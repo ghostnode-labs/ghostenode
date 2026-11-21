@@ -214,6 +214,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 case 'state':
                     $sync = ['synced' => false, 'wait' => 0];
                     $error = '';
+                    // alter Fehler „Sitzung abgelaufen“ (Konto blieb früher hängen) → einmal echt prüfen; 401 meldet automatisch ab
+                    if (strpos((string)$acc['last_error'], 'Sitzung abgelaufen') !== false) {
+                        $me = vrc_call($acc, 'GET', '/auth/user');
+                        if (empty($me['id'])) { vrc_db()->prepare('DELETE FROM accounts WHERE user_id = ?')->execute([$uid]); @session_start(); $_SESSION['vrc_expired'] = 1; throw new VrcAuthError('Die VRChat-Sitzung ist abgelaufen – du wurdest abgemeldet. Bitte neu anmelden.'); }
+                        vrc_db()->prepare("UPDATE accounts SET last_error = '' WHERE user_id = ?")->execute([$uid]); $acc['last_error'] = '';
+                    }
                     if (!empty($in['refresh'])) {
                         try { $sync = vrc_sync($uid, !empty($in['force'])); }
                         catch (VrcAuthError $e) { throw $e; }

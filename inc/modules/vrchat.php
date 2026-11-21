@@ -534,7 +534,12 @@ function vrc_sync(int $uid, bool $force = false): array {
     $db->prepare('UPDATE accounts SET last_sync = ? WHERE user_id = ?')->execute([time(), $uid]);   // auch bei Fehlern nicht sofort erneut
 
     $me = vrc_call($acc, 'GET', '/auth/user');
-    if (empty($me['id'])) throw new VrcAuthError('Die VRChat-Sitzung ist abgelaufen – bitte neu anmelden.');
+    if (empty($me['id'])) {   // 200 ohne Benutzer (z. B. 2FA nötig) = Sitzung nicht mehr gültig → abmelden
+        vrc_db()->prepare('DELETE FROM accounts WHERE user_id = ?')->execute([$acc['user_id']]);
+        if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
+        $_SESSION['vrc_expired'] = 1;
+        throw new VrcAuthError('Die VRChat-Sitzung ist abgelaufen – du wurdest abgemeldet. Bitte neu anmelden.');
+    }
     $online_ids = array_flip((array)($me['onlineFriends'] ?? []));
     $active_ids = array_flip((array)($me['activeFriends'] ?? []));
     $offline_ids = array_flip((array)($me['offlineFriends'] ?? []));
