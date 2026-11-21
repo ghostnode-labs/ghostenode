@@ -30,6 +30,7 @@ function backup_create(string $zip_path, bool $with_uploads = true): array {
     if ($with_uploads) {
         foreach (glob(APP_ROOT . '/uploads/*.{jpg,png,gif,webp}', GLOB_BRACE) ?: [] as $path) $files['uploads/' . basename($path)] = $path;
         foreach (glob(DATA_DIR . '/uploads/furhub/*') ?: [] as $path) if (preg_match('/^[0-9a-f]{24}$/', basename($path))) $files['data/uploads/furhub/' . basename($path)] = $path;
+        foreach (glob(DATA_DIR . '/uploads/posters/img/*') ?: [] as $path) if (preg_match('/^[0-9a-f]{24}$/', basename($path))) $files['data/uploads/posters/img/' . basename($path)] = $path;
     }
     if (db_is_mysql()) {
         $dump = sys_get_temp_dir() . '/db_backup_' . bin2hex(random_bytes(4)) . '.sql';

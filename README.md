@@ -16,6 +16,7 @@ PHP-Dashboard ohne Framework. Datenbank wahlweise **SQLite** (ohne Einrichtung) 
 | `discord.php` | **Discord-Zentrale**: Server über den eigenen Bot – Slash-Befehle, Rollen-Knöpfe, Umfragen, Begrüßung, Auto-Posts, Nachrichten & Embeds, Mitglieder, Rollen, Kanäle, Emojis, AutoMod, Events, geplante Nachrichten |
 | `furhub.php` | **Furry Hub**: Tamagotchi mit Shop & eigenen Bildern, Fursona-Baukasten (gezeichnet oder eigene Bilder mit 6 Emotionen), Karten-Editor, Minispiele, Community, Con-Bingo, Quiz, Soundboard, OwO-Übersetzer, Glossar, Pfotenabdrücke, Erfolge |
 | `nsfw.php` | **NSFW-Galerie** (18+): Bilder-APIs e621/e926, Danbooru, Gelbooru, Rule34, Yande.re, Konachan, waifu.im, waifu.pics – Suche, Favoriten, Posten in NSFW-Kanäle |
+| `poster.php`, `p.php` | **VRChat-Poster**: feste Bild-Adressen für Welten (`p.php/<adresse>.png`) – beliebig viele Slots, Bild tauschen per Drag & Drop/Einfügen, Bildlink (auch „live“), FTP-Eingangsordner oder Schnittstelle mit Token (ShareX/curl); Rotation, Zeitplan, Zielgröße/Format, Verlauf, Abrufzähler, QR-Code; Rechte über Rollen (`posters.view/upload/edit/manage`) plus Freigaben je Slot und je Bild, Gäste nur ansehen; Admin-Bereich „VRChat-Poster“ |
 | `page.php` | Eigene Seiten aus Vorlagen (Logik in `inc/tpl/*.php`) |
 | `client.php` | Schnittstelle für den **Nexus-Desktop-Client** (Geräte-Token, JSON) |
 | `cron.php` | Aufgabenplaner von außen anstoßen (Kommandozeile oder `cron.php?key=…`) |

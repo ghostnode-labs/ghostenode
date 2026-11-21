@@ -19,6 +19,7 @@ const TASKS = [
     'linkcheck' => ['🔗', 'Link-Check', 'Alle Links der Link-Hubs prüfen.', 10080, false],
     'vrcpush'   => ['🔔', 'VRC-Nexus-Push', 'VRChat abgleichen und Push-Benachrichtigungen schicken (beobachtete Freunde, Einladungen, Gruppen-Events) – für Handy-Meldungen am besten mit echtem Cron.', 15, true],
     'nexusage'  => ['🔞', 'Nexus: 18+-Freigaben', 'Abgelaufene Freigaben „Verified 18+“ aufräumen (NSFW aus). Neu geprüft wird in der App.', 60, true],
+    'posters'   => ['🖼️', 'VRChat-Poster', 'Bilder aus den FTP-Eingangsordnern übernehmen und „live“ Bildlinks neu laden.', 15, true],
     'vrcstats'  => ['🌍', 'VRChat-Spielerzahl', 'Spieler online bei VRChat messen (öffentlich, ohne Anmeldung) – für die Kurve im Nexus.', 15, true],
 ];
 const TASK_INTERVALS = [15 => '15 min', 30 => '30 min', 60 => '1 Std.', 180 => '3 Std.', 360 => '6 Std.', 720 => '12 Std.', 1440 => 'täglich', 10080 => 'wöchentlich'];
@@ -58,6 +59,9 @@ function task_run(string $id): string {
             return cal_sync_due(20) . ' Abos abgeglichen';
         case 'cleanup':
             return tasks_cleanup();
+        case 'posters':
+            require_once APP_ROOT . '/inc/modules/posters.php';
+            return ps_task();
         case 'backup':
             require_once __DIR__ . '/backup.php';
             $r = backup_auto(max(1, (int)setting('backup_keep', '7')));
