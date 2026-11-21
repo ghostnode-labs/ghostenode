@@ -14,6 +14,7 @@
  *   remove   {token, device}
  *   blob_put {token, data(b64, Chiffretext ≤ 7 MB), allow:[uid…]}  → {id}     (3.4: verschlüsselte Bilder; Schlüssel steckt nur in der E2E-Nachricht)
  *   blob_get {token, id}                       → Chiffretext (nur Absender und erlaubte Empfänger)
+ *   turn     {token}                          → {ice:[…]} (3.7 Sprachanrufe: eigener STUN/TURN-Server, kurzlebige Zugangsdaten nach coturn „use-auth-secret“)
  * Nachrichten liegen höchstens 30 Tage und werden nach dem Abholen gelöscht; Bilder höchstens 30 Tage.
  */
 require_once __DIR__ . '/inc/core/pages.php';
@@ -78,6 +79,23 @@ try {
             $ins = $db->prepare('INSERT OR IGNORE INTO chat_opks (device_id, opk_id, pub) VALUES (?, ?, ?)');
             foreach (array_slice((array)($in['opks'] ?? []), 0, 100) as $o) $ins->execute([$dev, (int)($o['id'] ?? 0), base64_encode(ch_key((string)($o['pub'] ?? '')))]);
             $out(['device' => $dev, 'opks' => ch_opks($dev)]);
+        }
+        case 'turn': {
+            // Konfiguration NICHT im Repo: Umgebungsvariablen NEXUS_TURN_URLS / NEXUS_TURN_SECRET oder data/keys/turn.json {"urls":[…],"secret":"…"}
+            $cfg = []; $f = DATA_DIR . '/keys/turn.json';
+            if (is_file($f)) $cfg = (array)json_decode((string)file_get_contents($f), true);
+            $urls = getenv('NEXUS_TURN_URLS') ? explode(',', (string)getenv('NEXUS_TURN_URLS')) : (array)($cfg['urls'] ?? []);
+            $secret = (string)(getenv('NEXUS_TURN_SECRET') ?: ($cfg['secret'] ?? ''));
+            $urls = array_values(array_filter(array_map('trim', $urls), fn($u) => preg_match('#^(stun|turns?):[\w.\-\[\]:]+(\?transport=(udp|tcp))?$#', $u)));
+            $stun = array_values(array_filter($urls, fn($u) => strpos($u, 'stun:') === 0));
+            $turn = array_values(array_filter($urls, fn($u) => strpos($u, 'turn') === 0));
+            $ice = [];
+            if ($stun) $ice[] = ['urls' => $stun];
+            if ($turn && $secret !== '') {
+                $user = (time() + 6 * 3600) . ':' . $acc['vrc_id'];           // 6 h gültig, an das Konto gebunden
+                $ice[] = ['urls' => $turn, 'username' => $user, 'credential' => base64_encode(hash_hmac('sha1', $user, $secret, true))];
+            }
+            $out(['ice' => $ice]);
         }
         case 'devices': {
             $uid = strtolower((string)($in['uid'] ?? ''));
