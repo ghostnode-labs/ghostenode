@@ -415,9 +415,16 @@ function vrc_call(array &$acc, string $method, string $path, array $query = [], 
     $before = $acc['cookie_jar'];
     [$code, $json] = vrc_http($acc['cookie_jar'], $method, $path, $query, $body);
     if ($acc['cookie_jar'] !== $before) vrc_db()->prepare('UPDATE accounts SET cookies = ? WHERE user_id = ?')->execute([vrc_encrypt($acc['cookie_jar']), $acc['user_id']]);
-    if ($code === 401 && strpos($path, '/auth/user') === 0) {
-        vrc_db()->prepare("UPDATE accounts SET last_error = 'Sitzung abgelaufen' WHERE user_id = ?")->execute([$acc['user_id']]);
-        throw new VrcAuthError('Die VRChat-Sitzung ist abgelaufen – bitte neu anmelden.');
+    // Abgelaufene Sitzung → automatisch abmelden (bei 401 anderer Pfade erst über /auth/user nachprüfen)
+    if ($code === 401) {
+        $expired = strpos($path, '/auth/user') === 0;
+        if (!$expired) { try { $jar = $acc['cookie_jar']; $expired = vrc_http($jar, 'GET', '/auth/user')[0] === 401; } catch (Throwable $e) { $expired = false; } }
+        if ($expired) {
+            vrc_db()->prepare('DELETE FROM accounts WHERE user_id = ?')->execute([$acc['user_id']]);
+            if (session_status() !== PHP_SESSION_ACTIVE) @session_start();
+            $_SESSION['vrc_expired'] = 1;
+            throw new VrcAuthError('Die VRChat-Sitzung ist abgelaufen – du wurdest abgemeldet. Bitte neu anmelden.');
+        }
     }
     if ($code < 200 || $code >= 300) throw new RuntimeException(vrc_error_text($code, $json));
     return $json ?? [];

@@ -633,3 +633,4 @@ span.vx-card-img { display: flex; align-items: center; justify-content: center; 
 .vx-av.xs { width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
 .vx-badge.sm { font-size: 0.66rem; padding: 0 5px; }
 .vx-reroll { margin: 4px 0; }
+.vx-expired { margin: 8px 0 12px; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255, 195, 92, .5); background: rgba(255, 195, 92, .1); color: #ffc35c; font-size: .92em; }

@@ -136,7 +136,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['vrc_pending'] = ['cookies' => $r['cookies'], 'types' => $r['need2fa'], 'until' => time() + 600];
                 $out = ['need2fa' => $r['need2fa']];
             } else {
-                vrc_save_account($uid, $r['user'], $r['cookies']);
+                vrc_save_account($uid, $r['user'], $r['cookies']); unset($_SESSION['vrc_expired']);
                 audit('VRChat verbunden', $r['user']['displayName'] ?? '');
             }
         } elseif ($act === 'verify') {
@@ -147,7 +147,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cookies = $p['cookies'];
             $u = vrc_verify_2fa($cookies, $type, (string)($in['code'] ?? ''));
             unset($_SESSION['vrc_pending']);
-            vrc_save_account($uid, $u, $cookies);
+            vrc_save_account($uid, $u, $cookies); unset($_SESSION['vrc_expired']);
             audit('VRChat verbunden', ($u['displayName'] ?? '') . ' (2FA: ' . $type . ')');
         } elseif ($act === 'cancel_login') {
             @session_start();
@@ -1110,6 +1110,7 @@ session_write_close();
 <?php if (!$acc): ?>
     <div class="vx-login panel">
         <div class="panel-title">VRChat-Konto verbinden</div>
+        <?php if (!empty($_SESSION['vrc_expired'])): ?><div class="vx-expired">⏱ Deine VRChat-Sitzung ist abgelaufen – du wurdest automatisch abgemeldet. Bitte melde dich neu an.</div><?php endif; ?>
         <form id="loginForm" <?php echo $pending ? 'hidden' : ''; ?>>
             <label class="field" for="vxU">VRChat-Benutzername oder E-Mail</label>
             <input type="text" id="vxU" name="username" autocomplete="username" required>
