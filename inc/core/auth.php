@@ -114,6 +114,19 @@ function current_user(bool $refresh = false): ?array {
     return $user = $u;
 }
 
+/** Restzeit der Anmeldung in Sekunden, OHNE sie zu verlängern (für den Sitzungs-Wächter); null = nicht (mehr) angemeldet */
+function auth_remaining(): ?int {
+    if (session_status() !== PHP_SESSION_ACTIVE && !isset($_COOKIE['GHOSTNODE'])) return null;
+    auth_session();
+    $s = $_SESSION['auth'] ?? null;
+    if (!$s || empty($s['uid'])) return null;
+    $u = user_load((int)$s['uid']);
+    if (!$u || !$u['active'] || (int)($s['version'] ?? -1) !== (int)$u['session_version'] || user_expired($u)) return null;
+    if (!empty($s['sid'])) { $st = site_db()->prepare('SELECT user_id FROM user_sessions WHERE id = ?'); $st->execute([(string)$s['sid']]); if ((int)$st->fetchColumn() !== (int)$u['id']) return null; }
+    $left = (!empty($s['remember']) ? AUTH_REMEMBER : AUTH_IDLE_TIMEOUT) - (time() - (int)($s['last'] ?? 0));
+    return $left > 0 ? $left : null;
+}
+
 /** Benutzername (kompatibel zur Vorversion) */
 function auth_user(): ?string {
     $u = current_user();

@@ -131,5 +131,7 @@ function german_datetime(int $ts, bool $with_time = true): string {
 
 /** Favicon als Emoji (data-URI), damit jede Seite im Browser-Tab erkennbar ist. */
 function emoji_favicon(string $emoji): string {
-    return '<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' . $emoji . '</text></svg>">';
+    // Sitzungs-Wächter: nur wenn ein Anmelde-Cookie da ist (Besucher bekommen nichts); meldet bei Ablauf automatisch ab
+    $watch = isset($_COOKIE['GHOSTNODE']) ? '<script src="assets/js/session-watch.js" defer></script>' : '';
+    return '<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' . $emoji . '</text></svg>">' . $watch;
 }
