@@ -524,7 +524,7 @@ hub_handle_post(__FILE__, $categories);
 <body>
 
     <div class="main-wrapper">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUR INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
 
         <header>
             <h1>Furry Community Hub</h1>

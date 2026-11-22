@@ -58,7 +58,7 @@ if (!$configured) {
         elseif ($how = totp_check_login($pu, (string)($_POST['code'] ?? ''))) {
             auth_finish_login($pu, !empty($pending['remember']), $how === 'recovery' ? 'mit Wiederherstellungscode' : '2FA');
             if ($how === 'recovery') audit('Wiederherstellungscode benutzt', count(json_decode(user_load((int)$pu['id'])['totp_recovery'], true) ?: []) . ' übrig', 'security');
-            header('Location: ' . ($next === 'admin.php' && !can('admin.access') ? 'index.php' : $next));
+            header('Location: ' . ($next === 'admin.php' && !can('admin.access') ? 'dashboard.php' : $next));
             exit;
         } else {
             auth_register_fail();
@@ -96,7 +96,7 @@ if (!$configured) {
                 $nu = user_load($id);
                 audit('Registriert per Einladung', $u . ' · Rolle ' . $invite['role_name'] . ' · Code ' . $invite['code'], 'security', $nu);
                 auth_finish_login($nu, false);
-                header('Location: ' . (can('admin.access') ? 'admin.php?welcome=1' : 'index.php'));
+                header('Location: ' . (can('admin.access') ? 'admin.php?welcome=1' : 'dashboard.php'));
                 exit;
             }
         }
@@ -114,7 +114,7 @@ if (!$configured) {
             exit;
         } elseif ($res) {
             // Ohne Admin-Zugang direkt zur gewünschten Seite bzw. zum Index
-            header('Location: ' . ($next === 'admin.php' && !can('admin.access') ? 'index.php' : $next));
+            header('Location: ' . ($next === 'admin.php' && !can('admin.access') ? 'dashboard.php' : $next));
             exit;
         } else {
             $locked = auth_locked_seconds();
@@ -289,7 +289,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$r) break;
                 $_SESSION['auth']['preview'] = (int)$r['id'];
                 audit('Ansicht als Rolle', $r['name']);
-                header('Location: index.php');
+                header('Location: dashboard.php');
                 exit;
 
             case 'preview_end':
@@ -978,8 +978,8 @@ if ($mode === 'panel') {
     if (can('announce.manage')) $palette[] = ['icon' => '📢', 'label' => 'Ankündigung setzen', 'hint' => 'Aktion', 'href' => 'admin.php?tab=overview#announce'];
     $palette[] = ['icon' => '🔐', 'label' => 'Zwei-Faktor-Anmeldung', 'hint' => 'Mein Konto', 'href' => 'admin.php?tab=account#tfa'];
     if (can('pages.manage')) {
-        $palette[] = ['icon' => '✨', 'label' => 'Neue Seite anlegen', 'hint' => 'Aktion', 'href' => 'index.php?edit=1#new'];
-        $palette[] = ['icon' => '✎', 'label' => 'Index bearbeiten & sortieren', 'hint' => 'Aktion', 'href' => 'index.php?edit=1'];
+        $palette[] = ['icon' => '✨', 'label' => 'Neue Seite anlegen', 'hint' => 'Aktion', 'href' => 'dashboard.php?edit=1#new'];
+        $palette[] = ['icon' => '✎', 'label' => 'Index bearbeiten & sortieren', 'hint' => 'Aktion', 'href' => 'dashboard.php?edit=1'];
     }
     foreach ($db->query('SELECT * FROM pages ORDER BY title') as $p) {
         if (page_access_ok($p)) $palette[] = ['icon' => $p['icon'] ?: '📄', 'label' => $p['title'], 'hint' => 'Seite', 'href' => page_href($p)];
@@ -1173,7 +1173,7 @@ function bytes(int $b): string {
                     <?php if (can('users.manage')): ?><a href="admin.php?tab=users#new">➕<span>Benutzer anlegen</span></a><?php endif; ?>
                     <?php if (can('invites.manage')): ?><a href="admin.php?tab=invites">🎟️<span>Einladung</span></a><?php endif; ?>
                     <?php if (can('security.manage')): ?><a href="admin.php?tab=security">🔐<span>Sicherheit</span></a><?php endif; ?>
-                    <?php if (can('pages.manage')): ?><a href="index.php?edit=1#new">✨<span>Neue Seite</span></a><a href="index.php?edit=1">✎<span>Index sortieren</span></a><?php endif; ?>
+                    <?php if (can('pages.manage')): ?><a href="dashboard.php?edit=1#new">✨<span>Neue Seite</span></a><a href="dashboard.php?edit=1">✎<span>Index sortieren</span></a><?php endif; ?>
                     <?php if (can('linkcheck.run')): ?><a href="linkcheck.php">🩺<span>Link-Check</span></a><?php endif; ?>
                     <?php if (can('backup.download')): ?><a href="backup.php">💾<span>Backup</span></a><?php endif; ?>
                     <a href="calendar.php">📅<span>Kalender</span></a>
@@ -1569,7 +1569,7 @@ function bytes(int $b): string {
 
 <?php elseif ($tab === 'pages'): ?>
         <div class="panel">
-            <div class="panel-title"><span>// <?php echo count($pages); ?> Seiten</span><span><a href="index.php?edit=1#new" class="btn btn-sm btn-gold">＋ Neue Seite</a> <a href="index.php?edit=1" class="btn btn-sm">✎ Index sortieren</a></span></div>
+            <div class="panel-title"><span>// <?php echo count($pages); ?> Seiten</span><span><a href="dashboard.php?edit=1#new" class="btn btn-sm btn-gold">＋ Neue Seite</a> <a href="dashboard.php?edit=1" class="btn btn-sm">✎ Index sortieren</a></span></div>
             <div class="table-wrap">
                 <table class="tbl">
                     <thead><tr><th>Seite</th><th>Kategorie</th><th>Art</th><th>Zugriff</th><th>Geändert</th><th></th></tr></thead>
@@ -1581,7 +1581,7 @@ function bytes(int $b): string {
                             <td><?php echo $p['kind'] === 'file' ? '<span class="muted">Datei</span>' : e(PAGE_TEMPLATES[$p['template']][0] . ' ' . PAGE_TEMPLATES[$p['template']][1]); ?><?php echo $p['hidden'] ? ' <span class="muted small">· versteckt</span>' : ''; ?></td>
                             <td><?php echo e(PAGE_ACCESS[$p['access']]); ?><?php if ($p['access'] === 'roles'): ?><small class="muted"> · <?php echo e(implode(', ', array_map(function ($id) use ($role_names) { return $role_names[$id] ?? '?'; }, array_filter(explode(',', $p['allowed_roles']))))); ?></small><?php endif; ?></td>
                             <td><?php echo e(ago($p['updated_at'])); ?><?php echo $p['creator'] ? '<small class="muted"> · ' . e($p['creator']) . '</small>' : ''; ?></td>
-                            <td class="actions"><a href="<?php echo e(page_href($p)); ?>" class="btn btn-sm" <?php echo $p['template'] === 'external' ? 'target="_blank" rel="noopener"' : ''; ?>>Öffnen</a> <a href="index.php?edit=1#page-<?php echo (int)$p['id']; ?>" class="btn btn-sm btn-gold">✎</a></td>
+                            <td class="actions"><a href="<?php echo e(page_href($p)); ?>" class="btn btn-sm" <?php echo $p['template'] === 'external' ? 'target="_blank" rel="noopener"' : ''; ?>>Öffnen</a> <a href="dashboard.php?edit=1#page-<?php echo (int)$p['id']; ?>" class="btn btn-sm btn-gold">✎</a></td>
                         </tr>
                     <?php endforeach; ?>
                     </tbody>

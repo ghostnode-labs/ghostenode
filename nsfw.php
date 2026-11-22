@@ -162,7 +162,7 @@ if ($discord) { require_once __DIR__ . '/inc/modules/discord.php'; $discord = di
 <?php auth_corner(); ?>
 <div class="wrapper" style="max-width: 1500px;">
     <div class="nav-bar">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
         <span class="ns-panic-hint" title="Panik-Taste">⇧ + P = sofort weg</span>
     </div>
     <header class="ns-head">

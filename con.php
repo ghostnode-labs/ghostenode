@@ -380,7 +380,7 @@ function con_donut(array $parts, float $total): string {
 <?php auth_corner(); ?>
 <div class="wrapper" style="max-width: 1200px;">
     <div class="nav-bar">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
         <span class="cn-navright">
             <button type="button" class="nav-tab" data-open="conModal" data-title="Neue Con anlegen" data-fill="<?php echo tpl_fill(['id' => '', 'icon' => '🎪', 'status' => 'planned', 'currency' => 'EUR', 'fx_rate' => '1', 'budget' => '']); ?>">＋ Neue Con</button>
             <a class="nav-tab" href="#compare" data-tabjump="compare">📊 Vergleich</a>

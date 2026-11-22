@@ -150,7 +150,7 @@ $icons = ['⏳', '🐾', '🎉', '🎂', '🎄', '🎆', '✈️', '🚆', '🏨
 <?php auth_corner(); ?>
 <div class="wrapper">
     <div class="nav-bar">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
         <div class="nav-tabs">
             <a href="calendar.php" class="nav-tab" title="Countdowns erscheinen automatisch im Kalender">📅 Kalender</a>
             <a href="feed.php" class="nav-tab">Feed</a>

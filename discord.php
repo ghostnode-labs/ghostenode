@@ -783,7 +783,7 @@ $configured = discord_configured();
 <?php auth_corner(); ?>
 <div class="wrapper" style="max-width: 1320px;">
     <div class="nav-bar">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
         <?php if ($configured): ?><span class="dc-guildpick"><span id="botInfo"></span><select id="guildSel" aria-label="Server"></select></span><?php endif; ?>
     </div>
     <header class="dc-head">

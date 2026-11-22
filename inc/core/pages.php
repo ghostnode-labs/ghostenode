@@ -46,7 +46,7 @@ const PAGE_DEFAULTS = [
 const PAGE_REQUIRED_PERMISSION = ['budget.php' => 'budget.access', 'con.php' => 'con.access', 'backup.php' => 'backup.download', 'nexus.php' => 'vrcx.access', 'discord.php' => 'discord.manage', 'nsfw.php' => 'nsfw.browse'];
 
 /** Seiten, die nie im Register auftauchen (Hilfsdateien) */
-const PAGE_IGNORE = ['index.php', 'page.php', 'preview.php', 'vrcx.php', 'widgets.php', 'client.php', 'cron.php'];
+const PAGE_IGNORE = ['index.php', 'dashboard.php', 'p.php', 'page.php', 'preview.php', 'vrcx.php', 'widgets.php', 'client.php', 'cron.php'];
 
 /** Umbenannte Dateien: alter Name => neuer Name (Einstellungen der Kachel bleiben erhalten) */
 const PAGE_RENAMES = ['vrcx.php' => 'nexus.php'];

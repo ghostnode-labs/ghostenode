@@ -149,7 +149,7 @@ $cron = (isset($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' ? 'https' : 'ht
 <?php auth_corner(); ?>
 <div class="fd-app" id="app">
     <aside class="fd-side" id="side">
-        <div class="fd-brand"><a href="index.php" class="fd-back" title="Zur Startseite">←</a><span>📡 Live-Feed</span></div>
+        <div class="fd-brand"><a href="dashboard.php" class="fd-back" title="Zum Dashboard">←</a><span>📡 Live-Feed</span></div>
         <nav class="fd-views" id="views">
             <button type="button" data-view="all" class="on">🗞 Alle <b data-count="all"></b></button>
             <button type="button" data-view="unread">● Ungelesen <b data-count="unread"></b></button>

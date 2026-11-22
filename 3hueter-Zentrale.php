@@ -479,7 +479,7 @@ hub_handle_post(__FILE__, $categories);
 
     <div class="wrapper">
         <!-- Zurück zur Index Button -->
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUR INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
 
         <header>
             <div class="hud-tag">Guardian Operations // Hub</div>

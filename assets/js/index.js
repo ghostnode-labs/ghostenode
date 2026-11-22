@@ -68,7 +68,7 @@
     document.addEventListener('keydown', e => {
         if (/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) || $('.modal-overlay.open')) return;
         if (e.key === '/') { e.preventDefault(); input.focus(); }
-        if (e.key === 'e' && window.IDX.canManage) location.href = window.IDX.edit ? 'index.php' : 'index.php?edit=1';
+        if (e.key === 'e' && window.IDX.canManage) location.href = window.IDX.edit ? 'dashboard.php' : 'dashboard.php?edit=1';
     });
     const saved = store('searchEngine');
     if (saved && select.querySelector('option[value="' + saved + '"]')) select.value = saved;
@@ -180,7 +180,7 @@
         const order = $$('#sections .cat-section').map(s => ({ cat: +s.dataset.cat, pages: $$('.tile-wrap', s).map(w => +w.dataset.id) }));
         state.textContent = 'speichere…'; state.className = 'saving';
         const body = new URLSearchParams({ action: 'reorder', order: JSON.stringify(order) });
-        fetch('index.php', { method: 'POST', body, credentials: 'same-origin' })
+        fetch('dashboard.php', { method: 'POST', body, credentials: 'same-origin' })
             .then(r => r.json()).then(d => { state.textContent = d.ok ? '✓ gespeichert' : 'Fehler beim Speichern'; state.className = d.ok ? 'saved' : ''; })
             .catch(() => { state.textContent = 'Fehler beim Speichern'; state.className = ''; });
     }

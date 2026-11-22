@@ -178,7 +178,7 @@ $EMO = ['neutral' => ['😐', 'Normal'], 'happy' => ['😊', 'Fröhlich'], 'sad'
 <?php auth_corner(); ?>
 <div class="wrapper fh-wrap">
     <div class="nav-bar">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
         <div class="nav-tabs">
             <a href="furry.php" class="nav-tab">🔗 Furry-Links</a>
             <a href="countdown.php" class="nav-tab">⏳ Countdowns</a>

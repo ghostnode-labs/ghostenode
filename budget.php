@@ -933,7 +933,7 @@ foreach ($sum['cats'] as $c => $v) $chart_cats[] = ['name' => $c, 'value' => rou
 
     <div class="wrapper">
         <div class="nav-bar">
-            <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
+            <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
             <div class="nav-tabs">
                 <a href="admin.php" class="nav-tab" title="Mein Konto">⚙ <?php echo e(user_label()); ?></a>
                 <a href="budget.php" class="nav-tab <?php echo ($view_mode === 'active') ? 'active' : ''; ?>">📊 Übersicht</a>

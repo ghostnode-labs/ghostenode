@@ -74,8 +74,8 @@ $wide = in_array($tpl, ['kanban', 'table', 'gallery', 'notes'], true);
 <?php if ($tpl !== 'links') auth_corner(); ?>
 <div class="wrapper" style="max-width: <?php echo $wide ? '1280px' : '1050px'; ?>;">
     <div class="nav-bar">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
-        <?php if (can('pages.manage')): ?><a href="index.php?edit=1#page-<?php echo (int)$page['id']; ?>" class="nav-tab" title="Titel, Beschreibung, Zugriff & Kategorie">⚙ Seiten-Einstellungen</a><?php endif; ?>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
+        <?php if (can('pages.manage')): ?><a href="dashboard.php?edit=1#page-<?php echo (int)$page['id']; ?>" class="nav-tab" title="Titel, Beschreibung, Zugriff & Kategorie">⚙ Seiten-Einstellungen</a><?php endif; ?>
     </div>
 
     <header class="page-head">

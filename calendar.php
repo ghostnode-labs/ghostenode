@@ -339,7 +339,7 @@ $flash_err = $_GET['error'] ?? '';
 <?php auth_corner(); ?>
 <div class="wrapper cal-wrapper">
     <div class="nav-bar">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
         <div class="nav-tabs">
             <?php foreach (['month' => 'Monat', 'week' => 'Woche', 'agenda' => 'Agenda', 'year' => 'Jahr'] as $v => $vl): ?>
                 <a href="calendar.php?view=<?php echo $v; ?>&amp;date=<?php echo $anchor->format('Y-m-d'); ?>" class="nav-tab <?php echo $view === $v && $q === '' ? 'active' : ''; ?>" data-key="<?php echo $vl[0]; ?>"><?php echo $vl; ?></a>

@@ -91,7 +91,7 @@ $me = current_user();
 <?php auth_corner(); ?>
 <div class="wrapper ps-wrap">
     <div class="nav-bar">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
         <div class="nav-tabs">
             <a href="nexus.php" class="nav-tab">🥽 VRC Nexus</a>
             <?php if (can('posters.manage') && can('admin.access')): ?><a href="admin.php?tab=posters" class="nav-tab">⚙ Poster-Admin</a><?php endif; ?>

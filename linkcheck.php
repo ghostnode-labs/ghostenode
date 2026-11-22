@@ -107,7 +107,7 @@ $problems = $counts['dead'] + $counts['broken'];
 <?php auth_corner(); ?>
 <div class="wrapper">
     <div class="nav-bar">
-        <a href="index.php" class="nav-back">&larr; ZURÜCK ZUM INDEX</a>
+        <a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a>
     </div>
 
     <header>
