@@ -158,6 +158,14 @@ $plan5_always = ['Stabilität und Fehlerbehebungen in jedem Release', 'Automatis
 // Webseite 2.0 (ghostnode) – Phasen
 // =====================================================================================================
 $planWeb = [
+    'Phase 0 – Umzug auf ghostnode-labs.dev' => ['🚚', 'Neue Heimat für Website und Dienste – ohne dass alte Links kaputtgehen.', [
+        'Website auf ghostnode-labs.dev umziehen (SSL, E-Mail, DNS)',
+        'Alte Adressen dauerhaft weiterleiten (301), Suchmaschinen informieren',
+        'VRChat-Poster: alte Bild-Adressen bleiben gültig (Welten nutzen sie fest)',
+        'VRC Nexus: neue Server-Adressen per Update, alte als Rückfall',
+        'HypeRate-Weiterleitung und Nexus-Dienste auf Subdomains der neuen Domain',
+        'Discord, GitHub, Patreon und Downloads auf die neue Adresse umstellen',
+    ]],
     'Phase 1 – Design & Navigation' => ['🎨', 'Ein Gesicht für alle Seiten – am PC und auf dem Handy.', [
         'Einheitlicher Kopfbereich mit Menü auf allen Seiten (statt einzelner Zurück-Links)',
         'Mobiles Menü und durchgehend handytaugliche Seiten',
