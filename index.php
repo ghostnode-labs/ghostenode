@@ -76,7 +76,7 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
     <meta name="description" content="<?php echo e($title); ?> – Heimat von VRC Nexus, der All-in-one-Begleit-App für VRChat (Windows, Android, Stream Deck), dazu VRChat-Poster, Link-Hubs, Furry Hub und mehr.">
     <meta property="og:title" content="<?php echo e($title); ?> · VRC Nexus">
     <meta property="og:description" content="Die All-in-one-Begleit-App für VRChat – Freunde, Verlauf, OSC, Chatbox, Overlay, Stream Deck. Kostenlos, alles bleibt auf deinem Gerät.">
-    <meta property="og:image" content="assets/img/landing/01-home.jpg">
+    <meta property="og:image" content="assets/img/landing/nexus-home.jpg">
     <?php echo emoji_favicon('◈'); ?>
     <link rel="stylesheet" href="assets/css/hud.css">
     <link rel="stylesheet" href="assets/css/landing.css">
@@ -110,7 +110,7 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
         </div>
         <div class="ld-badges"><span>🪟 Windows</span><span>🤖 Android</span><span>🎛 Stream Deck</span><span>🌍 DE · EN · FR · JA</span><span>🔒 Daten bleiben bei dir</span></div>
     </div>
-    <div class="ld-hero-img"><img src="assets/img/landing/01-home.jpg" alt="VRC Nexus – Startseite der App" loading="eager"></div>
+    <div class="ld-hero-img"><img src="assets/img/landing/nexus-home.jpg" alt="VRC Nexus – Startseite der App" loading="eager"></div>
 </header>
 
 <section class="ld-stats">
@@ -138,7 +138,7 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
         <?php endforeach; ?>
     </div>
     <div class="ld-shots">
-        <?php foreach ([['02-friend-locations.jpg', 'Freunde-Orte'], ['03-game-osc.jpg', 'Spiel & OSC'], ['04-chatbox-modules.jpg', 'Chatbox-Module'], ['07-stats.jpg', 'Statistik']] as [$f, $cap]): ?>
+        <?php foreach ([['nexus-friends.jpg', 'Freunde & Community'], ['nexus-client.jpg', 'Spiel, OSC & Chatbox'], ['nexus-stats.jpg', 'Diagramme & Statistik'], ['nexus-tools.jpg', 'Werkzeuge'], ['nexus-groups.jpg', 'Gruppen'], ['nexus-osc.jpg', 'OSC-Verbindung']] as [$f, $cap]): ?>
             <figure><a href="assets/img/landing/<?php echo $f; ?>" target="_blank" rel="noopener"><img src="assets/img/landing/<?php echo $f; ?>" alt="<?php echo e($cap); ?>" loading="lazy"></a><figcaption><?php echo e($cap); ?></figcaption></figure>
         <?php endforeach; ?>
     </div>

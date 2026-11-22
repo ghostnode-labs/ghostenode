@@ -38,7 +38,7 @@ body.ld { padding: 0; display: block; }
 .ld-card b { display: block; margin: 8px 0 6px; letter-spacing: .5px; }
 .ld-card p { margin: 0; color: var(--text-muted); font-size: .86rem; line-height: 1.5; }
 .ld-ic { font-size: 1.7rem; line-height: 1; }
-.ld-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; margin-top: 26px; }
+.ld-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; margin-top: 26px; }
 .ld-shots figure { margin: 0; }
 .ld-shots img { width: 100%; display: block; border: 1px solid var(--border-color); transition: border-color .2s; }
 .ld-shots img:hover { border-color: var(--accent-gold); }
