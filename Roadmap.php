@@ -154,6 +154,41 @@ $plan5 = [
     ]],
 ];
 $plan5_always = ['Stabilität und Fehlerbehebungen in jedem Release', 'Automatische Tests für jede neue Funktion', 'Keine Geheimnisse in Git – Schlüssel bleiben auf dem Server', 'Alle Texte in Deutsch, Englisch, Französisch und Japanisch', 'Lokale Funktionen bleiben kostenlos, Online-Dienste nur mit Opt-in'];
+// =====================================================================================================
+// Webseite 2.0 (ghostnode) – Phasen
+// =====================================================================================================
+$planWeb = [
+    'Phase 1 – Design & Navigation' => ['🎨', 'Ein Gesicht für alle Seiten – am PC und auf dem Handy.', [
+        'Einheitlicher Kopfbereich mit Menü auf allen Seiten (statt einzelner Zurück-Links)',
+        'Mobiles Menü und durchgehend handytaugliche Seiten',
+        'Helles und dunkles Design, gleiche Bausteine überall (Karten, Knöpfe, Formulare)',
+        'Globale Suche über Seiten, Poster, News und Hilfe',
+        'Deutsch und Englisch für alle öffentlichen Seiten',
+    ]],
+    'Phase 2 – Konto & Profile' => ['👤', 'Ein Konto für Website, App und Discord.', [
+        'Anmelden mit Discord oder dem Nexus-Konto (VRChat-ID)',
+        'Passkeys und Zwei-Faktor-Anmeldung',
+        'Öffentliche Mitgliederprofile (freiwillig) mit VRChat-Status',
+        'Persönliches Dashboard: Widgets per Drag & Drop anordnen',
+        'Benachrichtigungen auf der Website (neue Poster, Events, Releases)',
+    ]],
+    'Phase 3 – Nexus & Community' => ['🥽', 'Die Website wird zum zweiten Zuhause der App.', [
+        'Download-Center: alle Versionen, Changelog, Prüfsummen, Android und Windows',
+        'Hilfe & Wiki mit FAQ, Anleitungen und Suche',
+        'Nexus-Web-Dashboard: Freunde, Welten, Kalender im Browser',
+        'Poster 2.0: Zeitplan-Kalender, Statistiken, Freigaben für Gruppen',
+        'Öffentlicher Event-Kalender mit VRChat-Gruppen-Events',
+        'Entwickler-Bereich: API-Doku und Plugin-Einreichung für den Marktplatz',
+    ]],
+    'Phase 4 – Admin, Betrieb & Sicherheit' => ['🛡', 'Sicher, schnell und gut zu verwalten.', [
+        'Status-Seite für alle Dienste (nexus.php, HypeRate-Weiterleitung, Discord-Bot)',
+        'Rollen- und Rechte-Editor mit Änderungsprotokoll',
+        'Automatische Backups mit Wiederherstellung aus dem Admin-Bereich',
+        'Sicherheits-Header (CSP), Anfrage-Limits, Schutz vor Spam',
+        'Schneller: Zwischenspeicher, Bilder als WebP, gute Lighthouse-Werte',
+        'Barrierefreiheit, Impressum und Datenschutz auf allen Seiten, ohne Tracking-Cookies',
+    ]],
+];
 $ideas = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Steam Deck als zweiter Bildschirm', 'Avatar-Galerie mit Tags und Suche', 'KI-Übersetzung für Sprachchat (lokal)', 'Gruppen-Statistiken für Moderatoren', 'Themes-Marktplatz für die Oberfläche'];
 
 // =====================================================================================================
@@ -184,6 +219,10 @@ $count = ['planned' => 0, 'wip' => 0, 'done' => 0];
 $rows5 = [];
 foreach ($plan5 as $rel => [$ic, $desc, $items]) {
     foreach ($items as $it) { $s = $st('5x|' . $rel, $it, 'planned'); $count[$s]++; $rows5[$rel][] = [$it, $s, rm_key('5x|' . $rel, $it)]; }
+}
+$rowsWeb = []; $countWeb = ['planned' => 0, 'wip' => 0, 'done' => 0];
+foreach ($planWeb as $rel => [$ic, $desc, $items]) {
+    foreach ($items as $it) { $s = $st('web|' . $rel, $it, 'planned'); $countWeb[$s]++; $rowsWeb[$rel][] = [$it, $s, rm_key('web|' . $rel, $it)]; }
 }
 $rows34 = [];
 foreach ($modules as $mod => $items) {
@@ -270,11 +309,13 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
     <div class="rm-card"><b><?= $all5 ?></b><span>geplante Punkte</span></div>
     <div class="rm-card"><b><?= $count['wip'] ?></b><span>in Arbeit</span></div>
     <div class="rm-card"><b><?= $pct($count['done'], $all5) ?> %</b><span>5.x erledigt</span><div class="rm-bar"><i style="width:<?= $pct($count['done'], $all5) ?>%"></i></div></div>
+    <div class="rm-card"><b><?= $pct($countWeb['done'], array_sum($countWeb)) ?> %</b><span>Webseite 2.0</span><div class="rm-bar"><i style="width:<?= $pct($countWeb['done'], array_sum($countWeb)) ?>%"></i></div></div>
     <div class="rm-card"><b><?= $pct($done34, $all34) ?> %</b><span>3.x / 4.x erledigt</span><div class="rm-bar"><i style="width:<?= $pct($done34, $all34) ?>%"></i></div></div>
 </div>
 
 <nav class="rm-tabs" role="tablist">
     <button type="button" class="on" data-tab="plan">🚀 5.x-Plan</button>
+    <button type="button" data-tab="web">🌐 Webseite 2.0</button>
     <button type="button" data-tab="past">✅ 3.x &amp; 4.x</button>
     <button type="button" data-tab="ideas">💡 Ideen</button>
     <button type="button" data-tab="rules">🧭 Grundsätze</button>
@@ -294,6 +335,19 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
     </div>
     <h3>In jedem 5.x-Release</h3>
     <div class="rm-list"><?php foreach ($plan5_always as $p): ?><div>✓ <?= e($p) ?></div><?php endforeach; ?></div>
+</section>
+
+<section class="rm-pane" data-pane="web" hidden>
+    <p class="rm-note">Die GhostNode-Website in Version 2.0 – parallel zu Nexus 5.x, in vier Phasen.</p>
+    <div class="rm-tl">
+    <?php foreach ($planWeb as $rel => [$ic, $desc, $items]): $r = $rowsWeb[$rel]; $d = count(array_filter($r, fn($x) => $x[1] === 'done')); ?>
+        <article class="rm-rel<?= $d === count($r) ? ' done' : '' ?>">
+            <header><span class="ic"><?= $ic ?></span><h3><?= e($rel) ?></h3><small><?= $d ?>/<?= count($r) ?> erledigt</small></header>
+            <p><?= e($desc) ?></p>
+            <ul class="rm-items"><?php foreach ($r as [$it, $s, $k]): ?><li class="s-<?= $s ?>" data-s="<?= $s ?>"><span class="t"><?= e($it) ?></span><?= $edit_mode ? '<button type="button" class="rm-st rm-st-' . $s . '" data-k="' . $k . '" data-s="' . $s . '">' . e(RM_STATES[$s]) . '</button>' : $chip($s) ?></li><?php endforeach; ?></ul>
+        </article>
+    <?php endforeach; ?>
+    </div>
 </section>
 
 <section class="rm-pane" data-pane="past" hidden>
