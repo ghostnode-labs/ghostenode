@@ -135,6 +135,10 @@ function nc_profile(array $who, string $id): array {
     $c = nc_db()->prepare("SELECT COUNT(*) FROM comm_posts WHERE author = ? AND status = 'visible' AND parent = 0 AND rating = 'sfw'");
     $c->execute([$id]);
     $out['posts'] = (int)$c->fetchColumn();
+    $f = nc_db()->prepare('SELECT (SELECT COUNT(*) FROM comm_follows WHERE target = ?), (SELECT COUNT(*) FROM comm_follows WHERE vrc_id = ?), (SELECT COUNT(*) FROM comm_follows WHERE vrc_id = ? AND target = ?)');
+    $f->execute([$id, $id, $who['vrc_id'], $id]);
+    [$out['followers'], $out['following'], $out['i_follow']] = array_map('intval', $f->fetch(PDO::FETCH_NUM));
+    $out['i_follow'] = (bool)$out['i_follow'];
     return $out;
 }
 function nc_profile_save(array $who, array $in): array {
@@ -222,7 +226,7 @@ function nc_row(array $p, array $who, array $names): array {
     $media = json_decode($p['media'] ?: '[]', true) ?: [];
     return ['id' => (int)$p['id'], 'author' => $p['author'], 'name' => $names[$p['author']] ?? '', 'rating' => $p['rating'], 'text' => $p['status'] === 'deleted' ? '' : $p['text'],
         'media' => $p['status'] === 'deleted' ? [] : $media, 'parent' => (int)$p['parent'], 'created' => (int)$p['created'], 'edited' => (int)$p['edited'], 'status' => $p['status'],
-        'replies' => (int)($p['replies'] ?? 0), 'reactions' => $p['_reactions'] ?? [], 'mine' => $p['_mine'] ?? [], 'own' => $p['author'] === $who['vrc_id']];
+        'replies' => (int)($p['replies'] ?? 0), 'reactions' => $p['_reactions'] ?? [], 'mine' => $p['_mine'] ?? [], 'own' => $p['author'] === $who['vrc_id'], 'saved' => !empty($p['_saved']), 'tags' => $p['status'] === 'deleted' ? [] : nc_tags($p['text'])];
 }
 function nc_decorate(array $rows, array $who): array {
     if (!$rows) return [];
@@ -234,20 +238,40 @@ function nc_decorate(array $rows, array $who): array {
     $authors = array_values(array_unique(array_map(fn($r) => $r['author'], $rows)));
     $q = nc_db()->prepare('SELECT vrc_id, display_name FROM nexus_accounts WHERE vrc_id IN (' . implode(',', array_fill(0, count($authors), '?')) . ')'); $q->execute($authors);
     $names = $q->fetchAll(PDO::FETCH_KEY_PAIR);
+    $sv = nc_db()->prepare("SELECT post_id FROM comm_saves WHERE vrc_id = ? AND post_id IN ($in)"); $sv->execute([$who['vrc_id']]);
+    $saved = array_flip(array_map('intval', $sv->fetchAll(PDO::FETCH_COLUMN)));
     $by = []; foreach ($re as $r) $by[$r['post_id']][$r['emoji']] = (int)$r['n'];
     $my = []; foreach ($mine->fetchAll(PDO::FETCH_ASSOC) as $r) $my[$r['post_id']][] = $r['emoji'];
-    return array_map(function ($r) use ($by, $my, $rc, $who, $names) { $r['_reactions'] = $by[$r['id']] ?? []; $r['_mine'] = $my[$r['id']] ?? []; $r['replies'] = $rc[$r['id']] ?? 0; return nc_row($r, $who, $names); }, $rows);
+    return array_map(function ($r) use ($by, $my, $rc, $who, $names, $saved) { $r['_reactions'] = $by[$r['id']] ?? []; $r['_mine'] = $my[$r['id']] ?? []; $r['replies'] = $rc[$r['id']] ?? 0; $r['_saved'] = isset($saved[(int)$r['id']]); return nc_row($r, $who, $names); }, $rows);
 }
-/** Feed: rating = sfw (Timeline) oder nsfw (eigener Feed, nur freigegeben) */
-function nc_feed(array $who, string $rating, int $before = 0, string $author = ''): array {
+/**
+ * Feed: rating = sfw (Timeline) oder nsfw (eigener Feed, nur freigegeben).
+ * 5.3: q = Volltextsuche, tag = #Hashtag, mode = following (nur Leute, denen ich folge) | saved (meine Merkliste)
+ */
+function nc_feed(array $who, string $rating, int $before = 0, string $author = '', array $opt = []): array {
     if ($rating === 'nsfw') nc_need_nsfw($who); else $rating = 'sfw';
-    $sql = "SELECT * FROM comm_posts WHERE rating = ? AND parent = 0 AND (status = 'visible' OR (status = 'pending' AND author = ?))";
+    $sql = "SELECT p.* FROM comm_posts p WHERE p.rating = ? AND p.parent = 0 AND (p.status = 'visible' OR (p.status = 'pending' AND p.author = ?))";
     $args = [$rating, $who['vrc_id']];
-    if ($before > 0) { $sql .= ' AND id < ?'; $args[] = $before; }
-    if ($author !== '' && nx_uid_ok($author)) { $sql .= ' AND author = ?'; $args[] = strtolower($author); }
-    $st = nc_db()->prepare($sql . ' ORDER BY id DESC LIMIT 30');
+    if ($before > 0) { $sql .= ' AND p.id < ?'; $args[] = $before; }
+    if ($author !== '' && nx_uid_ok($author)) { $sql .= ' AND p.author = ?'; $args[] = strtolower($author); }
+    $q = nc_cut((string)($opt['q'] ?? ''), 80);
+    if ($q !== '') { $sql .= " AND p.text LIKE ? ESCAPE '\\'"; $args[] = '%' . addcslashes($q, '%_\\') . '%'; }
+    $tag = nc_tag((string)($opt['tag'] ?? ''));
+    if ($tag !== '') { $sql .= " AND (' ' || lower(p.text) || ' ') LIKE ? ESCAPE '\\'"; $args[] = '%#' . addcslashes($tag, '%_\\') . '%'; }
+    $mode = (string)($opt['mode'] ?? '');
+    if ($mode === 'following') { $sql .= ' AND p.author IN (SELECT target FROM comm_follows WHERE vrc_id = ?)'; $args[] = $who['vrc_id']; }
+    if ($mode === 'saved') { $sql .= ' AND p.id IN (SELECT post_id FROM comm_saves WHERE vrc_id = ?)'; $args[] = $who['vrc_id']; }
+    $st = nc_db()->prepare($sql . ' ORDER BY p.id DESC LIMIT 30');
     $st->execute($args);
-    return nc_decorate($st->fetchAll(PDO::FETCH_ASSOC), $who);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    if ($tag !== '') $rows = array_values(array_filter($rows, fn($r) => in_array($tag, nc_tags($r['text']), true)));   // genau dieser Hashtag, nicht nur der Anfang
+    return nc_decorate($rows, $who);
+}
+/** Hashtag normalisieren (ohne #, klein, Buchstaben/Ziffern/_) */
+function nc_tag(string $t): string { $t = mb_strtolower(ltrim(trim($t), '#')); return preg_match('/^[\p{L}\p{N}_]{2,32}$/u', $t) ? $t : ''; }
+function nc_tags(string $text): array {
+    preg_match_all('/(?:^|[^\p{L}\p{N}_&#])#([\p{L}\p{N}_]{2,32})/u', $text, $m);
+    return array_values(array_unique(array_map('mb_strtolower', $m[1])));
 }
 function nc_post_row(int $id): ?array { $st = nc_db()->prepare('SELECT * FROM comm_posts WHERE id = ?'); $st->execute([$id]); return $st->fetch(PDO::FETCH_ASSOC) ?: null; }
 function nc_visible(array $who, array $p): void {
@@ -393,4 +417,65 @@ function nc_mod(array $who, string $do, array $in): array {
     }
     if (in_array($do, ['hide', 'delete', 'nsfw'], true) && $id) $db->prepare("UPDATE comm_reports SET status = 'done', resolver = ?, result = ? WHERE post_id = ? AND status = 'open'")->execute([$who['vrc_id'], $do, $id]);
     return ['ok' => true, 'msg' => 'Erledigt.'];
+}
+
+// ---------- 5.3: Merken, Folgen, Trends, Antworten an mich ----------
+function nc_save(array $who, int $id, bool $on): array {
+    $p = nc_post_row($id);
+    if (!$p || $p['parent']) throw new NcError('Beitrag nicht gefunden.');
+    nc_visible($who, $p);
+    if ($on) {
+        $n = nc_db()->prepare('SELECT COUNT(*) FROM comm_saves WHERE vrc_id = ?'); $n->execute([$who['vrc_id']]);
+        if ((int)$n->fetchColumn() >= 500) throw new NcError('Merkliste ist voll (500).');
+        nc_db()->prepare('INSERT OR IGNORE INTO comm_saves (vrc_id, post_id, created) VALUES (?, ?, ?)')->execute([$who['vrc_id'], $id, time()]);
+    } else nc_db()->prepare('DELETE FROM comm_saves WHERE vrc_id = ? AND post_id = ?')->execute([$who['vrc_id'], $id]);
+    return ['saved' => $on, 'msg' => $on ? '🔖 Gemerkt.' : 'Nicht mehr gemerkt.'];
+}
+function nc_follow(array $who, string $target, bool $on): array {
+    $target = strtolower(trim($target));
+    if (!nx_uid_ok($target) || $target === $who['vrc_id']) throw new NcError('Ungültige Person.');
+    if ($on) {
+        if (!nx_account($target)) throw new NcError('Diese Person hat (noch) kein Nexus-Konto.');
+        $n = nc_db()->prepare('SELECT COUNT(*) FROM comm_follows WHERE vrc_id = ?'); $n->execute([$who['vrc_id']]);
+        if ((int)$n->fetchColumn() >= 1000) throw new NcError('Du folgst schon 1000 Leuten.');
+        nc_db()->prepare('INSERT OR IGNORE INTO comm_follows (vrc_id, target, created) VALUES (?, ?, ?)')->execute([$who['vrc_id'], $target, time()]);
+    } else nc_db()->prepare('DELETE FROM comm_follows WHERE vrc_id = ? AND target = ?')->execute([$who['vrc_id'], $target]);
+    return ['following' => $on, 'msg' => $on ? '⭐ Du folgst jetzt.' : 'Nicht mehr gefolgt.'];
+}
+function nc_follows(array $who): array {
+    $st = nc_db()->prepare('SELECT f.target AS vrc_id, a.display_name AS name, f.created FROM comm_follows f LEFT JOIN nexus_accounts a ON a.vrc_id = f.target WHERE f.vrc_id = ? ORDER BY f.created DESC LIMIT 1000');
+    $st->execute([$who['vrc_id']]);
+    return ['items' => $st->fetchAll(PDO::FETCH_ASSOC)];
+}
+/** Trends der letzten 7 Tage: Hashtags, meistbeachtete Beiträge, aktive Leute (nur SFW, außer der Feed ist nsfw und freigegeben) */
+function nc_trends(array $who, string $rating = 'sfw'): array {
+    if ($rating === 'nsfw') nc_need_nsfw($who); else $rating = 'sfw';
+    $since = time() - 7 * 86400;
+    $st = nc_db()->prepare("SELECT text FROM comm_posts WHERE rating = ? AND status = 'visible' AND created > ? ORDER BY id DESC LIMIT 2000");
+    $st->execute([$rating, $since]);
+    $tags = [];
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $t) foreach (nc_tags((string)$t) as $g) $tags[$g] = ($tags[$g] ?? 0) + 1;
+    arsort($tags);
+    $tp = nc_db()->prepare("SELECT p.*, (SELECT COUNT(*) FROM comm_reactions r WHERE r.post_id = p.id) + 2 * (SELECT COUNT(*) FROM comm_posts c WHERE c.parent = p.id AND c.status = 'visible') AS score
+        FROM comm_posts p WHERE p.rating = ? AND p.parent = 0 AND p.status = 'visible' AND p.created > ? ORDER BY score DESC, p.id DESC LIMIT 5");
+    $tp->execute([$rating, $since]);
+    $top = array_values(array_filter($tp->fetchAll(PDO::FETCH_ASSOC), fn($r) => (int)$r['score'] > 0));
+    $pp = nc_db()->prepare("SELECT p.author AS vrc_id, a.display_name AS name, COUNT(*) AS n FROM comm_posts p LEFT JOIN nexus_accounts a ON a.vrc_id = p.author
+        WHERE p.rating = ? AND p.status = 'visible' AND p.created > ? GROUP BY p.author ORDER BY n DESC LIMIT 5");
+    $pp->execute([$rating, $since]);
+    $out = [];
+    foreach (array_slice($tags, 0, 10, true) as $g => $n) $out[] = ['tag' => (string)$g, 'n' => $n];
+    return ['tags' => $out, 'top' => nc_decorate($top, $who), 'people' => array_map(fn($r) => ['vrc_id' => $r['vrc_id'], 'name' => (string)$r['name'], 'n' => (int)$r['n']], $pp->fetchAll(PDO::FETCH_ASSOC))];
+}
+/** Antworten auf meine Beiträge (neueste zuerst) + Zahl der ungelesenen; seen=1 setzt den Lesestand */
+function nc_inbox(array $who, bool $markSeen = false): array {
+    $st = nc_db()->prepare("SELECT r.* FROM comm_posts r JOIN comm_posts p ON p.id = r.parent
+        WHERE p.author = ? AND r.author != ? AND r.status = 'visible' AND (r.rating = 'sfw' OR ?) ORDER BY r.id DESC LIMIT 40");
+    $st->execute([$who['vrc_id'], $who['vrc_id'], $who['_nsfw'] ? 1 : 0]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $s = nc_db()->prepare('SELECT replies_seen FROM comm_seen WHERE vrc_id = ?'); $s->execute([$who['vrc_id']]);
+    $seen = (int)$s->fetchColumn();
+    $unread = count(array_filter($rows, fn($r) => (int)$r['id'] > $seen));
+    if ($markSeen && $rows) nc_db()->prepare('INSERT INTO comm_seen (vrc_id, replies_seen) VALUES (?, ?) ON CONFLICT(vrc_id) DO UPDATE SET replies_seen = excluded.replies_seen')->execute([$who['vrc_id'], (int)$rows[0]['id']]);
+    return ['items' => nc_decorate($rows, $who), 'unread' => $unread, 'seen' => $seen];
 }

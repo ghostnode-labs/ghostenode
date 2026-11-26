@@ -291,6 +291,17 @@ function vrc_migrate(PDO $db): void {
         PRAGMA user_version = 16;
     ");
     }
+    if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 17) {
+        // 5.3: Community – Merken, Folgen, gelesen-Stand für „Antworten an mich“
+        $db->exec("
+        CREATE TABLE IF NOT EXISTS comm_saves (vrc_id TEXT NOT NULL, post_id INTEGER NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (vrc_id, post_id));
+        CREATE TABLE IF NOT EXISTS comm_follows (vrc_id TEXT NOT NULL, target TEXT NOT NULL, created INTEGER NOT NULL, PRIMARY KEY (vrc_id, target));
+        CREATE INDEX IF NOT EXISTS idx_comm_follow_target ON comm_follows(target);
+        CREATE TABLE IF NOT EXISTS comm_seen (vrc_id TEXT PRIMARY KEY, replies_seen INTEGER NOT NULL DEFAULT 0);
+        CREATE INDEX IF NOT EXISTS idx_comm_parent ON comm_posts(parent, id);
+        PRAGMA user_version = 17;
+    ");
+    }
 }
 
 // ---------- Verschlüsselung der Sitzungs-Cookies ----------

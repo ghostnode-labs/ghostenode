@@ -105,6 +105,15 @@ if (isset($_GET['client_download'])) {
     unlink($tmp);
     exit;
 }
+// Bilder der Nexus Community (NSFW nur mit Freigabe – geprüft wie in der App)
+if (isset($_GET['cmedia'])) {
+    session_write_close();
+    require_once __DIR__ . '/inc/modules/nexusweb.php';
+    try { [$mime, $bin] = nc_media_get(nxweb_who($uid), (string)$_GET['cmedia']); }
+    catch (Throwable $e) { http_response_code(404); exit; }
+    header('Content-Type: ' . $mime); header('Cache-Control: private, max-age=86400'); header('X-Content-Type-Options: nosniff');
+    echo $bin; exit;
+}
 // Bilder aus der VRChat-Galerie (brauchen die VRChat-Anmeldung) durchreichen
 if (isset($_GET['img'])) {
     session_write_close();
@@ -152,6 +161,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($act === 'cancel_login') {
             @session_start();
             unset($_SESSION['vrc_pending']);
+        } elseif (strpos($act, 'nw_') === 0) {
+            // Nexus Web: Community, Pulse, 18+ (gleiches Nexus-Konto wie die App, aus der VRChat-Anmeldung dieser Seite)
+            session_write_close();
+            require_once __DIR__ . '/inc/modules/nexusweb.php';
+            $out = nxweb_action($uid, $act, $in);
         } elseif (strpos($act, 'client_') === 0) {
             // Desktop-Client – funktioniert auch ohne verbundenes VRChat-Web-Konto
             session_write_close();
@@ -1096,8 +1110,9 @@ session_write_close();
     <?php echo emoji_favicon('🥽'); ?>
     <link rel="stylesheet" href="assets/css/hud.css">
     <link rel="stylesheet" href="assets/css/nexus.css">
+    <link rel="stylesheet" href="assets/css/nexus-web.css">
 </head>
-<body>
+<body<?php echo $acc ? ' class="nav-side"' : ''; ?>>
 <?php auth_corner(); ?>
 <div class="wrapper" style="max-width: 1320px;">
     <div class="nav-bar">
@@ -1143,25 +1158,47 @@ session_write_close();
         <div id="clientPane" class="nc"></div>
     </details>
 <?php else: ?>
-    <nav class="vx-tabs" id="tabs" role="tablist">
-        <button type="button" class="vx-tabbtn active" data-tab="friends" role="tab"><span>👥</span>Freunde</button>
-        <button type="button" class="vx-tabbtn" data-tab="favs" role="tab"><span>⭐</span>Favoriten</button>
-        <button type="button" class="vx-tabbtn" data-tab="feed" role="tab"><span>📜</span>Verlauf</button>
-        <button type="button" class="vx-tabbtn" data-tab="stats" role="tab"><span>📈</span>Statistik</button>
-        <button type="button" class="vx-tabbtn" data-tab="worlds" role="tab"><span>🌐</span>Welten</button>
-        <button type="button" class="vx-tabbtn" data-tab="avatars" role="tab"><span>🎭</span>Avatare</button>
-        <button type="button" class="vx-tabbtn" data-tab="groups" role="tab"><span>🛡️</span>Gruppen</button>
-        <button type="button" class="vx-tabbtn" data-tab="calendar" role="tab"><span>📅</span>Kalender</button>
-        <button type="button" class="vx-tabbtn" data-tab="gallery" role="tab"><span>🖼️</span>Galerie</button>
-        <button type="button" class="vx-tabbtn" data-tab="notifs" role="tab"><span>🔔</span>Benachrichtigungen</button>
-        <button type="button" class="vx-tabbtn" data-tab="shop" role="tab"><span>🛒</span>Shop</button>
-        <button type="button" class="vx-tabbtn" data-tab="global" role="tab"><span>🌍</span>VRChat</button>
-        <button type="button" class="vx-tabbtn" data-tab="moderation" role="tab"><span>🚫</span>Moderation</button>
-        <button type="button" class="vx-tabbtn" data-tab="news" role="tab"><span>📰</span>Info-Push</button>
-        <button type="button" class="vx-tabbtn" data-tab="search" role="tab"><span>🔍</span>Suche</button>
-        <button type="button" class="vx-tabbtn" data-tab="client" role="tab"><span>🖥️</span>Client</button>
-        <button type="button" class="vx-tabbtn" data-tab="account" role="tab"><span>⚙</span>Konto</button>
+    <nav class="vx-menu" id="tabs" role="menubar">
+        <div class="vx-sidebrand">VRC <b>Nexus</b> <small>Web</small></div>
+        <button type="button" class="vx-tabbtn" data-tab="friends"><span>👥</span><em>Freunde</em></button>
+        <button type="button" class="vx-tabbtn" data-tab="feed"><span>📰</span><em>Verlauf</em></button>
+        <button type="button" class="vx-tabbtn" data-tab="notifs"><span>🔔</span><em>Benachrichtigungen</em></button>
+        <button type="button" class="vx-tabbtn" data-tab="search"><span>🔍</span><em>Suche</em></button>
+        <div class="vx-msec" role="separator">Leute</div>
+        <div class="vx-mgroup"><button type="button" class="vx-mtop" aria-haspopup="true"><span>🫂</span><em>Community</em><i>▾</i></button>
+            <div class="vx-mdrop" role="menu">
+                <button type="button" class="vx-tabbtn" data-tab="community" data-msub="feed"><span>📰</span><em>Feed</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="community" data-msub="following"><span>⭐</span><em>Folge ich</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="community" data-msub="saved"><span>🔖</span><em>Gemerkt</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="community" data-msub="profile"><span>👤</span><em>Mein Profil</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="groups"><span>🛡️</span><em>Gruppen</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="moderation"><span>🚫</span><em>Blockiert &amp; stumm</em></button>
+                <button type="button" class="vx-tabbtn cm-mod-only" data-tab="community" data-msub="mod" hidden><span>🛡</span><em>Community-Moderation</em></button>
+            </div></div>
+        <button type="button" class="vx-tabbtn" data-tab="pulse"><span>📡</span><em>Nexus Pulse</em></button>
+        <button type="button" class="vx-tabbtn" data-tab="favs"><span>⭐</span><em>Favoriten</em></button>
+        <div class="vx-msec" role="separator">Spiel und Mehr</div>
+        <button type="button" class="vx-tabbtn" data-tab="client"><span>🎮</span><em>Spiel &amp; OSC</em></button>
+        <div class="vx-mgroup"><button type="button" class="vx-mtop" aria-haspopup="true"><span>🧰</span><em>Werkzeuge</em><i>▾</i></button>
+            <div class="vx-mdrop" role="menu">
+                <button type="button" class="vx-tabbtn" data-tab="calendar"><span>📅</span><em>Gruppen-Kalender</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="gallery"><span>🖼️</span><em>Galerie &amp; Inventar</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="shop"><span>🛒</span><em>Shop &amp; Käufe</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="news"><span>📣</span><em>Info-Push</em></button>
+            </div></div>
+        <button type="button" class="vx-tabbtn ns-tab" data-tab="erp" hidden><span>❤️</span><em>18+ / ERP</em></button>
+        <div class="vx-msec" role="separator">Inhalte</div>
+        <button type="button" class="vx-tabbtn" data-tab="avatars"><span>🎭</span><em>Meine Avatare</em></button>
+        <button type="button" class="vx-tabbtn" data-tab="worlds"><span>🌐</span><em>Welten</em></button>
+        <div class="vx-mgroup"><button type="button" class="vx-mtop" aria-haspopup="true"><span>📊</span><em>Diagramme</em><i>▾</i></button>
+            <div class="vx-mdrop" role="menu">
+                <button type="button" class="vx-tabbtn" data-tab="stats"><span>⏱</span><em>Statistik &amp; Spielzeit</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="global"><span>🔥</span><em>Beliebte Welten &amp; VRChat weltweit</em></button>
+            </div></div>
+        <div class="vx-sidefoot"><button type="button" class="vx-tabbtn" data-tab="account"><span>⚙</span><em>Konto &amp; Einstellungen</em></button>
+            <a class="vx-tabbtn" href="dashboard.php"><span>←</span><em>Dashboard</em></a></div>
     </nav>
+    <nav class="vx-subnav" id="subNav" hidden></nav>
     <div class="vx-bar" id="syncBar">
         <span id="syncInfo">Lade …</span>
         <svg class="vx-spark" id="spark" viewBox="0 0 120 26" preserveAspectRatio="none" aria-hidden="true"></svg>
@@ -1349,6 +1386,9 @@ session_write_close();
         <div class="vx-results" id="searchBox"></div>
     </section>
 
+    <section class="vx-tab" data-pane="community" hidden><div id="nwComm" class="nw"></div></section>
+    <section class="vx-tab" data-pane="pulse" hidden><div id="nwPulse" class="nw"></div></section>
+    <section class="vx-tab" data-pane="erp" hidden><div id="nwErp" class="nw"></div></section>
     <section class="vx-tab" data-pane="client" hidden><div id="clientPane" class="nc"></div></section>
     <section class="vx-tab" data-pane="account" hidden>
         <form class="panel" id="pushPanel" style="margin-bottom: 16px;">
@@ -1464,6 +1504,7 @@ session_write_close();
     window.VRCX = { connected: <?php echo $acc ? 'true' : 'false'; ?>, status: <?php echo json_encode(array_map(function ($s) { return ['label' => $s[0], 'color' => $s[1]]; }, VRC_STATUS), JSON_UNESCAPED_UNICODE); ?>, syncMin: <?php echo VRC_SYNC_MIN; ?>, discord: <?php echo can('discord.manage') && (function () { require_once __DIR__ . '/inc/modules/discord.php'; return discord_configured(); })() ? 'true' : 'false'; ?> };
 </script>
 <script src="assets/js/nexus.js"></script>
+<script src="assets/js/nexus-web.js"></script>
 <script src="assets/js/nexus-client.js"></script>
 <script src="assets/js/nexus-translate.js"></script>
 </body>

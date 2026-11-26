@@ -137,12 +137,18 @@
     const TRUST_ORDER = ['VRChat-Team', 'Trusted User', 'Known User', 'User', 'New User', 'Visitor', 'Nuisance'];
 
     // ---------- Reiter ----------
-    const TABS = $$('#tabs [data-tab]').map(b => b.dataset.tab);
-    function tab(name) {
+    const TABS = [...new Set($$('#tabs [data-tab]').map(b => b.dataset.tab))];
+    function tab(name, sub) {
         if (!TABS.includes(name)) name = 'friends';
-        $$('#tabs [data-tab]').forEach(b => b.classList.toggle('active', b.dataset.tab === name));
+        sub = sub || '';
+        let hit = false;
+        $$('#tabs [data-tab]').forEach(b => { const on = b.dataset.tab === name && (b.dataset.msub || '') === sub; hit = hit || on; b.classList.toggle('active', on); });
+        if (!hit) { const l = $$('#tabs [data-tab="' + name + '"]'), main = l.find(b => !b.dataset.msub) || l[0]; l.forEach(b => b.classList.toggle('active', b === main)); }
+        $$('#tabs .vx-mgroup').forEach(g => { g.classList.toggle('active', !!g.querySelector('.active:not([hidden])')); g.classList.remove('open'); });
         $$('.vx-tab').forEach(p => { p.hidden = p.dataset.pane !== name; });
-        store.set('tab', name);
+        store.set('tab', name); store.set('tabSub', sub);
+        const gb = $$('#tabs .vx-mgroup [data-tab="' + name + '"]').find(b => (b.dataset.msub || '') === sub);
+        if (gb) store.set('grpLast:' + gb.closest('.vx-mgroup').querySelector('.vx-mtop em').textContent, { tab: name, sub });
         if (name === 'feed') loadFeed(true);
         if (name === 'stats') loadStats();
         if (name === 'worlds' && !loaded.worlds) loadWorlds('favorites');
@@ -158,8 +164,37 @@
         if (name === 'news' && !loaded.news) loadNews();
         if (name === 'client' && window.NexusClient) window.NexusClient.open();
         if (name !== 'client' && window.NexusClient) window.NexusClient.close();
+        if (window.NexusWeb) window.NexusWeb.open(name, sub);
+        syncSubNav(name, sub);
     }
-    $('#tabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (b) tab(b.dataset.tab); });
+    window.NexusTab = tab;
+    window.NexusWebKit = { api, toast, esc, openUser: id => openUser(id), ago };
+    // Unterpunkte einer Menügruppe stehen (wie im Client) oben als Reiter
+    function syncSubNav(name, sub) {
+        const bar = $('#subNav');
+        if (!bar) return;
+        const btn = $$('#tabs [data-tab="' + name + '"]').find(b => b.closest('.vx-mgroup'));
+        const g = btn && btn.closest('.vx-mgroup');
+        if (!g) { bar.hidden = true; bar.innerHTML = ''; return; }
+        bar.innerHTML = '<span class="vx-subhead">' + g.querySelector('.vx-mtop').innerHTML.replace(/<i>.*?<\/i>/, '') + '</span>'
+            + $$('.vx-mdrop .vx-tabbtn', g).filter(b => !b.hidden).map(b => '<button type="button" class="chip' + (b.dataset.tab === name && (b.dataset.msub || '') === (sub || '') ? ' on' : '') + '" data-tab="' + b.dataset.tab + '"' + (b.dataset.msub ? ' data-msub="' + b.dataset.msub + '"' : '') + '>' + b.innerHTML + '</button>').join('');
+        bar.hidden = false;
+    }
+    window.NexusSubNav = () => syncSubNav(store.get('tab'), store.get('tabSub'));
+    function groupGo(g) {
+        const last = store.get('grpLast:' + g.querySelector('.vx-mtop em').textContent);
+        const first = $$('.vx-mdrop [data-tab]', g).find(b => !b.hidden);
+        if (last && $$('.vx-mdrop [data-tab="' + last.tab + '"]', g).some(b => !b.hidden && (b.dataset.msub || '') === (last.sub || ''))) return tab(last.tab, last.sub);
+        if (first) tab(first.dataset.tab, first.dataset.msub);
+    }
+    $('#subNav') && $('#subNav').addEventListener('click', e => { const b = e.target.closest('.chip[data-tab]'); if (b) tab(b.dataset.tab, b.dataset.msub); });
+    $('#tabs').addEventListener('click', e => {
+        const top = e.target.closest('.vx-mtop');
+        if (top && document.body.classList.contains('nav-side')) return groupGo(top.parentNode);
+        if (top) { const g = top.parentNode, was = g.classList.contains('open'); $$('#tabs .vx-mgroup').forEach(x => x.classList.remove('open')); g.classList.toggle('open', !was); return; }
+        const b = e.target.closest('button[data-tab]'); if (b) tab(b.dataset.tab, b.dataset.msub);
+    });
+    document.addEventListener('click', e => { if (!e.target.closest('#tabs')) $$('#tabs .vx-mgroup.open').forEach(x => x.classList.remove('open')); });
     document.addEventListener('keydown', e => {
         if (e.target.closest('input, textarea, select') || e.ctrlKey || e.metaKey || e.altKey || !$('#userModal').hidden) return;
         if (e.key === '/') { e.preventDefault(); tab('friends'); $('#friendSearch').focus(); }
@@ -1247,7 +1282,7 @@
                         + '<span class="nf-msg" title="' + esc(n.message) + '">' + msg + '</span>'
                         + '<span class="nf-acts">' + acts.join('') + '</span></div>';
                 }).join('') + '</div>' : '<div class="vx-empty">' + (nfView === 'open' ? 'Keine offenen Benachrichtigungen. 🎉' : 'Noch nichts im Verlauf.') + '</div>');
-            $('[data-tab=notifs]').innerHTML = '<span>🔔</span>Benachrichtigungen' + (d.unseen ? ' <b class="vx-badge">' + d.unseen + '</b>' : '');
+            $('[data-tab=notifs]').innerHTML = '<span>🔔</span><em>Benachrichtigungen</em>' + (d.unseen ? ' <b class="vx-badge">' + d.unseen + '</b>' : '');
         }).catch(fail(box));
     }
     $('#nfView').addEventListener('click', e => { const b = e.target.closest('[data-view]'); if (!b) return; nfView = b.dataset.view; $$('#nfView .chip').forEach(c => c.classList.toggle('on', c === b)); loadNotifs(true); });
@@ -1963,6 +1998,6 @@
 
     // Start
     load(false).then(() => load(true)).finally(schedule);
-    tab(store.get('tab', 'friends'));
+    tab(store.get('tab', 'friends'), store.get('tabSub', ''));
     setInterval(() => { if (state && !$('[data-pane=friends]').hidden) renderFriends(); }, 60000);
 })();

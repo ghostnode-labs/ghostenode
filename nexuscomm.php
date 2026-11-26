@@ -7,6 +7,7 @@
  *   feed {rating:"sfw"|"nsfw", before, author} · thread {id} · post {text, rating, media[], parent} · edit {id,text} · delete {id}
  *   react {id, emoji} · report {id, reason} · upload {data(base64), rating} · media {id} → Bild (binär)
  *   profile {id} · profile_save {…} · mod_queue · mod {do, id, note, hours, vrc_id, media, report}
+ *   5.3: feed {q, tag, mode:"following"|"saved"} · save {id,on} · follow {id,on} · follows · trends {rating} · inbox {seen}
  * NSFW wird bei jeder Anfrage serverseitig geprüft (Verified 18+ + NSFW an) – auch für Bilder und Antworten.
  */
 require_once __DIR__ . '/inc/core/pages.php';
@@ -24,7 +25,12 @@ try {
     $who = nc_who($in);
     switch ($a) {
         case 'me': $out(['vrc_id' => $who['vrc_id'], 'mod' => $who['_mod'], 'nsfw' => $who['_nsfw'], 'reactions' => NC_REACTIONS, 'sanction' => nc_sanction($who['vrc_id'])]);
-        case 'feed': $out(['items' => nc_feed($who, (string)($in['rating'] ?? 'sfw'), (int)($in['before'] ?? 0), (string)($in['author'] ?? ''))]);
+        case 'feed': $out(['items' => nc_feed($who, (string)($in['rating'] ?? 'sfw'), (int)($in['before'] ?? 0), (string)($in['author'] ?? ''), ['q' => (string)($in['q'] ?? ''), 'tag' => (string)($in['tag'] ?? ''), 'mode' => (string)($in['mode'] ?? '')])]);
+        case 'save': $out(nc_save($who, (int)($in['id'] ?? 0), !empty($in['on'])));
+        case 'follow': $out(nc_follow($who, (string)($in['id'] ?? ''), !empty($in['on'])));
+        case 'follows': $out(nc_follows($who));
+        case 'trends': $out(nc_trends($who, (string)($in['rating'] ?? 'sfw')));
+        case 'inbox': $out(nc_inbox($who, !empty($in['seen'])));
         case 'thread': $out(nc_thread($who, (int)($in['id'] ?? 0)));
         case 'post': $out(nc_create($who, $in));
         case 'edit': $out(nc_edit($who, (int)($in['id'] ?? 0), (string)($in['text'] ?? '')));
