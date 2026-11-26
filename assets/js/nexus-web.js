@@ -185,10 +185,12 @@
                 + (p.bio ? '<div class="nw-text">' + rich(p.bio) + '</div>' : '')
                 + (p.interests ? '<div class="nw-muted">💜 ' + esc(p.interests) + '</div>' : '')
                 + (p.links && p.links.length ? '<div class="nw-row">' + p.links.map(l => '<a class="chip" href="' + esc(l) + '" target="_blank" rel="noopener noreferrer">🔗 ' + esc(l.replace(/^https:\/\//, '').slice(0, 40)) + '</a>').join('') + '</div>' : '')
+                + (me && me.nsfw && !own && p.link18 ? linkBar(p) : '')
                 + (p.nsfw_bio ? '<div class="nw-card" style="margin-top:10px;border-color:rgba(255,85,140,.45)"><h3>🔞 18+-Profil</h3><div class="nw-text">' + rich(p.nsfw_bio) + '</div></div>' : '')
                 + '</div>' + (own ? profileForm(p) : '') + '<h3 class="nw-muted" style="margin:6px 0 0">Beiträge</h3><div class="nw" id="nwList"></div><button type="button" class="btn btn-sm" id="nwMore" hidden>Ältere laden</button>';
             if ($('#nwFollow', box)) $('#nwFollow', box).onclick = () => api('nw_follow', { id: p.vrc_id, on: p.i_follow ? '' : '1' }).then(x => { toast(x.msg); showProfile(id, box); }).catch(x => toast('⚠ ' + x.message, true));
             $('#nwVrc', box).onclick = () => K.openUser(p.vrc_id);
+            $$('[data-l18]', box).forEach(b => { b.onclick = () => l18Do(b, () => showProfile(id, box)); });
             if (own) bindProfileForm(box, p);
             cs.box = box; cs.author = p.vrc_id; cs.mode = ''; cs.q = ''; cs.tag = ''; cs.rating = box.id === 'nwErpBody' ? 'nsfw' : 'sfw';
             $('#nwMore', box).onclick = () => loadFeed(false);
@@ -271,13 +273,82 @@
     // ❤️ 18+ / ERP
     // =====================================================================
     let erpSub = 'feed';
+    // ---------- 6.0: 18+-Anfragen, Verbindungen, Kompatibilität, Consent-Check ----------
+    const LIGHT = { green: '🟢', yellow: '🟡', red: '🔴' };
+    let compatOf = null, consentFor = '';
+    function linkBar(p) {
+        const l = p.link18, b = (a, t, g) => '<button type="button" class="btn btn-sm' + (g ? ' btn-gold' : '') + '" data-l18="' + a + '" data-vrc="' + esc(p.vrc_id) + '"' + (l.id ? ' data-rid="' + l.id + '"' : '') + '>' + t + '</button>';
+        return '<div class="nw-row" style="margin-top:8px">' + (l.state === 'none' ? b('send', '💌 18+-Anfrage senden', true)
+            : l.state === 'sent' ? '<span class="chip on">⏳ Anfrage gesendet</span>' + b('withdraw', 'Zurückziehen')
+            : l.state === 'received' ? b('open', '💌 Anfrage beantworten', true)
+            : '<span class="chip on">💞 Verbunden</span>' + b('open', '🤝 Consent-Check & Kompatibilität', true)) + '</div>';
+    }
+    function l18Do(b, again) {
+        const a = b.dataset.l18, rid = b.dataset.rid, vrc = b.dataset.vrc, sid = b.dataset.sid;
+        const ok = d => { if (d && d.msg) toast(d.msg); again(); }, bad = x => toast('⚠ ' + x.message, true);
+        if (a === 'send') { const m = prompt('Kurze Nachricht zur Anfrage (optional):', ''); if (m === null) return; return api('nw_req_send', { id: vrc, message: m }).then(ok).catch(bad); }
+        if (a === 'open') { erpSub = 'links'; if (window.NexusTab) window.NexusTab('erp'); return openErp(); }
+        if (a === 'accept' || a === 'decline') return api('nw_req_answer', { id: rid, accept: a === 'accept' ? '1' : '' }).then(ok).catch(bad);
+        if (a === 'withdraw') return api('nw_req_withdraw', { id: rid }).then(ok).catch(bad);
+        if (a === 'unlink') { if (!confirm('Verbindung lösen? Laufende Consent-Checks enden dann.')) return; return api('nw_req_withdraw', { id: rid }).then(ok).catch(bad); }
+        if (a === 'compat') return api('nw_compat', { id: vrc }).then(d => { compatOf = { id: vrc, d }; again(); }).catch(bad);
+        if (a === 'consent') { consentFor = vrc; return again(); }
+        if (a === 'sdecline') return api('nw_sess_answer', { id: sid, agree: '' }).then(ok).catch(bad);
+        if (a === 'end') return api('nw_sess_end', { id: sid, reason: b.dataset.r }).then(ok).catch(bad);
+    }
+    function openLinks(body) {
+        body.innerHTML = '<div class="vx-loading">Lade …</div>';
+        api('nw_req_list').then(d => {
+            const nm = x => '<a href="#" data-prof="' + esc(x.vrc_id) + '"><b>' + esc(x.name || x.vrc_id.slice(0, 12)) + '</b></a>';
+            const dt = ts => new Date(ts * 1000).toLocaleDateString('de-DE');
+            const terms = t => t ? LIGHT[t.light] + ' · ⏱ ' + t.minutes + ' min · 🛑 „' + esc(t.safeword) + '“' + (t.toys ? ' · 🎮 Spielzeug' : '') + (t.limits ? '<div class="nw-muted">🚫 ' + esc(t.limits) + '</div>' : '') : '–';
+            const form = (id, sid) => '<form class="nw-card nw-consent" data-cf="' + esc(id) + '"' + (sid ? ' data-sid="' + sid + '"' : '') + '><div class="nw-row">'
+                + ['green', 'yellow', 'red'].map(l => '<label class="vx-auto"><input type="radio" name="light" value="' + l + '"' + (l === 'green' ? ' checked' : '') + '> ' + LIGHT[l] + ' ' + { green: 'Bereit', yellow: 'Vorsichtig', red: 'Heute nicht' }[l] + '</label>').join('') + '</div>'
+                + '<input type="text" name="limits" maxlength="500" placeholder="Grenzen für heute (optional)"><div class="nw-row"><input type="text" name="safeword" maxlength="40" value="Rot" style="width:140px" placeholder="Safeword">'
+                + '<select name="minutes">' + [15, 30, 45, 60, 90, 120].map(m => '<option value="' + m + '"' + (m === 30 ? ' selected' : '') + '>' + m + ' min</option>').join('') + '</select><label class="vx-auto"><input type="checkbox" name="toys"> 🎮 Spielzeug erlaubt</label></div>'
+                + '<div class="nw-row"><button class="btn btn-sm btn-gold">' + (sid ? 'Zustimmen' : 'Consent-Check schicken') + '</button>' + (sid ? '<button type="button" class="btn btn-sm" data-l18="sdecline" data-sid="' + sid + '">Nein danke</button>' : '') + '</div></form>';
+            const compat = c => '<div class="nw-card"><b>💞 ' + (c.score === null ? 'Noch zu wenig ausgefüllt' : c.score + ' %') + '</b>'
+                + [['match', '💚'], ['maybe', '💛'], ['conflict', '🚫']].map(([k, i]) => c[k].length ? '<div class="nw-row">' + c[k].map(x => '<span class="chip">' + i + ' ' + esc(x.k.replace(/_/g, ' ')) + ' ' + (x.dir === 'me' ? '↙' : '↗') + '</span>').join('') + '</div>' : '').join('')
+                + '<span class="nw-muted">↙ du empfängst · ↗ du gibst</span></div>';
+            const card = (h, inner) => '<div class="nw-card"><h3>' + h + '</h3>' + inner + '</div>';
+            body.innerHTML = '<div class="nw-muted" style="margin-bottom:8px">💌 Anfragen gibt es nur zwischen Konten mit Verified 18+ und NSFW an. Erst wenn beide zustimmen, seid ihr verbunden. Ablehnen bleibt anonym („nicht angenommen“).</div>'
+                + card('📥 Eingang (' + d.incoming.length + ')', d.incoming.length ? d.incoming.map(r => '<div class="nw-l18">' + nm(r) + ' <span class="nw-muted">' + dt(r.created) + '</span>' + (r.message ? '<div class="nw-text">' + esc(r.message) + '</div>' : '')
+                    + '<div class="nw-row"><button type="button" class="btn btn-sm btn-gold" data-l18="accept" data-rid="' + r.id + '">💞 Annehmen</button><button type="button" class="btn btn-sm" data-l18="decline" data-rid="' + r.id + '">Ablehnen</button></div></div>').join('') : '<span class="nw-muted">Keine offenen Anfragen.</span>')
+                + card('💞 Verbindungen (' + d.connections.length + ')', d.connections.length ? d.connections.map(c => {
+                    const ss = d.sessions.filter(s => s.with === c.vrc_id && ['proposed', 'ready'].includes(s.status));
+                    const open = ss.find(s => s.status === 'proposed' && !s.proposed_by_me), mine = ss.find(s => s.status === 'proposed' && s.proposed_by_me), ready = ss.find(s => s.status === 'ready');
+                    return '<div class="nw-l18">' + nm(c) + ' <span class="nw-muted">seit ' + dt(c.since) + '</span><div class="nw-row">'
+                        + '<button type="button" class="btn btn-sm" data-l18="compat" data-vrc="' + esc(c.vrc_id) + '">💞 Kompatibilität</button>'
+                        + (!ss.length ? '<button type="button" class="btn btn-sm btn-gold" data-l18="consent" data-vrc="' + esc(c.vrc_id) + '">🤝 Consent-Check</button>' : '')
+                        + '<button type="button" class="btn btn-sm" data-l18="unlink" data-rid="' + c.id + '">Lösen</button></div>'
+                        + (compatOf && compatOf.id === c.vrc_id ? compat(compatOf.d) : '')
+                        + (consentFor === c.vrc_id && !ss.length ? form(c.vrc_id, 0) : '')
+                        + (open ? '<div class="nw-card"><b>🤝 Consent-Check angefragt</b><div>' + terms(open.theirs) + '</div>' + form(c.vrc_id, open.id) + '</div>' : '')
+                        + (mine ? '<div class="nw-muted">⏳ Wartet auf Zustimmung – ' + terms(mine.mine) + ' <button type="button" class="btn btn-sm" data-l18="end" data-sid="' + mine.id + '" data-r="cancel">Zurückziehen</button></div>' : '')
+                        + (ready ? '<div class="nw-card" style="border-color:rgba(80,200,120,.5)"><b>✅ Session läuft</b> · bis ' + new Date(ready.ends * 1000).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })
+                            + '<div>Du: ' + terms(ready.mine) + '</div><div>Gegenüber: ' + terms(ready.theirs) + '</div><div class="nw-row"><button type="button" class="btn btn-sm btn-danger" data-l18="end" data-sid="' + ready.id + '" data-r="safeword">🛑 Safeword – sofort beenden</button>'
+                            + '<button type="button" class="btn btn-sm" data-l18="end" data-sid="' + ready.id + '" data-r="done">Fertig</button></div></div>' : '') + '</div>';
+                }).join('') : '<span class="nw-muted">Noch keine Verbindungen – schick jemandem im Profil eine 18+-Anfrage.</span>')
+                + card('📤 Gesendet', d.outgoing.length ? d.outgoing.map(r => '<div class="nw-l18">' + nm(r) + ' <span class="nw-muted">' + dt(r.created) + ' · ' + ({ pending: 'wartet', not_accepted: 'nicht angenommen', withdrawn: 'zurückgezogen', expired: 'abgelaufen', ended: 'gelöst' }[r.status] || esc(r.status)) + '</span>'
+                    + (r.status === 'pending' ? ' <button type="button" class="btn btn-sm" data-l18="withdraw" data-rid="' + r.id + '">Zurückziehen</button>' : '') + '</div>').join('') : '<span class="nw-muted">–</span>');
+            const again = () => openLinks(body);
+            $$('[data-l18]', body).forEach(b => { b.onclick = () => l18Do(b, again); });
+            $$('[data-prof]', body).forEach(a => { a.onclick = e => { e.preventDefault(); erpSub = 'profile'; cs.box = body; showProfile(a.dataset.prof, body); }; });
+            $$('form.nw-consent', body).forEach(f => { f.onsubmit = e => {
+                e.preventDefault();
+                const t = { light: (f.querySelector('[name=light]:checked') || {}).value || 'yellow', limits: f.limits.value, safeword: f.safeword.value, minutes: +f.minutes.value, toys: f.toys.checked };
+                (f.dataset.sid ? api('nw_sess_answer', { id: f.dataset.sid, agree: '1', terms: JSON.stringify(t) }) : api('nw_sess_start', { id: f.dataset.cf, terms: JSON.stringify(t) }))
+                    .then(x => { consentFor = ''; toast(x.msg); again(); }).catch(x => toast('⚠ ' + x.message, true));
+            }; });
+        }).catch(x => { body.innerHTML = '<div class="vx-error">' + esc(x.message) + '</div>'; });
+    }
     function openErp() {
         const box = $('#nwErp');
         const a = me.account;
         if (!a.verified18) return gate(box, '🔞 Nur mit Verified 18+', 'Schließe in VRChat die Altersverifizierung (18+) ab und mach sie im Profil sichtbar – danach hier neu laden.');
         box.innerHTML = '<div class="nw-erp-hero"><div class="nw-row"><div style="flex:1"><h2>❤️ 18+ / ERP</h2><span class="nw-muted">Nur für dich sichtbar, weil dein Konto Verified 18+ ist. Inhalte bleiben im 18+-Bereich – nichts davon erscheint im normalen Feed.</span></div>'
             + '<label class="vx-auto"><input type="checkbox" id="nwNsfwOn"' + (me.nsfw ? ' checked' : '') + '> NSFW-Inhalte anzeigen</label></div></div>'
-            + (me.nsfw ? '<div class="nw-row">' + [['feed', '🔞 NSFW-Feed'], ['reddit', '👽 r/VRchatERP'], ['profile', '👤 Mein 18+-Profil'], ['tips', '🛡 Sicherheit & Regeln']].map(([k, l]) => '<button type="button" class="chip' + (erpSub === k ? ' on' : '') + '" data-esub="' + k + '">' + l + '</button>').join('') + '</div><div id="nwErpBody" class="nw"></div>'
+            + (me.nsfw ? '<div class="nw-row">' + [['feed', '🔞 NSFW-Feed'], ['links', '💌 Anfragen & Consent'], ['reddit', '👽 r/VRchatERP'], ['profile', '👤 Mein 18+-Profil'], ['tips', '🛡 Sicherheit & Regeln']].map(([k, l]) => '<button type="button" class="chip' + (erpSub === k ? ' on' : '') + '" data-esub="' + k + '">' + l + '</button>').join('') + '</div><div id="nwErpBody" class="nw"></div>'
                 : '<div class="nw-card nw-gate"><b>NSFW ist aus</b><span class="nw-muted">Schalte oben „NSFW-Inhalte anzeigen“ ein. Das gilt auch in der App (gleiches Nexus-Konto) und lässt sich jederzeit wieder ausschalten.</span></div>');
         $('#nwNsfwOn', box).onchange = e => api('nw_nsfw', { on: e.target.checked ? '1' : '0' }).then(d => { toast(d.msg); meP = null; return ME(); }).then(openErp).catch(x => { e.target.checked = !e.target.checked; toast('⚠ ' + x.message, true); });
         $$('[data-esub]', box).forEach(b => { b.onclick = () => { erpSub = b.dataset.esub; openErp(); }; });
@@ -285,6 +356,7 @@
         const body = $('#nwErpBody', box);
         if (erpSub === 'feed') return openComm('erp-feed');
         if (erpSub === 'reddit') return openPulse(body, true);
+        if (erpSub === 'links') return openLinks(body);
         if (erpSub === 'profile') { cs.box = body; return showProfile(a.vrc_id, body); }
         body.innerHTML = '<div class="nw-tiles">' + [
             ['🤝', 'Einverständnis zuerst', 'Klärt Grenzen vorher. „Nein“ und Safewords gelten sofort – auch mitten in einer Szene.'],

@@ -215,8 +215,16 @@ $rm_default = [
     'Poster 2.0: Zeitplan-Kalender, Statistiken, Freigaben für Gruppen' => 'wip', 'Öffentlicher Event-Kalender mit VRChat-Gruppen-Events' => 'done',
     'Rollen- und Rechte-Editor mit Änderungsprotokoll' => 'done', 'Automatische Backups mit Wiederherstellung aus dem Admin-Bereich' => 'wip',
     'Sicherheits-Header (CSP), Anfrage-Limits, Schutz vor Spam' => 'wip',
+    // 6.x – bereits umgesetzt (5.4 – 6.0)
+    'Oberfläche 2.0: neue Schriftarten, eigene Schrift-Datei, Schriftgröße, Dichte und Ecken' => 'done', 'Akzentfarbe frei wählbar, Kontrast-Modus und Farbschwäche-Modi' => 'done',
+    'Lizenzen 2.0: Übersicht aller Schlüssel, Ablauf-Erinnerung, Geräte und Übertragung' => 'wip', 'Admin: Schlüssel ausstellen, verlängern, sperren – mit Protokoll' => 'wip',
+    'Web-API (PHP) mit API-Schlüsseln, Limits und Dokumentations-Seite' => 'done', 'Dashboard-Baukasten: Widgets per Drag & Drop, Sichtbarkeit je Gast / angemeldet / Rolle' => 'done',
+    'Profil-Anfragen: 18+-Profile können sich gegenseitig anfragen – nur mit beidseitiger Zustimmung sichtbar' => 'done', 'Privater Vorlieben-Abgleich zwischen freigegebenen Profilen' => 'done',
+    'Einverständnis-Check vor jeder gemeinsamen Session' => 'done', 'Kompatibilitäts-Anzeige nur bei gegenseitiger Freigabe' => 'done',
+    '18+-Bereich auf der Webseite: Anfragen, Grenzen und Vorlagen auch im Browser' => 'wip', 'Anfragen mit Nachricht, Ablauf und Erinnerung – ablehnen ohne Begründung' => 'wip',
+    'Grenzen-Profil zum Teilen (Ja / Vielleicht / Nein) – beim Anfragen automatisch verglichen' => 'wip',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 
 // =====================================================================================================
@@ -674,7 +682,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 </header>
 
 <div class="rm-stats">
-    <div class="rm-card"><b><?= count($released5) ?></b><span>5.x-Releases erschienen</span></div>
+    <div class="rm-card"><b><?= count($released5) ?></b><span>Releases seit 5.0 erschienen</span></div>
     <div class="rm-card"><b><?= $all5 ?></b><span>geplante Punkte</span></div>
     <div class="rm-card"><b><?= $count['wip'] ?></b><span>in Arbeit</span></div>
     <div class="rm-card"><b><?= $pct($count['done'], $all5) ?> %</b><span>5.x erledigt</span><div class="rm-bar"><i style="width:<?= $pct($count['done'], $all5) ?>%"></i></div></div>
