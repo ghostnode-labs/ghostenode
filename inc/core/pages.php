@@ -40,6 +40,7 @@ const PAGE_DEFAULTS = [
     'nsfw.php'             => ['NSFW-Galerie', '🔞', 'Bilder-APIs (e621, Rule34, Danbooru, Gelbooru …) durchsuchen, Favoriten & Discord – 18+', 'Community', 'users'],
     'linkcheck.php'        => ['Link-Check', '🩺', 'Prüft alle Links der Hubs auf Erreichbarkeit', 'System', 'public'],
     'backup.php'           => ['Backup', '💾', 'Alle Daten als ZIP herunterladen', 'System', 'users'],
+    'api.php'              => ['API & Entwickler', '🔌', 'Web-API und Client-API (WebSocket) mit Dokumentation und eigenen Schlüsseln', 'Community', 'public'],
     'changelog.php'        => ['Changelog', '📜', 'Alle Versionen von VRC Nexus mit Neuerungen und Downloads', 'Community', 'public'],
     'Roadmap.php'          => ['Roadmap', '🗺️', 'Was als Nächstes kommt: VRC Nexus 5.x, Webseite 2.0 & mehr', 'Community', 'public'],
     'admin.php'            => ['Admin-Zentrale', '⚙️', 'Benutzer, Rechte, Seiten, Protokoll & System', 'System', 'public'],
