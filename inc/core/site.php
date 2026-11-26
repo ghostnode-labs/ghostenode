@@ -49,6 +49,8 @@ const PERMISSIONS = [
     'posters.manage'         => ['VRChat-Poster: alle Slots aller Benutzer verwalten + Admin-Einstellungen', 'Poster'],
     'market.submit'          => ['Plugin-Marktplatz: eigene VRC-Nexus-Plugins einreichen und aktualisieren', 'Marktplatz'],
     'market.manage'          => ['Plugin-Marktplatz: Plugins prüfen, freigeben, ablehnen und löschen', 'Marktplatz'],
+    'nexus.age'              => ['Nexus: „Verified 18+“ manuell vergeben und entziehen (mit Grund, protokolliert)', 'Community'],
+    'nexus.community'        => ['Nexus-Community verwalten: Beiträge, Profile, Weltbeschreibungen, Statistik', 'Community'],
 ];
 
 function site_db_file(): string { return db_sqlite_file('site'); }

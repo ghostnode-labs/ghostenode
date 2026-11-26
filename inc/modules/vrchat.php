@@ -282,6 +282,15 @@ function vrc_migrate(PDO $db): void {
         PRAGMA user_version = 15;
     ");
     }
+    if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 16) {
+        // 5.1: 18+ manuell durch einen Admin (z. B. nach eigener Prüfung) – mit Ablauf, Grund und wer es war
+        $db->exec("
+        ALTER TABLE nexus_accounts ADD COLUMN age_manual_until INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE nexus_accounts ADD COLUMN age_manual_by TEXT NOT NULL DEFAULT '';
+        ALTER TABLE nexus_accounts ADD COLUMN age_manual_note TEXT NOT NULL DEFAULT '';
+        PRAGMA user_version = 16;
+    ");
+    }
 }
 
 // ---------- Verschlüsselung der Sitzungs-Cookies ----------

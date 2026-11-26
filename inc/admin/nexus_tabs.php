@@ -7,11 +7,13 @@
  *   nx_chat      💬 Chat-Geräte (nur öffentliche Schlüssel/Zähler – Nachrichten sind Ende-zu-Ende-verschlüsselt)
  */
 require_once __DIR__ . '/../modules/nexuscomm.php';   // lädt auch nexusacct + nexuswarn
+require_once __DIR__ . '/nexus_cadm.php';   // 5.1: Community-Verwaltung
 
 const NX_ADMIN_TABS = [
     'nx_accounts' => ['🪪', 'Nexus-Konten', 'admin.access'],
     'nx_warn'     => ['⚠️', 'Nexus-Warnliste', 'admin.access'],
     'nx_comm'     => ['🫂', 'Community-Moderation', 'admin.access'],
+    'nx_cadm'     => ['🗂️', 'Community-Verwaltung', 'nexus.community'],
     'nx_chat'     => ['💬', 'Nexus-Chat', 'admin.access'],
 ];
 
@@ -33,9 +35,26 @@ function admin_nexus_post(string $act, array $in): string {
                 return $act === 'nx_ban' ? 'Konto gesperrt, alle Geräte abgemeldet.' : 'Konto entsperrt.';
             case 'nx_age_revoke':
                 if (!nx_uid_ok($id)) throw new InvalidArgumentException('Ungültige VRChat-User-ID.');
-                nx_db()->prepare("UPDATE nexus_accounts SET age_until = 0, nsfw_on = 0, age_status = 'entzogen (Admin)' WHERE vrc_id = ?")->execute([$id]);
-                nw_log($actor, 'Admin: Verified 18+ entzogen', $id);
-                return 'Freigabe entzogen – die App prüft beim nächsten Start neu bei VRChat.';
+                nx_db()->prepare("UPDATE nexus_accounts SET age_until = 0, nsfw_on = 0, age_status = 'entzogen (Admin)', age_manual_until = 0, age_manual_by = '', age_manual_note = '' WHERE vrc_id = ?")->execute([$id]);
+                nw_log($actor, 'Admin: Verified 18+ entzogen', $id, mb_substr(trim((string)($in['note'] ?? '')), 0, 200));
+                audit('Nexus: 18+ entzogen', $id, 'security');
+                return 'Freigabe entzogen (auch eine manuelle) – die App prüft beim nächsten Start neu bei VRChat.';
+            case 'nx_age_grant':   // 5.1: 18+ manuell – nur mit Grund (wie geprüft), Ablauf, protokolliert
+                if (!nx_uid_ok($id)) throw new InvalidArgumentException('Ungültige VRChat-User-ID.');
+                $acc = nx_account($id);
+                if (!$acc) throw new InvalidArgumentException('Zu dieser VRChat-ID gibt es noch kein Nexus-Konto – die Person muss VRC Nexus einmal mit ihrem Konto verbinden.');
+                if ((int)$acc['banned']) throw new InvalidArgumentException('Das Konto ist gesperrt.');
+                $note = mb_substr(trim((string)($in['note'] ?? '')), 0, 300);
+                if (mb_strlen($note) < 10) throw new InvalidArgumentException('Bitte angeben, wie das Alter geprüft wurde (mindestens 10 Zeichen) – das wird protokolliert.');
+                if (empty($in['confirm'])) throw new InvalidArgumentException('Bitte bestätigen, dass die Person nachweislich volljährig ist.');
+                $days = max(1, min(365, (int)($in['days'] ?? 30)));
+                $until = time() + $days * 86400;
+                nx_db()->prepare("UPDATE nexus_accounts SET age_manual_until = ?, age_manual_by = ?, age_manual_note = ?, age_until = MAX(age_until, ?), age_status = CASE WHEN age_until > ? THEN age_status ELSE 'manuell' END WHERE vrc_id = ?")
+                    ->execute([$until, user_label(), $note, $until, time(), $id]);
+                nw_log($actor, 'Admin: Verified 18+ manuell vergeben', $id, $days . ' Tage – ' . $note);
+                audit('Nexus: 18+ manuell vergeben', $id . ' · ' . $days . ' Tage · ' . $note, 'security');
+                return '🔞 18+ für ' . $acc['display_name'] . ' manuell freigegeben bis ' . date('d.m.Y', $until) . '. NSFW muss die Person in der App selbst einschalten.';
+            case 'nx_cadm': return admin_nexus_cadm($actor, $in);
             case 'nx_cron': return nx_cron(50) . ' abgelaufene Freigaben aufgeräumt.';
             // --- Warnliste ---
             case 'nx_warn_settings': case 'nx_warn_update': case 'nx_warn_delete': case 'nx_warn_clear': case 'nx_warn_appeal':
@@ -91,8 +110,10 @@ function admin_nexus_view(string $tab): void {
         foreach ($list as $a) {
             $v = (int)$a['age_until'] > time();
             echo '<tr><td>' . e($a['display_name']) . ($a['banned'] ? ' <span class="badge red">gesperrt</span>' : '') . (nw_is_owner($a['vrc_id']) ? ' <span class="badge gold">Besitzerin</span>' : '') . '</td><td><code>' . e($a['vrc_id']) . '</code></td>'
-                . '<td>' . ($v ? '<span class="green">✔ bis ' . e(nx_adm_when($a['age_until'])) . '</span>' : '<span class="muted">✖ ' . e($a['age_status'] ?: '–') . '</span>') . '</td><td>' . ($v && $a['nsfw_on'] ? 'an' : 'aus') . '</td><td>' . (int)$a['devs'] . '</td><td>' . e(nx_adm_when($a['last_seen'])) . '</td><td class="tools">'
-                . ($v ? nx_adm_form('nx_accounts', 'nx_age_revoke', '<input type="hidden" name="vrc_id" value="' . e($a['vrc_id']) . '"><button class="btn btn-sm" onclick="return confirm(\'18+-Freigabe entziehen?\')">18+ entziehen</button>') : '')
+                . '<td>' . ($v ? '<span class="green">✔ bis ' . e(nx_adm_when($a['age_until'])) . '</span>' : '<span class="muted">✖ ' . e($a['age_status'] ?: '–') . '</span>')
+                . ((int)($a['age_manual_until'] ?? 0) > time() ? ' <span class="badge gold" title="' . e(($a['age_manual_by'] ?? '') . ': ' . ($a['age_manual_note'] ?? '')) . '">manuell bis ' . e(date('d.m.Y', (int)$a['age_manual_until'])) . '</span>' : '') . '</td><td>' . ($v && $a['nsfw_on'] ? 'an' : 'aus') . '</td><td>' . (int)$a['devs'] . '</td><td>' . e(nx_adm_when($a['last_seen'])) . '</td><td class="tools">'
+                . (can('nexus.age') && !$v && !$a['banned'] ? '<details class="nx-grant"><summary class="btn btn-sm">🔞 18+ manuell</summary>' . nx_adm_form('nx_accounts', 'nx_age_grant', '<input type="hidden" name="vrc_id" value="' . e($a['vrc_id']) . '"><input type="text" name="note" required minlength="10" maxlength="300" placeholder="Wie geprüft? (z. B. Ausweis per Video-Call am …)"> <label><input type="number" name="days" min="1" max="365" value="30" style="width:70px"> Tage</label> <label class="check small"><input type="checkbox" name="confirm" value="1" required> nachweislich volljährig</label> <button class="btn btn-sm btn-gold">Freigeben</button>', '') . '</details>' : '')
+                . ($v && can('nexus.age') ? nx_adm_form('nx_accounts', 'nx_age_revoke', '<input type="hidden" name="vrc_id" value="' . e($a['vrc_id']) . '"><button class="btn btn-sm" onclick="return confirm(\'18+-Freigabe entziehen?\')">18+ entziehen</button>') : '')
                 . nx_adm_form('nx_accounts', $a['banned'] ? 'nx_unban' : 'nx_ban', '<input type="hidden" name="vrc_id" value="' . e($a['vrc_id']) . '"><button class="btn btn-sm ' . ($a['banned'] ? '' : 'btn-danger') . '"' . ($a['banned'] ? '' : ' onclick="return confirm(\'Konto sperren und alle Geräte abmelden?\')"') . '>' . ($a['banned'] ? 'Entsperren' : 'Sperren') . '</button>') . '</td></tr>';
         }
         if (!$list) echo '<tr><td colspan="7" class="muted">Noch keine Nexus-Konten.</td></tr>';
@@ -164,6 +185,7 @@ function admin_nexus_view(string $tab): void {
         echo '</div></div>';
         return;
     }
+    if ($tab === 'nx_cadm') { admin_nexus_cadm_view(); return; }
     if ($tab === 'nx_chat') {
         $devs = $db->query('SELECT d.*, a.display_name, (SELECT COUNT(*) FROM chat_opks o WHERE o.device_id = d.device_id) AS opks, (SELECT COUNT(*) FROM chat_inbox i WHERE i.to_device = d.device_id) AS waiting FROM chat_devices d LEFT JOIN nexus_accounts a ON a.vrc_id = d.vrc_id ORDER BY d.last_seen DESC LIMIT 500')->fetchAll(PDO::FETCH_ASSOC);
         $wait = (int)$db->query('SELECT COUNT(*) FROM chat_inbox')->fetchColumn();

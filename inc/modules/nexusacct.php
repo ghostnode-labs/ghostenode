@@ -129,12 +129,18 @@ function nx_auth(string $token): array {
 }
 
 // ---------- Altersfreigabe ----------
+function nx_manual_until(?array $a): int { return $a ? max(0, (int)($a['age_manual_until'] ?? 0)) : 0; }
 function nx_apply_age(string $vrc_id, array $u): bool {
     $ok = $u['age'] === '18+';
     $db = nx_db();
-    if ($ok) $db->prepare('UPDATE nexus_accounts SET age_status = ?, age_checked = ?, age_until = ?, display_name = ? WHERE vrc_id = ?')->execute(['18+', nx_now(), nx_now() + NX_AGE_VALID, mb_substr($u['name'], 0, 60), $vrc_id]);
-    else {
-        $prev = nx_account($vrc_id);
+    $prev = nx_account($vrc_id);
+    $man = nx_manual_until($prev) > nx_now() ? nx_manual_until($prev) : 0;
+    if ($ok) $db->prepare('UPDATE nexus_accounts SET age_status = ?, age_checked = ?, age_until = ?, display_name = ? WHERE vrc_id = ?')->execute(['18+', nx_now(), max(nx_now() + NX_AGE_VALID, $man), mb_substr($u['name'], 0, 60), $vrc_id]);
+    elseif ($man) {
+        // 5.1: manuelle Freigabe durch einen Admin bleibt, auch wenn VRChat (noch) nichts meldet
+        $db->prepare("UPDATE nexus_accounts SET age_status = 'manuell', age_checked = ?, age_until = ? WHERE vrc_id = ?")->execute([nx_now(), $man, $vrc_id]);
+        return true;
+    } else {
         // Status fehlt/unsichtbar → Rolle entziehen UND NSFW ausschalten (muss nach erneuter Freigabe bewusst wieder an)
         $db->prepare('UPDATE nexus_accounts SET age_status = ?, age_checked = ?, age_until = 0, nsfw_on = 0 WHERE vrc_id = ?')->execute([$u['age'] === '' ? 'hidden' : mb_substr($u['age'], 0, 20), nx_now(), $vrc_id]);
         if ($prev && (int)$prev['age_until'] > 0) nw_log($vrc_id, 'Verified 18+ entzogen', $vrc_id, 'Status: ' . ($u['age'] ?: 'nicht sichtbar'));
@@ -175,7 +181,7 @@ function nx_recheck(array &$a): array { return nx_public($a); }   // seit 3.0.1 
 function nx_public(array $a): array {
     $v = (int)$a['age_until'] > nx_now();
     return ['vrc_id' => $a['vrc_id'], 'name' => $a['display_name'], 'created' => (int)$a['created'],
-        'verified18' => $v, 'age_status' => $a['age_status'], 'age_checked' => (int)$a['age_checked'], 'age_until' => (int)$a['age_until'],
+        'verified18' => $v, 'age_source' => $v && nx_manual_until($a) > nx_now() && nx_manual_until($a) >= (int)$a['age_until'] ? 'manual' : 'vrchat', 'age_status' => $a['age_status'], 'age_checked' => (int)$a['age_checked'], 'age_until' => (int)$a['age_until'],
         'nsfw_on' => $v && !empty($a['nsfw_on']), 'roles' => array_values(array_filter([$v ? 'Verified 18+' : '', nw_is_owner($a['vrc_id']) ? 'Admin' : '']))];
 }
 function nx_devices(array $a): array {
