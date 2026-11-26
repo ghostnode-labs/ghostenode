@@ -1,0 +1,5 @@
+.wg-type-nexus .nxw-v { font-size: .95rem; margin-bottom: 8px; }
+.wg-type-nexus .nxw-v a { color: var(--accent-cyan); font-size: .8rem; margin-left: 6px; }
+.wg-type-nexus .nxw-dl { display: flex; flex-wrap: wrap; gap: 6px; }
+.wg-type-nexus .nxw-news { margin: 10px 0 0; padding-left: 18px; font-size: .85rem; line-height: 1.5; }
+.wg-type-nexus .nxw-news a { color: var(--text-main); }

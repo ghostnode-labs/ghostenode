@@ -1,0 +1,5 @@
+.wg-type-block .blk { border-left: 3px solid var(--blk); padding: 4px 4px 4px 12px; }
+.wg-type-block .blk-emo { font-size: 2.2rem; line-height: 1.1; margin-bottom: 6px; }
+.wg-type-block .blk-img { max-width: 100%; max-height: 220px; object-fit: cover; border: 1px solid var(--border-color); margin-bottom: 8px; display: block; }
+.wg-type-block .blk-text { line-height: 1.55; font-size: .92rem; }
+.wg-type-block .blk-btn { margin-top: 10px; display: inline-block; border-color: var(--blk); color: var(--blk); }

@@ -43,7 +43,7 @@ final class WidgetCtx {
 
     /** Darf der aktuelle Benutzer Inhalte dieses Widgets ändern? (Standard: Recht „pages.edit“) */
     public function can_edit(): bool {
-        return can($this->manifest['edit_permission'] ?? 'pages.edit');
+        return widgets_mine() || can($this->manifest['edit_permission'] ?? 'pages.edit');   // eigenes Dashboard: eigene Inhalte
     }
 
     /** Daten von einer Adresse holen und für $ttl Sekunden zwischenspeichern */
@@ -102,8 +102,39 @@ function widget_allowed(array $m): bool {
     return true;
 }
 
-/** Anordnung auf der Startseite (für alle gleich, bearbeitbar mit „widgets.manage“) */
+/** Baukasten: eigenes Dashboard dieses Kontos an? (sonst gilt die gemeinsame Anordnung) */
+function widgets_mine(): bool {
+    $u = current_user();
+    return $u && setting('widgets_mine_u' . (int)$u['id'], '0') === '1';
+}
+function widgets_mine_set(bool $on): void {
+    $u = current_user();
+    if (!$u) throw new RuntimeException('Bitte anmelden.');
+    $id = (int)$u['id'];
+    if ($on && setting('widgets_layout_u' . $id, '') === '') {   // Start: Kopie der gemeinsamen Anordnung (gleiche Widgets, gleicher Inhalt)
+        set_setting('widgets_mine_u' . $id, '0');
+        // eigene IDs: Notizen, Aufgaben usw. im eigenen Dashboard sind getrennt vom gemeinsamen Inhalt
+        $copy = array_map(function ($w) { $w['uid'] = substr(md5($w['uid'] . random_bytes(6)), 0, 10); return $w; }, widgets_layout());
+        set_setting('widgets_layout_u' . $id, json_encode($copy, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+    set_setting('widgets_mine_u' . $id, $on ? '1' : '0');
+}
+/** Darf der Besucher die gerade gültige Anordnung ändern? */
+function widgets_can_arrange(): bool { return widgets_mine() || can('widgets.manage'); }
+/** Sichtbarkeit einer Instanz (Einstellung „Wer sieht das?“) */
+function widget_visible(array $inst): bool {
+    $v = (string)($inst['cfg']['_vis'] ?? 'all');
+    if ($v === 'login') return is_logged_in();
+    if ($v === 'guests') return !is_logged_in();
+    return true;
+}
+
+/** Anordnung auf der Startseite (gemeinsam, bearbeitbar mit „widgets.manage“ – oder das eigene Dashboard des Kontos) */
 function widgets_layout(): array {
+    if (widgets_mine()) {
+        $l = json_decode(setting('widgets_layout_u' . (int)current_user()['id'], '[]'), true);
+        return is_array($l) ? array_values(array_filter($l, function ($w) { return isset($w['uid'], $w['type']); })) : [];
+    }
     $raw = setting('widgets_layout', '');
     if ($raw === '') {
         // Erster Start: alle mitgelieferten Widgets in sinnvoller Reihenfolge
@@ -122,6 +153,7 @@ function widgets_layout(): array {
 }
 
 function widgets_layout_save(array $layout): void {
+    if (widgets_mine()) { set_setting('widgets_layout_u' . (int)current_user()['id'], json_encode(array_values($layout), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); return; }
     set_setting('widgets_layout', json_encode(array_values($layout), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
 }
 
@@ -173,7 +205,8 @@ function widget_card(array $inst, bool $edit): string {
 
 /** Einstellungs-Schema für den Dialog im Bearbeiten-Modus */
 function widget_settings_schema(array $m): array {
-    $s = ['_title' => ['label' => 'Eigener Titel (leer = Standard)', 'type' => 'text', 'default' => '']];
+    $s = ['_title' => ['label' => 'Eigener Titel (leer = Standard)', 'type' => 'text', 'default' => ''],
+          '_vis' => ['label' => 'Wer sieht das?', 'type' => 'select', 'default' => 'all', 'options' => ['all' => '🌍 alle', 'login' => '🔒 nur Angemeldete', 'guests' => '👋 nur Gäste (nicht angemeldet)']]];
     foreach ((array)($m['settings'] ?? []) as $k => $d) $s[$k] = $d + ['type' => 'text', 'label' => $k, 'default' => ''];
     return $s;
 }

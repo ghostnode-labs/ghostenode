@@ -107,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $can_manage = can('pages.manage');
 $edit = $can_manage && !empty($_GET['edit']);
 // Widgets haben ein eigenes Recht – wer nur das hat, bekommt einen reinen Widget-Bearbeiten-Modus (?widgets=1)
-$wg_edit = can('widgets.manage') && ($edit || !empty($_GET['widgets']));
+$wg_edit = widgets_can_arrange() && ($edit || !empty($_GET['widgets']));
 $user = current_user();
 $settings = site_settings();
 $show_nsfw = $settings['show_nsfw'];
@@ -237,7 +237,7 @@ $access_icon = ['public' => '', 'users' => '🔑', 'members' => '🔒', 'roles' 
 $wg_avail = widgets_available();
 $wg_layout = array_values(array_filter(widgets_layout(), function ($w) use ($wg_avail, $wg_edit) {
     $m = $wg_avail[$w['type']] ?? null;
-    return $m ? widget_allowed($m) : $wg_edit;
+    return $m ? widget_allowed($m) && ($wg_edit || widget_visible($w)) : $wg_edit;
 }));
 $wg_assets = [];
 foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type']] = $wg_avail[$w['type']];
@@ -298,7 +298,8 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
             <?php endif; ?>
             <span class="ub-actions">
                 <?php if ($can_manage): ?><a href="dashboard.php<?php echo $edit ? '' : '?edit=1'; ?>" class="ub-btn <?php echo $edit ? 'on' : ''; ?>" title="Index bearbeiten (Taste E)"><?php echo $edit ? '✓ Fertig' : '✎ Bearbeiten'; ?></a>
-                <?php elseif (can('widgets.manage')): ?><a href="dashboard.php<?php echo $wg_edit ? '' : '?widgets=1'; ?>" class="ub-btn <?php echo $wg_edit ? 'on' : ''; ?>" title="Widgets anordnen"><?php echo $wg_edit ? '✓ Fertig' : '🧩 Widgets'; ?></a><?php endif; ?>
+                <?php elseif (widgets_can_arrange()): ?><a href="dashboard.php<?php echo $wg_edit ? '' : '?widgets=1'; ?>" class="ub-btn <?php echo $wg_edit ? 'on' : ''; ?>" title="Widgets anordnen"><?php echo $wg_edit ? '✓ Fertig' : '🧩 Widgets'; ?></a><?php endif; ?>
+                <button type="button" class="ub-btn <?php echo widgets_mine() ? 'on' : ''; ?>" id="wgMine" data-on="<?php echo widgets_mine() ? '1' : '0'; ?>" title="<?php echo widgets_mine() ? 'Eigenes Dashboard aus – wieder die gemeinsame Anordnung zeigen' : 'Eigenes Dashboard: Widgets nur für dich zusammenstellen (Baukasten)'; ?>">🧱 <?php echo widgets_mine() ? 'Mein Dashboard' : 'Baukasten'; ?></button>
                 <?php if (can('admin.access')): ?><a href="admin.php" class="ub-btn" title="Admin-Zentrale">⚙</a><?php endif; ?>
                 <form method="POST" action="admin.php" style="margin: 0;"><input type="hidden" name="action" value="logout"><button type="submit" class="ub-btn danger" title="Abmelden">⏻</button></form>
             </span>
@@ -347,7 +348,7 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
     <?php if ($wg_layout || $wg_edit): ?>
         <section class="wg-area" id="wgArea">
             <div class="wg-area-head">
-                <h2>🧩 Widgets</h2>
+                <h2>🧩 Widgets<?php if (widgets_mine()): ?> <small style="font-size:.7rem;color:var(--accent-gold);letter-spacing:1px">· MEIN DASHBOARD</small><?php endif; ?></h2>
                 <span>
                     <?php if ($wg_edit): ?><button type="button" class="btn btn-sm btn-gold" id="wgAdd">＋ Widget</button>
                     <?php else: ?><button type="button" class="wg-link" id="wgToggle">▾ ausblenden</button><?php endif; ?>

@@ -17,8 +17,13 @@ $act = (string)($in['act'] ?? '');
 $out = ['ok' => true];
 try {
     $manage = ['add', 'remove', 'size', 'settings', 'reorder'];
-    if ($_SERVER['REQUEST_METHOD'] === 'POST') guard_post(in_array($act, $manage, true) ? 'widgets.manage' : null);
-    if (in_array($act, $manage, true) && !can('widgets.manage')) throw new RuntimeException('Dafür fehlt das Recht „Startseiten-Widgets anordnen“.');
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') guard_post(null);
+    if (in_array($act, $manage, true) && !widgets_can_arrange()) throw new RuntimeException('Dafür fehlt das Recht „Startseiten-Widgets anordnen“ – oder schalte „Mein Dashboard“ ein.');
+    if ($act === 'mine') {   // Baukasten: eigenes Dashboard an/aus
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') throw new RuntimeException('Nur per POST.');
+        widgets_mine_set(!empty($in['on']) && $in['on'] !== '0');
+        echo json_encode(['ok' => true, 'mine' => widgets_mine()]); exit;
+    }
     $uid = preg_replace('/\W/', '', (string)($in['uid'] ?? ''));
     $layout = widgets_layout();
     $avail = widgets_available();
@@ -29,7 +34,7 @@ try {
             $inst = widget_find($uid);
             if (!$inst) throw new RuntimeException('Widget nicht gefunden.');
             $m = $avail[$inst['type']] ?? null;
-            if (!$m || !widget_allowed($m)) throw new RuntimeException('Kein Zugriff.');
+            if (!$m || !widget_allowed($m) || (!widget_visible($inst) && !widgets_can_arrange())) throw new RuntimeException('Kein Zugriff.');
             if ($act === 'action') {
                 if ($_SERVER['REQUEST_METHOD'] !== 'POST') throw new RuntimeException('Nur per POST.');
                 if (!is_callable($m['action'] ?? null)) throw new RuntimeException('Dieses Widget hat keine Aktionen.');
@@ -86,7 +91,7 @@ try {
             widgets_layout_save($layout);
             break;
         case 'catalog':
-            if (!can('widgets.manage')) throw new RuntimeException('Kein Zugriff.');
+            if (!widgets_can_arrange()) throw new RuntimeException('Kein Zugriff.');
             $used = array_count_values(array_column($layout, 'type'));
             $out['widgets'] = array_values(array_map(function ($t, $m) use ($used) {
                 return ['type' => $t, 'name' => $m['name'], 'icon' => $m['icon'], 'description' => $m['description'], 'version' => $m['version'], 'author' => $m['author'],

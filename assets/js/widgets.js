@@ -124,6 +124,13 @@
         mins[el.dataset.uid] = el.classList.contains('min');
         store.set('min', mins);
     });
+    // 🧱 Baukasten: eigenes Dashboard an/aus (danach neu laden – im Bearbeiten-Modus, wenn gerade eingeschaltet)
+    const mine = $('#wgMine');
+    if (mine) mine.addEventListener('click', () => {
+        const on = mine.dataset.on !== '1';
+        if (!on && !confirm('Eigenes Dashboard ausschalten? Deine Anordnung bleibt gespeichert und kommt beim nächsten Einschalten zurück.')) return;
+        call('mine', { on: on ? '1' : '0' }).then(() => { location.href = 'dashboard.php' + (on ? '?widgets=1' : ''); }).catch(e => toast(e.message, true));
+    });
     const area = $('#wgArea'), tog = $('#wgToggle');
     if (tog) {
         const hidden = store.get('hidden', false);

@@ -1,0 +1,7 @@
+.wg-type-buttons .kb { display: grid; gap: 8px; }
+.wg-type-buttons .kb-b { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; aspect-ratio: 1 / 1; max-height: 110px; border: 1px solid var(--border-color);
+    background: linear-gradient(160deg, rgba(56,213,230,.10), rgba(10,16,24,.9)); color: var(--text-main); text-decoration: none; border-radius: 10px; transition: transform .1s, border-color .1s; text-align: center; padding: 4px; }
+.wg-type-buttons .kb-b:hover { border-color: var(--accent-cyan); transform: translateY(-2px); }
+.wg-type-buttons .kb-b:active { transform: scale(.96); }
+.wg-type-buttons .kb-b i { font-style: normal; font-size: 1.7rem; line-height: 1; }
+.wg-type-buttons .kb-b span { font-size: .74rem; line-height: 1.2; }
