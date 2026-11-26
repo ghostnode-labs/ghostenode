@@ -166,6 +166,8 @@ $plan5 = [
 ];
 // Stand der Umsetzung (Vorgabe für alle, die der Bearbeitungsmodus nicht ausdrücklich anders gesetzt hat)
 $rm_default = [
+    // Ausblick 6.x (schon begonnen)
+    'Dashboard-Baukasten: Widgets per Drag & Drop, Sichtbarkeit je Gast / angemeldet / Rolle' => 'wip',
     // schon erschienen
     'Avatar-Presets: Outfits und Zustände speichern, laden, als Makro-Schritt' => 'done', 'Komfort: Schlafmodus, Pausen-Hinweise, Puls-Warnungen' => 'done',
     'OBS-Anbindung (obs-websocket 5): Szene je Welt, Panik-Szene, Textquelle' => 'done', 'Unity-Werkzeuge für Avatar- und Welt-Bastler' => 'done',
@@ -209,8 +211,85 @@ $rm_default = [
     'Rollen- und Rechte-Editor mit Änderungsprotokoll' => 'done', 'Automatische Backups mit Wiederherstellung aus dem Admin-Bereich' => 'wip',
     'Sicherheits-Header (CSP), Anfrage-Limits, Schutz vor Spam' => 'wip',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
+
+// =====================================================================================================
+// Ausblick: drei Major-Versionen (6.x, 7.x, 8.x) – je Webseite, Client und 🔞 (öffentlich bewusst zurückhaltend formuliert)
+// =====================================================================================================
+$planFuture = [
+    '6.0 – „Verbunden“: API, Baukasten & Anfragen' => ['🔌', 'Nexus wird zur Plattform: alles per API steuerbar, Dashboard und Stream Deck frei zusammenstellbar.', [
+        '🖥 Client' => [
+            'Nexus Client-API über WebSocket (lokal, mit Schlüssel und Rechten je App)',
+            'Stream Deck 2.0: Ordner, Mehrfach-Aktionen, Live-Anzeigen (Puls, Spieler, Welt) direkt auf den Tasten',
+            'Dashboard-Baukasten im Client: Widgets frei anordnen, eigene Kacheln aus Aktionen bauen',
+            'Automationen 2.0: Wenn-Dann-Regeln (Welt, Uhrzeit, Puls, Freunde) mit Vorschau',
+            'Nexus Watch: Zifferblatt-Anzeigen (Puls, Freunde online) und Schnellaktionen',
+            'Offline-Modus für Android mit Abgleich beim nächsten Start',
+        ],
+        '🌐 Webseite' => [
+            'Web-API (PHP) mit API-Schlüsseln, Limits und Dokumentations-Seite',
+            'Dashboard-Baukasten: Widgets per Drag & Drop, Sichtbarkeit je Gast / angemeldet / Rolle',
+            'Öffentliche Profilseiten (freiwillig) mit eigener Adresse',
+            'Benachrichtigungs-Center auf der Webseite (Antworten, Events, Releases)',
+            'Passkeys als Anmeldung',
+            'Download-Center mit Prüfsummen und Installationshilfe',
+        ],
+        '🔞 NSFW-Major' => [
+            'Profil-Anfragen: 18+-Profile können sich gegenseitig anfragen – nur mit beidseitiger Zustimmung sichtbar',
+            'Privater Vorlieben-Abgleich zwischen freigegebenen Profilen',
+            'Fantasie- & Szenen-Baukasten: Ablauf, Rollen und Grenzen gemeinsam festlegen',
+            'Neue Schnittstellen für weitere Geräte und Inhalte',
+            'Einverständnis-Check vor jeder gemeinsamen Session',
+        ],
+    ]],
+    '7.0 – „Gemeinsam“: Gruppen, Events & Erlebnisse' => ['🫂', 'Community wird zu Clubs und Treffen – planen, erleben, erinnern.', [
+        '🖥 Client' => [
+            'Event-Planer mit Zusagen, Erinnerungen und gemeinsamer Instanz',
+            'Gruppen-Sprachräume (eigener Server, Rollen, Push-to-Talk)',
+            'Geteilte Foto-Alben, Ende-zu-Ende verschlüsselt',
+            'Treffen-Karte: wer, wo, wie lange – als Zeitachse',
+            'Live-Untertitel und Übersetzung lokal, ohne Cloud',
+        ],
+        '🌐 Webseite' => [
+            'Clubs & Gruppen mit eigenem Feed, Regeln und Moderatoren',
+            'Event-Seiten mit Anmeldung und Kalender-Abo',
+            'Creator-Profile mit Welten, Avataren und Shop-Links',
+            'Moderation 2.0: Wortfilter, Warteschlange, Sperren mit Ablauf',
+            'Fediverse-Anbindung für öffentliche Beiträge (Opt-in)',
+        ],
+        '🔞 NSFW-Major' => [
+            'Private 18+-Clubs mit eigenen Einlassregeln',
+            'Gemeinsame Szenen für Paare und Gruppen, synchron über mehrere Geräte',
+            'Vorlagen-Bibliothek für Szenen: teilen, bewerten, anpassen',
+            'Aftercare: sanfter Check-in nach einer Session',
+            'Vertrauensliste für Partner mit eigenen Rechten',
+        ],
+    ]],
+    '8.0 – „Überall“: Geräte, Föderation & Komfort' => ['🛰', 'Nexus läuft auf allen Geräten und spricht mit anderen Diensten – ohne Kontrolle abzugeben.', [
+        '🖥 Client' => [
+            'VR-Overlay 2.0 mit Handmenü',
+            'Begleiter für Steam Deck und Standalone-Headsets',
+            'Smart-Home: Licht reagiert auf Welt, Puls oder Panik',
+            'Verschlüsselter Einstellungs-Abgleich zwischen allen Geräten',
+            'Themes-Marktplatz und Barrierefreiheit (Schriftgröße, Kontrast, Bildschirmleser)',
+        ],
+        '🌐 Webseite' => [
+            'Installierbare Web-App (PWA) mit Offline-Ansicht',
+            'Status-Seite für alle Dienste',
+            'Mehrsprachig (Deutsch, Englisch, Französisch, Japanisch)',
+            'Entwickler-Portal: API-Schlüssel, Plugin-SDK und Einreichung an einem Ort',
+            'Selbst hosten: Paket für eigene Server',
+        ],
+        '🔞 NSFW-Major' => [
+            'Unterstützung für Wearables und weitere Haptik',
+            'Synchronisation mit Audio und Musik',
+            'Lokaler Szenen-Begleiter ohne Cloud',
+            'Sichere Verbindungen zwischen Servern (Föderation) für Fernsteuerung',
+            'Sicherheits-Center: Notfall-Kontakte und gemeinsame Sperrlisten',
+        ],
+    ]],
+];
 $plan5_always = ['Stabilität und Fehlerbehebungen in jedem Release', 'Automatische Tests für jede neue Funktion', 'Keine Geheimnisse in Git – Schlüssel bleiben auf dem Server', 'Alle Texte in Deutsch, Englisch, Französisch und Japanisch', 'Lokale Funktionen bleiben kostenlos, Online-Dienste nur mit Opt-in'];
 // =====================================================================================================
 // Webseite 2.0 (ghostnode) – Phasen
@@ -290,6 +369,10 @@ $rowsWeb = []; $countWeb = ['planned' => 0, 'wip' => 0, 'done' => 0];
 foreach ($planWeb as $rel => [$ic, $desc, $items]) {
     foreach ($items as $it) { $s = $st('web|' . $rel, $it, $rm_default[$it] ?? 'planned'); $countWeb[$s]++; $rowsWeb[$rel][] = [$it, $s, rm_key('web|' . $rel, $it)]; }
 }
+$rowsFuture = []; $countFuture = ['planned' => 0, 'wip' => 0, 'done' => 0];
+foreach ($planFuture as $rel => [$ic, $desc, $cols]) foreach ($cols as $col => $items) foreach ($items as $it) {
+    $s = $st('fx|' . $rel . '|' . $col, $it, $rm_default[$it] ?? 'planned'); $countFuture[$s]++; $rowsFuture[$rel][$col][] = [$it, $s, rm_key('fx|' . $rel . '|' . $col, $it)];
+}
 $rows34 = [];
 foreach ($modules as $mod => $items) {
     foreach ($items as $it) { $s = $st('34|' . $mod, $it, in_array($it, $open34, true) ? 'planned' : 'done'); $rows34[$mod][] = [$it, $s, rm_key('34|' . $mod, $it)]; }
@@ -354,6 +437,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 .rm-err{color:var(--accent-red)}
 .rm-toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel-bg);border:1px solid var(--accent-cyan);padding:8px 14px;font-size:.85rem;z-index:9}
 @media(max-width:640px){.rm-wrap{padding:14px 16px 40px}.rm-items{grid-template-columns:1fr}.rm-tl{padding-left:20px}.rm-rel:before{left:-17px}}
+.rm-fcols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.rm-fcols h4{margin:4px 0 6px;color:var(--accent-cyan);font-size:.85rem;letter-spacing:1px}.rm-fcols .rm-items{grid-template-columns:1fr}@media(max-width:900px){.rm-fcols{grid-template-columns:1fr}}
 </style></head><body class="rm">
 <div class="rm-wrap">
 <div class="rm-top">
@@ -382,6 +466,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 <nav class="rm-tabs" role="tablist">
     <button type="button" class="on" data-tab="plan">🚀 5.x-Plan</button>
     <button type="button" data-tab="web">🌐 Webseite 2.0</button>
+    <button type="button" data-tab="future">🔭 6.x – 8.x</button>
     <button type="button" data-tab="past">✅ 3.x &amp; 4.x</button>
     <button type="button" data-tab="ideas">💡 Ideen</button>
     <button type="button" data-tab="rules">🧭 Grundsätze</button>
@@ -411,6 +496,20 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
             <header><span class="ic"><?= $ic ?></span><h3><?= e($rel) ?></h3><small><?= $d ?>/<?= count($r) ?> erledigt</small></header>
             <p><?= e($desc) ?></p>
             <ul class="rm-items"><?php foreach ($r as [$it, $s, $k]): ?><li class="s-<?= $s ?>" data-s="<?= $s ?>"><span class="t"><?= e($it) ?></span><?= $edit_mode ? '<button type="button" class="rm-st rm-st-' . $s . '" data-k="' . $k . '" data-s="' . $s . '">' . e(RM_STATES[$s]) . '</button>' : $chip($s) ?></li><?php endforeach; ?></ul>
+        </article>
+    <?php endforeach; ?>
+    </div>
+</section>
+
+<section class="rm-pane" data-pane="future" hidden>
+    <p class="rm-note">Ausblick auf die nächsten drei Major-Versionen – je für Client, Webseite und den 🔞-Bereich (Details dazu nur freigeschaltet in der App). Reihenfolge und Umfang können sich ändern.</p>
+    <div class="rm-tl">
+    <?php foreach ($planFuture as $rel => [$ic, $desc, $cols]): $all = array_merge(...array_values($rowsFuture[$rel])); $d = count(array_filter($all, fn($x) => $x[1] === 'done')); ?>
+        <article class="rm-rel<?= $d === count($all) ? ' done' : '' ?>">
+            <header><span class="ic"><?= $ic ?></span><h3><?= e($rel) ?></h3><small><?= $d ?>/<?= count($all) ?> erledigt</small></header>
+            <p><?= e($desc) ?></p>
+            <div class="rm-fcols"><?php foreach ($rowsFuture[$rel] as $col => $r): ?><div><h4><?= e($col) ?></h4>
+            <ul class="rm-items"><?php foreach ($r as [$it, $s, $k]): ?><li class="s-<?= $s ?>" data-s="<?= $s ?>"><span class="t"><?= e($it) ?></span><?= $edit_mode ? '<button type="button" class="rm-st rm-st-' . $s . '" data-k="' . $k . '" data-s="' . $s . '">' . e(RM_STATES[$s]) . '</button>' : $chip($s) ?></li><?php endforeach; ?></ul></div><?php endforeach; ?></div>
         </article>
     <?php endforeach; ?>
     </div>
