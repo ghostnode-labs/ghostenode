@@ -333,3 +333,11 @@ a.ucell:hover b { color: var(--accent-cyan); }
 code.wrap { word-break: break-all; display: inline-block; }
 .stor .tools { display: flex; gap: 6px; }
 .stor .tools form { margin: 0; }
+
+/* Registrierung & Discord-Anmeldung */
+.btn-discord { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; background: #5865f2; border-color: #5865f2; color: #fff; text-decoration: none; }
+.btn-discord:hover { background: #4752c4; border-color: #4752c4; color: #fff; }
+.or-sep { display: flex; align-items: center; gap: 10px; margin: 14px 0; color: var(--muted, #8a93a6); font-size: 12px; text-transform: uppercase; letter-spacing: .1em; }
+.or-sep::before, .or-sep::after { content: ''; flex: 1; height: 1px; background: currentColor; opacity: .3; }
+.hp { position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden; }
+.dc-av { width: 56px; height: 56px; border-radius: 50%; object-fit: cover; }

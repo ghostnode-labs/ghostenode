@@ -8,6 +8,8 @@ require_once __DIR__ . '/inc/modules/countdown.php';
 require_once __DIR__ . '/inc/modules/hub.php';
 require_once __DIR__ . '/inc/admin/nexus_tabs.php';
 require_once __DIR__ . '/inc/admin/poster_tab.php';
+require_once __DIR__ . '/inc/core/accounts.php';
+acc_schema();
 
 /** Nur lokale Ziele für die Weiterleitung nach dem Login zulassen */
 function safe_next(?string $next): string {
@@ -67,6 +69,17 @@ if (!$configured) {
             if ($_SESSION['auth_pending']['tries'] >= 5) { unset($_SESSION['auth_pending']); header('Location: admin.php?error=' . urlencode('Zu viele falsche Codes – bitte neu anmelden.')); exit; }
             $error = 'Der Code stimmt nicht.';
         }
+    }
+} elseif (!is_logged_in() && (isset($_GET['signup']) || isset($_POST['signup']))) {
+    // Offene Registrierung (Admin → System → Registrierung)
+    $mode = 'signup';
+    $locked = auth_locked_seconds();
+    if (!acc_open()) $error = acc_reg_mode() === 'invite' ? 'Neue Konten gibt es gerade nur mit Einladungscode.' : 'Die Registrierung ist gerade geschlossen.';
+    elseif ($locked) $error = 'Zu viele Fehlversuche – bitte warten.';
+    elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['register'])) {
+        $r = same_origin_request() ? acc_register($_POST) : 'Anfrage abgelehnt.';
+        if (is_string($r)) { $error = $r; auth_register_fail(); }
+        else { auth_finish_login($r, false, 'Registrierung'); header('Location: ' . (can('admin.access') ? 'admin.php?welcome=1' : 'dashboard.php')); exit; }
     }
 } elseif (!is_logged_in() && (isset($_GET['invite']) || isset($_POST['invite']))) {
     // Registrierung mit Einladungscode
@@ -141,6 +154,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'invite_create' => 'invites.manage', 'invite_delete' => 'invites.manage', 'announce_save' => 'announce.manage',
         'db_config' => 'database.manage', 'db_test' => 'database.manage', 'db_transfer' => 'database.manage', 'db_switch' => 'database.manage',
         'db_check' => 'database.manage', 'db_dump' => 'database.manage',
+        'reg_save' => 'system.manage',
         'tasks_save' => 'system.manage', 'task_run' => 'system.manage', 'tasks_newkey' => 'system.manage', 'backup_delete' => 'backup.download', 'backup_now' => 'backup.download',
         // Nexus (VRC Nexus: Konten, Warnliste, Community, Chat)
         'nx_service' => 'admin.access', 'nx_ban' => 'admin.access', 'nx_unban' => 'admin.access', 'nx_age_revoke' => 'admin.access', 'nx_cron' => 'admin.access',
@@ -216,6 +230,47 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     audit('Eigenes Passwort geändert', '', 'security');
                     $msg = 'Passwort geändert – andere Geräte wurden abgemeldet.';
                 }
+                break;
+
+            // ----- Registrierung & Discord-Anmeldung (Admin → System) -----
+            case 'reg_save':
+                $m = (string)($_POST['reg_mode'] ?? 'invite');
+                set_setting('reg_mode', isset(ACC_REG_MODES[$m]) ? $m : 'invite');
+                $rid = (int)($_POST['reg_role'] ?? 0);
+                $rr = $rid ? $role_row($rid) : null;
+                if ($rr && (int)$rr['is_system']) throw new InvalidArgumentException('Neue Konten dürfen nie automatisch Administrator werden.');
+                set_setting('reg_role', (string)($rr ? $rid : 0));
+                set_setting('reg_email', !empty($_POST['reg_email']) ? '1' : '0');
+                $ru = trim((string)($_POST['reg_rules_url'] ?? ''));
+                set_setting('reg_rules_url', preg_match('#^https://\S{4,300}$#', $ru) ? $ru : '');
+                set_setting('dlogin_on', !empty($_POST['dlogin_on']) ? '1' : '0');
+                set_setting('dlogin_email', !empty($_POST['dlogin_email']) ? '1' : '0');
+                $cid = trim((string)($_POST['dlogin_client_id'] ?? ''));
+                if ($cid !== '' && !preg_match('/^\d{15,22}$/', $cid)) throw new InvalidArgumentException('Die Client-ID besteht nur aus Ziffern.');
+                set_setting('dlogin_client_id', $cid);
+                if (($sec = trim((string)($_POST['dlogin_secret'] ?? ''))) !== '') set_setting('dlogin_secret', crypto_encrypt('dlogin', $sec));
+                if (!empty($_POST['dlogin_secret_clear'])) set_setting('dlogin_secret', '');
+                $rd = trim((string)($_POST['dlogin_redirect'] ?? ''));
+                set_setting('dlogin_redirect', preg_match('#^https://[\w.\-]+(:\d+)?/\S*$#', $rd) ? $rd : '');
+                audit('Registrierung/Discord-Anmeldung geändert', 'Modus ' . acc_reg_mode() . ' · Discord ' . (setting('dlogin_on', '0') === '1' ? 'an' : 'aus'), 'warn');
+                $msg = 'Registrierung & Discord-Anmeldung gespeichert.' . (acc_reg_mode() === 'open' && !acc_reg_role() ? ' ⚠ Ohne Standardrolle bleibt die offene Registrierung zu.' : '');
+                break;
+
+            // ----- Mein Konto: Discord & E-Mail -----
+            case 'acc_unlink':
+                acc_unlink_discord(user_load((int)$me['id']));
+                audit('Discord getrennt', '', 'security');
+                $msg = 'Discord getrennt.';
+                break;
+            case 'acc_first_pw':
+                if ($e = acc_set_first_password(user_load((int)$me['id']), (string)($_POST['password'] ?? ''), (string)($_POST['password2'] ?? ''))) throw new InvalidArgumentException($e);
+                $msg = 'Passwort gesetzt – du kannst dich jetzt auch mit Benutzername und Passwort anmelden.';
+                break;
+            case 'acc_email':
+                $em = trim((string)($_POST['email'] ?? ''));
+                if ($em !== '' && !filter_var($em, FILTER_VALIDATE_EMAIL)) throw new InvalidArgumentException('Die E-Mail-Adresse sieht ungültig aus.');
+                $db->prepare('UPDATE users SET email = ? WHERE id = ?')->execute([mb_substr($em, 0, 190), $me['id']]);
+                $msg = 'E-Mail gespeichert.';
                 break;
 
             // ----- Zwei-Faktor (eigenes Konto) -----
@@ -1028,6 +1083,7 @@ function bytes(int $b): string {
     'login'    => ['🔒', 'System // Zugriff erforderlich', 'Anmelden', 'Melde dich mit deinem Benutzerkonto an'],
     'totp'     => ['🔐', 'System // Zweiter Faktor', 'Bestätigen', 'Code aus deiner Authenticator-App eingeben'],
     'register' => ['🎟️', 'System // Einladung', 'Konto erstellen', 'Du wurdest eingeladen – lege dein Konto an'],
+    'signup'   => ['✨', 'GhostNode // Registrierung', 'Konto erstellen', 'Ein Konto für die ganze GhostNode-Webseite'],
 ][$mode]; ?>
 <div class="wrapper">
     <div class="gate">
@@ -1038,6 +1094,7 @@ function bytes(int $b): string {
             <p class="subtitle"><?php echo $gate[3]; ?></p>
 
             <?php if ($error): ?><div class="err" role="alert"><?php echo e($error); ?></div><?php endif; ?>
+            <?php if (!$error && isset($_GET['msg'])): ?><div class="info"><?php echo e((string)$_GET['msg']); ?></div><?php endif; ?>
             <?php if ($mode === 'login' && isset($_GET['denied']) && !$error): ?><div class="info">Für diese Änderung musst du angemeldet sein.</div><?php endif; ?>
             <?php if (in_array($mode, ['login', 'totp', 'register'], true) && !$error && ($locked ?? 0)): ?><div class="err">Zu viele Fehlversuche – für <?php echo ceil($locked / 60); ?> Minuten gesperrt.</div><?php endif; ?>
             <?php if ($mode === 'setup'): ?><div class="info">Willkommen! Das Dashboard hat noch kein Konto. Wer dieses Formular als Erstes ausfüllt, wird Administrator – also am besten direkt nach dem Hochladen erledigen.</div><?php endif; ?>
@@ -1053,6 +1110,27 @@ function bytes(int $b): string {
                     <button type="submit" name="totp_cancel" class="btn" formnovalidate style="margin-top: 8px;">Abbrechen</button>
                 </form>
                 <p class="muted small" style="text-align: center;">Handy verloren? Nutze einen deiner Wiederherstellungscodes (Format <code>abcd-efgh</code>) oder bitte einen Administrator, die Zwei-Faktor-Anmeldung zurückzusetzen.</p>
+            <?php elseif ($mode === 'signup'): ?>
+                <?php if (acc_open()): ?>
+                    <?php if (acc_discord_ready()): ?><a class="btn btn-discord" href="auth-discord.php?go=register">🎮 Mit Discord registrieren</a><div class="or-sep"><span>oder</span></div><?php endif; ?>
+                    <form method="POST" autocomplete="on">
+                        <input type="hidden" name="signup" value="1"><input type="hidden" name="t" value="<?php echo time(); ?>">
+                        <div class="hp" aria-hidden="true"><label>Webseite<input type="text" name="website" tabindex="-1" autocomplete="off"></label></div>
+                        <div class="field-wrap"><label class="field" for="u">Benutzername</label><input type="text" id="u" name="username" required minlength="3" maxlength="32" autocomplete="username" autofocus value="<?php echo e($_POST['username'] ?? ''); ?>"></div>
+                        <div class="field-wrap"><label class="field" for="dn">Anzeigename (optional)</label><input type="text" id="dn" name="display_name" maxlength="60" value="<?php echo e($_POST['display_name'] ?? ''); ?>"></div>
+                        <div class="field-wrap"><label class="field" for="em">E-Mail <?php echo setting('reg_email', '0') === '1' ? '' : '(optional)'; ?></label><input type="email" id="em" name="email" maxlength="190" autocomplete="email" <?php echo setting('reg_email', '0') === '1' ? 'required' : ''; ?> value="<?php echo e($_POST['email'] ?? ''); ?>"></div>
+                        <div class="field-wrap">
+                            <label class="field" for="p">Passwort (mind. <?php echo password_policy()['min']; ?> Zeichen)</label>
+                            <input type="password" id="p" name="password" required minlength="<?php echo password_policy()['min']; ?>" autocomplete="new-password" data-meter="1">
+                            <button type="button" class="eye" data-eye="p" title="Passwort anzeigen">👁</button>
+                            <div class="meter"><div></div></div><div class="meter-label"></div>
+                        </div>
+                        <div class="field-wrap"><label class="field" for="p2">Passwort wiederholen</label><input type="password" id="p2" name="password2" required autocomplete="new-password"></div>
+                        <label class="check"><input type="checkbox" name="accept" value="1" required> Ich halte mich an die Regeln der Community<?php echo setting('reg_rules_url', '') !== '' ? ' (<a href="' . e(setting('reg_rules_url', '')) . '" target="_blank" rel="noopener">lesen</a>)' : ''; ?>.</label>
+                        <button type="submit" name="register" class="btn btn-gold" <?php echo ($locked ?? 0) ? 'disabled' : ''; ?>>Konto erstellen</button>
+                    </form>
+                <?php endif; ?>
+                <p class="muted small" style="text-align: center; margin-top: 14px;">Schon ein Konto? <a href="admin.php">Anmelden</a><?php echo acc_reg_mode() !== 'off' ? ' · <a href="admin.php?invite=-">Einladungscode</a>' : ''; ?></p>
             <?php elseif ($mode === 'register'): ?>
                 <?php if (!empty($invite)): ?>
                     <div class="info">Einladung für die Rolle <b style="color: <?php echo e($invite['role_color']); ?>;"><?php echo e($invite['role_name']); ?></b><?php echo $invite['created_by'] ? ' von <b>' . e($invite['created_by']) . '</b>' : ''; ?>.<?php echo $invite['expires_at'] ? ' Gültig bis ' . e(date('d.m.Y H:i', strtotime($invite['expires_at']))) . '.' : ''; ?></div>
@@ -1096,7 +1174,8 @@ function bytes(int $b): string {
                     <button type="submit" name="login" class="btn btn-gold" <?php echo ($locked ?? 0) ? 'disabled' : ''; ?>>Zugriff anfordern</button>
                 <?php endif; ?>
             </form>
-            <?php if ($mode === 'login'): ?><p class="muted small" style="text-align: center; margin-top: 14px;">Du hast einen Einladungscode? <a href="admin.php?invite=-">Konto erstellen</a></p><?php endif; ?>
+            <?php if ($mode === 'login' && acc_discord_ready()): ?><div class="or-sep"><span>oder</span></div><a class="btn btn-discord" href="auth-discord.php?go=login&amp;next=<?php echo e(rawurlencode($next)); ?>">🎮 Mit Discord anmelden</a><?php endif; ?>
+            <?php if ($mode === 'login'): ?><p class="muted small" style="text-align: center; margin-top: 14px;"><?php if (acc_open()): ?>Neu hier? <a href="admin.php?signup=1">Konto erstellen</a> · <?php endif; ?><?php if (acc_reg_mode() !== 'off'): ?>Du hast einen Einladungscode? <a href="admin.php?invite=-">Einlösen</a><?php endif; ?></p><?php endif; ?>
             <?php endif; ?>
         </div>
         <div class="gate-foot"><a href="index.php">&larr; Zur Startseite</a></div>
@@ -1746,6 +1825,29 @@ function bytes(int $b): string {
         </div>
 
         <div class="grid2">
+            <form method="POST" class="panel" autocomplete="off">
+                <input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="reg_save">
+                <div class="panel-title"><span>// ✨ Registrierung</span><span class="muted small"><?php echo e(ACC_REG_MODES[acc_reg_mode()]); ?></span></div>
+                <label class="field">Wer darf ein Konto erstellen?</label>
+                <select name="reg_mode"><?php foreach (ACC_REG_MODES as $k => $l): ?><option value="<?php echo $k; ?>" <?php echo acc_reg_mode() === $k ? 'selected' : ''; ?>><?php echo e($l); ?></option><?php endforeach; ?></select>
+                <label class="field">Rolle für neue Konten (offene Registrierung &amp; Discord)</label>
+                <select name="reg_role"><option value="0">– keine (Registrierung bleibt zu) –</option><?php foreach ($db->query('SELECT id, name, is_system FROM roles ORDER BY name')->fetchAll() as $r): if ((int)$r['is_system']) continue; ?><option value="<?php echo (int)$r['id']; ?>" <?php echo (int)setting('reg_role', '0') === (int)$r['id'] ? 'selected' : ''; ?>><?php echo e($r['name']); ?></option><?php endforeach; ?></select>
+                <label class="check"><input type="checkbox" name="reg_email" value="1" <?php echo setting('reg_email', '0') === '1' ? 'checked' : ''; ?>> E-Mail-Adresse ist Pflicht</label>
+                <label class="field">Regeln (Link, optional)</label><input type="url" name="reg_rules_url" value="<?php echo e(setting('reg_rules_url', '')); ?>" placeholder="https://…">
+                <p class="muted small">Schutz: Honigtopf-Feld, Mindestzeit, höchstens 3 Konten pro IP und Tag, Login-Sperre bei Fehlversuchen. Neue Konten werden nie Administrator.</p>
+                <div class="panel-title" style="margin-top: 16px;"><span>// 🎮 Anmeldung mit Discord</span><?php echo acc_discord_ready() ? '<span class="dot-ok">bereit</span>' : '<span class="dot-off">aus</span>'; ?></div>
+                <label class="check"><input type="checkbox" name="dlogin_on" value="1" <?php echo setting('dlogin_on', '0') === '1' ? 'checked' : ''; ?>> „Mit Discord anmelden“ anbieten</label>
+                <label class="check"><input type="checkbox" name="dlogin_email" value="1" <?php echo setting('dlogin_email', '0') === '1' ? 'checked' : ''; ?>> E-Mail von Discord übernehmen (Scope „email“)</label>
+                <label class="field">Client-ID <?php echo getenv('GN_DISCORD_CLIENT_ID') ? '(aus Umgebungsvariable)' : ''; ?></label><input type="text" name="dlogin_client_id" inputmode="numeric" value="<?php echo e(setting('dlogin_client_id', '')); ?>" <?php echo getenv('GN_DISCORD_CLIENT_ID') ? 'disabled' : ''; ?> placeholder="123456789012345678">
+                <label class="field">Client-Secret <?php echo ['env' => '(aus Umgebungsvariable GN_DISCORD_CLIENT_SECRET)', 'admin' => '(gespeichert, verschlüsselt)', '' => ''][acc_discord_secret_source()]; ?></label>
+                <input type="password" name="dlogin_secret" autocomplete="new-password" placeholder="<?php echo acc_discord_secret_source() ? '•••••• (leer = unverändert)' : 'aus dem Discord Developer Portal'; ?>" <?php echo acc_discord_secret_source() === 'env' ? 'disabled' : ''; ?>>
+                <?php if (acc_discord_secret_source() === 'admin'): ?><label class="check small"><input type="checkbox" name="dlogin_secret_clear" value="1"> gespeichertes Secret löschen</label><?php endif; ?>
+                <label class="field">Redirect-URL (im Developer Portal unter OAuth2 → Redirects eintragen)</label><input type="url" name="dlogin_redirect" value="<?php echo e(setting('dlogin_redirect', '')); ?>" placeholder="<?php echo e(acc_redirect_uri()); ?>">
+                <p class="muted small">Besser: Client-ID und Secret als Umgebungsvariablen <code>GN_DISCORD_CLIENT_ID</code> / <code>GN_DISCORD_CLIENT_SECRET</code> setzen. Ein hier eingetragenes Secret wird verschlüsselt gespeichert und nie wieder angezeigt.</p>
+                <button class="btn btn-gold" style="margin-top: 10px;">Speichern</button>
+            </form>
+        </div>
+        <div class="grid2">
             <form method="POST" class="panel">
                 <input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="tasks_save">
                 <div class="panel-title"><span>// ⏱️ Aufgabenplaner</span><span class="muted small"><?php $lr = (int)setting('tasks_last_run', '0'); echo $lr ? 'zuletzt ' . e(date('d.m. H:i', $lr)) : 'noch nie gelaufen'; ?></span></div>
@@ -1812,6 +1914,37 @@ function bytes(int $b): string {
                 <div class="feed-list">
                     <?php foreach ($my_log as $r): ?><div class="fl lv-<?php echo e($r['level']); ?>"><span class="fl-dot"></span><div><b><?php echo e($r['action']); ?></b><small><?php echo e(ago($r['ts'])); ?> · <?php echo e($r['ip']); ?></small></div></div><?php endforeach; ?>
                 </div>
+            </div>
+        </div>
+        <?php $mu = user_load((int)$me['id']); ?>
+        <div class="grid2">
+            <div class="panel" id="dlink">
+                <div class="panel-title"><span>// 🎮 Discord</span><?php echo ($mu['discord_id'] ?? '') !== '' ? '<span class="dot-ok">verknüpft</span>' : '<span class="dot-off">nicht verknüpft</span>'; ?></div>
+                <?php if (($mu['discord_id'] ?? '') !== ''): ?>
+                    <div class="profile"><?php if ($mu['discord_avatar'] !== ''): ?><img src="<?php echo e($mu['discord_avatar']); ?>" alt="" class="dc-av" referrerpolicy="no-referrer"><?php endif; ?><div><b><?php echo e($mu['discord_name']); ?></b><small>Discord-ID <?php echo e($mu['discord_id']); ?></small></div></div>
+                    <p class="muted small">Du kannst dich mit „Mit Discord anmelden“ einloggen. Zwei-Faktor gilt auch dort.</p>
+                    <form method="POST" onsubmit="return confirm('Discord-Verknüpfung trennen?');"><input type="hidden" name="tab" value="account"><input type="hidden" name="action" value="acc_unlink"><button class="btn btn-sm btn-danger" <?php echo (int)$mu['pw_set'] ? '' : 'disabled title="Erst ein Passwort setzen"'; ?>>Trennen</button></form>
+                <?php elseif (acc_discord_ready()): ?>
+                    <p class="muted">Verknüpfe dein Discord-Konto, um dich mit einem Klick anzumelden.</p>
+                    <a class="btn btn-discord" href="auth-discord.php?go=link">🎮 Discord verknüpfen</a>
+                <?php else: ?>
+                    <p class="muted small">Die Discord-Anmeldung ist auf dieser Webseite noch nicht eingerichtet.</p>
+                <?php endif; ?>
+                <?php if (!(int)($mu['pw_set'] ?? 1)): ?>
+                    <div class="panel-title" style="margin-top: 18px;"><span>// Passwort setzen</span></div>
+                    <p class="muted small">Dein Konto ist über Discord entstanden. Mit einem Passwort kannst du dich auch ohne Discord anmelden.</p>
+                    <form method="POST" autocomplete="off"><input type="hidden" name="tab" value="account"><input type="hidden" name="action" value="acc_first_pw">
+                        <input type="password" name="password" required minlength="<?php echo $pol['min']; ?>" autocomplete="new-password" placeholder="Neues Passwort" data-meter="1"><div class="meter"><div></div></div><div class="meter-label"></div>
+                        <input type="password" name="password2" required autocomplete="new-password" placeholder="Wiederholen" style="margin-top: 6px;">
+                        <button class="btn btn-sm btn-gold" style="margin-top: 8px;">Passwort setzen</button></form>
+                <?php endif; ?>
+                <div class="panel-title" style="margin-top: 18px;"><span>// E-Mail</span></div>
+                <form method="POST" class="ip-add"><input type="hidden" name="tab" value="account"><input type="hidden" name="action" value="acc_email"><input type="email" name="email" maxlength="190" value="<?php echo e($mu['email'] ?? ''); ?>" placeholder="name@beispiel.de" autocomplete="email"><button class="btn btn-sm">Speichern</button></form>
+                <p class="muted small">Nur für dich und die Admins sichtbar – nie öffentlich.</p>
+            </div>
+            <div class="panel">
+                <div class="panel-title"><span>// Konto</span></div>
+                <p class="muted small">Registriert <?php echo e(['form' => 'über das Formular', 'discord' => 'mit Discord'][$mu['registered_via'] ?? ''] ?? (($mu['invited_by'] ?? '') !== '' ? 'per Einladung' : 'durch einen Admin')); ?> · dabei seit <?php echo e(date('d.m.Y', strtotime($mu['created_at']))); ?></p>
             </div>
         </div>
         <div class="grid2">
