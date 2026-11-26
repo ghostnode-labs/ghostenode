@@ -19,7 +19,7 @@ const PAGE_TEMPLATES = [
     'external'  => ['🌐', 'Externer Link', 'Kachel im Index, die direkt zu einer anderen Webseite führt.'],
 ];
 
-const PAGE_ACCESS = ['public' => '🌍 Öffentlich', 'users' => '🔑 Nur angemeldet', 'roles' => '🛡️ Nur bestimmte Rollen'];
+const PAGE_ACCESS = ['public' => '🌍 Öffentlich', 'users' => '🔑 Nur angemeldet (Gäste sehen sie mit Schloss)', 'members' => '🔒 Nur angemeldet – für Gäste unsichtbar', 'roles' => '🛡️ Nur bestimmte Rollen'];
 
 /** Standardwerte der mitgelieferten Seiten: Datei => [Titel, Icon, Beschreibung, Kategorie, Zugriff] */
 const PAGE_DEFAULTS = [
@@ -138,6 +138,16 @@ function page_get_by_id(int $id): ?array {
     return $st->fetch() ?: null;
 }
 
+/** Kategorie „nur für Angemeldete“ (Spalte bei Bedarf anlegen) */
+function page_cat_schema(): void {
+    static $done = false;
+    if ($done) return;
+    $done = true;
+    if (setting('cat_members_schema', '0') === '1') return;
+    try { if (!in_array('members_only', db_columns(site_db(), 'page_categories'), true)) site_db()->exec('ALTER TABLE page_categories ADD COLUMN members_only INTEGER NOT NULL DEFAULT 0'); } catch (Throwable $e) { return; }
+    set_setting('cat_members_schema', '1');
+}
+
 /** Ziel-Adresse einer Seite */
 function page_href(array $p): string {
     if ($p['kind'] === 'file') return $p['slug'];
@@ -149,7 +159,7 @@ function page_href(array $p): string {
 function page_visible_in_index(array $p, bool $edit_mode): bool {
     if ($edit_mode) return true;
     if ($p['hidden']) return false;
-    if (!is_logged_in()) return $p['access'] !== 'roles';   // Gäste: öffentliche + "nur angemeldet" (mit Schloss)
+    if (!is_logged_in()) return !in_array($p['access'], ['roles', 'members'], true) && empty($p['_cat_members']);   // Gäste: öffentliche + "nur angemeldet" (mit Schloss); „unsichtbar“ und Mitglieder-Kategorien gar nicht
     if (!page_access_ok($p)) return false;
     $perm = PAGE_REQUIRED_PERMISSION[$p['slug']] ?? null;
     return !$perm || can($perm);

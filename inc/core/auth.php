@@ -345,7 +345,7 @@ function page_access_ok(array $page): bool {
     if ($page['access'] === 'public') return true;
     $u = current_user();
     if (!$u) return false;
-    if ($page['access'] === 'users' || $u['role_is_system']) return true;
+    if ($page['access'] === 'users' || $page['access'] === 'members' || $u['role_is_system']) return true;
     return in_array((string)$u['role_id'], array_filter(explode(',', (string)$page['allowed_roles'])), true);
 }
 
@@ -353,6 +353,10 @@ function require_page_access(string $slug): void {
     $st = site_db()->prepare('SELECT * FROM pages WHERE slug = ?');
     $st->execute([$slug]);
     $page = $st->fetch();
+    // Seiten in einer Kategorie „nur für Angemeldete“ sind für Gäste auch per direktem Link gesperrt
+    if ($page && !is_logged_in() && !empty($page['category_id'])) {
+        try { $c = site_db()->prepare('SELECT members_only FROM page_categories WHERE id = ?'); $c->execute([(int)$page['category_id']]); if ((int)$c->fetchColumn() === 1) $page['access'] = 'members'; } catch (Throwable $e) { /* Spalte noch nicht da */ }
+    }
     if (!$page || page_access_ok($page)) return;
     if (!is_logged_in()) {
         header('Location: admin.php?next=' . urlencode($slug . (($_SERVER['QUERY_STRING'] ?? '') !== '' ? '?' . $_SERVER['QUERY_STRING'] : '')));

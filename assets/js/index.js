@@ -138,6 +138,7 @@
         cf.elements.id.value = c ? c.id : '';
         cf.elements.name.value = c ? c.name : '';
         cf.elements.icon.value = c ? c.icon : '';
+        cf.elements.members_only.checked = !!(c && c.members_only);
         $('#catFormTitle').textContent = c ? '// Kategorie bearbeiten' : '// Neue Kategorie';
         openModal($('#catModal'));
     }));

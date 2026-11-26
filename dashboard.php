@@ -82,8 +82,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($name === '') throw new InvalidArgumentException('Bitte einen Namen eingeben.');
                 $icon = mb_substr(trim($_POST['icon'] ?? ''), 0, 4);
                 $cid = (int)($_POST['id'] ?? 0);
-                if ($cid) $db->prepare('UPDATE page_categories SET name = ?, icon = ? WHERE id = ?')->execute([$name, $icon, $cid]);
-                else $db->prepare('INSERT INTO page_categories (name, icon, sort) VALUES (?, ?, ?)')->execute([$name, $icon, (int)$db->query('SELECT COALESCE(MAX(sort), 0) + 1 FROM page_categories')->fetchColumn()]);
+                $mo = !empty($_POST['members_only']) ? 1 : 0;
+                page_cat_schema();
+                if ($cid) $db->prepare('UPDATE page_categories SET name = ?, icon = ?, members_only = ? WHERE id = ?')->execute([$name, $icon, $mo, $cid]);
+                else $db->prepare('INSERT INTO page_categories (name, icon, sort, members_only) VALUES (?, ?, ?, ?)')->execute([$name, $icon, (int)$db->query('SELECT COALESCE(MAX(sort), 0) + 1 FROM page_categories')->fetchColumn(), $mo]);
                 audit($cid ? 'Kategorie umbenannt' : 'Kategorie angelegt', $name);
                 $msg = 'Kategorie „' . $name . '“ gespeichert.';
                 break;
@@ -173,8 +175,11 @@ function load_hub_links(string $path): ?array {
 }
 
 // ---------- Seiten laden & gruppieren ----------
+page_cat_schema();
 $categories = page_categories();
 $all_pages = $db->query('SELECT * FROM pages ORDER BY sort, title')->fetchAll();
+$cat_members = [];
+foreach ($categories as $c) if (!empty($c['members_only'])) $cat_members[(int)$c['id']] = true;
 $groups = [];
 foreach ($categories as $c) $groups[(int)$c['id']] = ['cat' => $c, 'pages' => []];
 $groups[0] = ['cat' => ['id' => 0, 'name' => 'Ohne Kategorie', 'icon' => '📁'], 'pages' => []];
@@ -183,6 +188,7 @@ $seen = [];
 $visible_count = 0;
 
 foreach ($all_pages as $p) {
+    $p['_cat_members'] = isset($cat_members[(int)$p['category_id']]);
     if (!page_visible_in_index($p, $edit)) continue;
     $accessible = page_access_ok($p);
     $p['locked'] = !$accessible;
@@ -225,7 +231,7 @@ function soon_items(): array {
 $cal_page = page_get('calendar.php');
 $soon = ($cal_page && page_access_ok($cal_page)) ? soon_items() : [];
 
-$access_icon = ['public' => '', 'users' => '🔑', 'roles' => '🛡️'];
+$access_icon = ['public' => '', 'users' => '🔑', 'members' => '🔒', 'roles' => '🛡️'];
 
 // ---------- Widgets ----------
 $wg_avail = widgets_available();
@@ -368,7 +374,7 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
                         <span class="cat-tools">
                             <button type="button" class="ic" data-move-cat="up" title="Nach oben">▲</button>
                             <button type="button" class="ic" data-move-cat="down" title="Nach unten">▼</button>
-                            <button type="button" class="ic" data-cat-edit="<?php echo e(json_encode(['id' => $cid, 'name' => $g['cat']['name'], 'icon' => $g['cat']['icon']])); ?>" title="Umbenennen">✎</button>
+                            <button type="button" class="ic" data-cat-edit="<?php echo e(json_encode(['id' => $cid, 'name' => $g['cat']['name'], 'icon' => $g['cat']['icon'], 'members_only' => (int)($g['cat']['members_only'] ?? 0)])); ?>" title="Bearbeiten">✎</button>
                             <form method="POST" onsubmit="return confirm('Kategorie löschen? Ihre Seiten bleiben erhalten (ohne Kategorie).');"><input type="hidden" name="action" value="category_delete"><input type="hidden" name="id" value="<?php echo (int)$cid; ?>"><button class="ic danger" title="Kategorie löschen">✕</button></form>
                         </span>
                     <?php endif; ?>
@@ -491,6 +497,7 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
             <div><label class="field">Name *</label><input type="text" name="name" maxlength="60" required></div>
             <div><label class="field">Icon</label><input type="text" name="icon" maxlength="4" placeholder="📁"></div>
         </div>
+        <label style="display:flex;gap:8px;align-items:center;margin-top:12px;font-size:.85rem"><input type="checkbox" name="members_only" value="1"> 🔒 Nur für Angemeldete – Gäste sehen diese Kategorie gar nicht</label>
         <button type="submit" class="btn btn-gold" style="width: 100%; margin-top: 14px;">Speichern</button>
     </form>
 </div>
