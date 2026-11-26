@@ -50,7 +50,7 @@ const PAGE_REQUIRED_PERMISSION = ['budget.php' => 'budget.access', 'con.php' => 
 /** Seiten, die nie im Register auftauchen (Hilfsdateien) */
 const PAGE_IGNORE = ['index.php', 'dashboard.php', 'p.php', 'page.php', 'preview.php', 'vrcx.php', 'widgets.php', 'client.php', 'cron.php',
     // Schnittstellen (keine Seiten): App-APIs, Anmeldung, Sitzungs-Wächter
-    'auth-discord.php', 'nexusacct.php', 'nexuschat.php', 'nexuscomm.php', 'nexuswarn.php', 'toyrelay.php', 'session.php'];
+    'auth-discord.php', 'nexuspulse.php', 'nexusacct.php', 'nexuschat.php', 'nexuscomm.php', 'nexuswarn.php', 'toyrelay.php', 'session.php'];
 
 /** Umbenannte Dateien: alter Name => neuer Name (Einstellungen der Kachel bleiben erhalten) */
 const PAGE_RENAMES = ['vrcx.php' => 'nexus.php'];
