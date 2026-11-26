@@ -55,6 +55,14 @@ function nxweb_action(int $uid, string $act, array $in): array {
         case 'nw_follows': return nc_follows($who);
         case 'nw_trends': return nc_trends($who, (string)($in['rating'] ?? 'sfw'));
         case 'nw_inbox': return nc_inbox($who, ($in['seen'] ?? '') === '1');
+        case 'nw_req_list': return nc_req_list($who);
+        case 'nw_req_send': return nc_req_send($who, (string)($in['id'] ?? ''), (string)($in['message'] ?? ''));
+        case 'nw_req_answer': return nc_req_answer($who, (int)($in['id'] ?? 0), ($in['accept'] ?? '') === '1');
+        case 'nw_req_withdraw': return nc_req_withdraw($who, (int)($in['id'] ?? 0));
+        case 'nw_compat': return nc_compat($who, (string)($in['id'] ?? ''));
+        case 'nw_sess_start': return nc_sess_start($who, (string)($in['id'] ?? ''), $J('terms'));
+        case 'nw_sess_answer': return nc_sess_answer($who, (int)($in['id'] ?? 0), ($in['agree'] ?? '') === '1', $J('terms'));
+        case 'nw_sess_end': return nc_sess_end($who, (int)($in['id'] ?? 0), (string)($in['reason'] ?? 'done'));
         case 'nw_thread': return nc_thread($who, (int)($in['id'] ?? 0));
         case 'nw_post': return nc_create($who, ['text' => (string)($in['text'] ?? ''), 'rating' => (string)($in['rating'] ?? 'sfw'), 'parent' => (int)($in['parent'] ?? 0), 'media' => $J('media')]);
         case 'nw_edit': return nc_edit($who, (int)($in['id'] ?? 0), (string)($in['text'] ?? ''));

@@ -302,6 +302,20 @@ function vrc_migrate(PDO $db): void {
         PRAGMA user_version = 17;
     ");
     }
+    if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 18) {
+        // 6.0 (18+): Profil-Anfragen (beidseitig) und Consent-Checks vor gemeinsamen Sessions
+        $db->exec("
+        CREATE TABLE IF NOT EXISTS comm_requests (id INTEGER PRIMARY KEY AUTOINCREMENT, from_id TEXT NOT NULL, to_id TEXT NOT NULL, message TEXT NOT NULL DEFAULT '',
+                                status TEXT NOT NULL DEFAULT 'pending', created INTEGER NOT NULL, expires INTEGER NOT NULL, answered INTEGER NOT NULL DEFAULT 0);
+        CREATE INDEX IF NOT EXISTS idx_comm_req_to ON comm_requests(to_id, status);
+        CREATE INDEX IF NOT EXISTS idx_comm_req_from ON comm_requests(from_id, status);
+        CREATE TABLE IF NOT EXISTS comm_sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, a_id TEXT NOT NULL, b_id TEXT NOT NULL, a_terms TEXT NOT NULL DEFAULT '{}', b_terms TEXT NOT NULL DEFAULT '{}',
+                                status TEXT NOT NULL DEFAULT 'proposed', created INTEGER NOT NULL, ready INTEGER NOT NULL DEFAULT 0, ends INTEGER NOT NULL DEFAULT 0, ended INTEGER NOT NULL DEFAULT 0,
+                                ended_by TEXT NOT NULL DEFAULT '', end_reason TEXT NOT NULL DEFAULT '');
+        CREATE INDEX IF NOT EXISTS idx_comm_sess ON comm_sessions(a_id, b_id, status);
+        PRAGMA user_version = 18;
+    ");
+    }
 }
 
 // ---------- Verschlüsselung der Sitzungs-Cookies ----------

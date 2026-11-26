@@ -63,7 +63,7 @@ const NC_NSFW_SETS = [
     'behavior' => ['', 'dominant', 'submissive', 'switch', 'versatile'],
     'open_contact' => ['', 'yes', 'no', 'ask'],
     'safer' => ['', 'always', 'sometimes', 'never', 'talk'],
-    'visibility' => ['', 'hidden'],        // Sichtbarkeit: '' = alle Verified 18+ mit NSFW an, 'hidden' = nur ich
+    'visibility' => ['', 'connections', 'hidden'],        // Sichtbarkeit: '' = alle Verified 18+ mit NSFW an, 'connections' = nur angenommene Anfragen (6.0), 'hidden' = nur ich
 ];
 function nc_facts(array $in): array {
     $out = [];
@@ -128,13 +128,15 @@ function nc_profile(array $who, string $id): array {
         'facts' => json_decode($p['facts'] ?? '{}', true) ?: (object)[]];
     // 18+-Profilteil nur für freigegebene Betrachter (und nur, wenn die Person selbst NSFW an hat)
     $nf = json_decode($p['nsfw_facts'] ?? '{}', true) ?: [];
-    if ($own || ($who['_nsfw'] && !empty($acc['nsfw_on']) && (int)$acc['age_until'] > time() && ($nf['visibility'] ?? '') !== 'hidden')) {
+    $vis = (string)($nf['visibility'] ?? '');
+    if ($own || ($who['_nsfw'] && !empty($acc['nsfw_on']) && (int)$acc['age_until'] > time() && $vis !== 'hidden' && ($vis !== 'connections' || nc_connected($who['vrc_id'], $id)))) {
         $out['nsfw_bio'] = $p['nsfw_bio'] ?? '';
         $out['nsfw_facts'] = $nf ?: (object)[];
     }
     $c = nc_db()->prepare("SELECT COUNT(*) FROM comm_posts WHERE author = ? AND status = 'visible' AND parent = 0 AND rating = 'sfw'");
     $c->execute([$id]);
     $out['posts'] = (int)$c->fetchColumn();
+    if ($who['_nsfw'] && !$own) $out['link18'] = nc_link_state($who['vrc_id'], $id);   // 6.0: Stand der 18+-Anfrage zwischen uns
     $f = nc_db()->prepare('SELECT (SELECT COUNT(*) FROM comm_follows WHERE target = ?), (SELECT COUNT(*) FROM comm_follows WHERE vrc_id = ?), (SELECT COUNT(*) FROM comm_follows WHERE vrc_id = ? AND target = ?)');
     $f->execute([$id, $id, $who['vrc_id'], $id]);
     [$out['followers'], $out['following'], $out['i_follow']] = array_map('intval', $f->fetch(PDO::FETCH_NUM));
@@ -478,4 +480,169 @@ function nc_inbox(array $who, bool $markSeen = false): array {
     $unread = count(array_filter($rows, fn($r) => (int)$r['id'] > $seen));
     if ($markSeen && $rows) nc_db()->prepare('INSERT INTO comm_seen (vrc_id, replies_seen) VALUES (?, ?) ON CONFLICT(vrc_id) DO UPDATE SET replies_seen = excluded.replies_seen')->execute([$who['vrc_id'], (int)$rows[0]['id']]);
     return ['items' => nc_decorate($rows, $who), 'unread' => $unread, 'seen' => $seen];
+}
+
+// ---------- 6.0 (18+): Profil-Anfragen, Verbindungen, Kompatibilität, Consent-Check ----------
+const NC_REQ_DAYS = 14;
+function nc_pair(string $a, string $b): array { return strcmp($a, $b) < 0 ? [$a, $b] : [$b, $a]; }
+function nc_connected(string $a, string $b): bool {
+    if ($a === $b) return true;
+    $st = nc_db()->prepare("SELECT 1 FROM comm_requests WHERE status = 'accepted' AND ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)) LIMIT 1");
+    $st->execute([$a, $b, $b, $a]);
+    return (bool)$st->fetchColumn();
+}
+/** Stand zwischen zwei Personen: none | sent | received | connected (+ Anfrage-ID) */
+function nc_link_state(string $me, string $other): array {
+    $st = nc_db()->prepare("SELECT * FROM comm_requests WHERE ((from_id = ? AND to_id = ?) OR (from_id = ? AND to_id = ?)) AND (status = 'accepted' OR (status = 'pending' AND expires > ?)) ORDER BY id DESC LIMIT 1");
+    $st->execute([$me, $other, $other, $me, time()]);
+    $r = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$r) return ['state' => 'none'];
+    if ($r['status'] === 'accepted') return ['state' => 'connected', 'id' => (int)$r['id']];
+    return ['state' => $r['from_id'] === $me ? 'sent' : 'received', 'id' => (int)$r['id']];
+}
+/** Darf diese Person 18+-Anfragen bekommen? (Verified 18+, NSFW an, nicht gesperrt, offen für Kontakt) */
+function nc_req_target(string $id): array {
+    $acc = nx_account($id);
+    if (!$acc || !empty($acc['banned']) || !nx_nsfw_allowed($acc)) throw new NcError('Diese Person kann gerade keine 18+-Anfragen bekommen.');
+    $st = nc_db()->prepare('SELECT nsfw_facts FROM comm_profiles WHERE vrc_id = ?'); $st->execute([$id]);
+    $nf = json_decode((string)$st->fetchColumn(), true) ?: [];
+    if (($nf['open_contact'] ?? '') === 'no' || ($nf['visibility'] ?? '') === 'hidden') throw new NcError('Diese Person nimmt gerade keine Anfragen an.');
+    return $acc;
+}
+function nc_req_send(array $who, string $to, string $message): array {
+    nc_need_nsfw($who); nc_can_post($who);
+    $to = strtolower(trim($to));
+    if (!nx_uid_ok($to) || $to === $who['vrc_id']) throw new NcError('Ungültige Person.');
+    nc_req_target($to);
+    $db = nc_db();
+    $ls = nc_link_state($who['vrc_id'], $to);
+    if ($ls['state'] === 'connected') throw new NcError('Ihr seid schon verbunden.');
+    if ($ls['state'] !== 'none') throw new NcError($ls['state'] === 'sent' ? 'Deine Anfrage wartet noch auf Antwort.' : 'Diese Person hat dir schon eine Anfrage geschickt – schau in deine Anfragen.');
+    $n = $db->prepare("SELECT COUNT(*) FROM comm_requests WHERE from_id = ? AND created > ?"); $n->execute([$who['vrc_id'], time() - 86400]);
+    if ((int)$n->fetchColumn() >= 20) throw new NcError('Höchstens 20 Anfragen pro Tag.');
+    $d = $db->prepare("SELECT COUNT(*) FROM comm_requests WHERE from_id = ? AND to_id = ? AND status = 'declined' AND answered > ?"); $d->execute([$who['vrc_id'], $to, time() - 30 * 86400]);
+    if ((int)$d->fetchColumn() > 0) throw new NcError('Diese Person hat vor Kurzem abgelehnt – erneut geht erst nach 30 Tagen.');
+    $db->prepare('INSERT INTO comm_requests (from_id, to_id, message, status, created, expires) VALUES (?, ?, ?, \'pending\', ?, ?)')
+        ->execute([$who['vrc_id'], $to, nc_cut($message, 500), time(), time() + NC_REQ_DAYS * 86400]);
+    return ['link18' => nc_link_state($who['vrc_id'], $to), 'msg' => '💌 Anfrage geschickt.'];
+}
+function nc_req_row(int $id): ?array { $st = nc_db()->prepare('SELECT * FROM comm_requests WHERE id = ?'); $st->execute([$id]); return $st->fetch(PDO::FETCH_ASSOC) ?: null; }
+function nc_req_answer(array $who, int $id, bool $accept): array {
+    nc_need_nsfw($who);
+    $r = nc_req_row($id);
+    if (!$r || $r['to_id'] !== $who['vrc_id'] || $r['status'] !== 'pending' || (int)$r['expires'] < time()) throw new NcError('Anfrage nicht (mehr) offen.');
+    if ($accept) nc_req_target($r['from_id']);
+    nc_db()->prepare('UPDATE comm_requests SET status = ?, answered = ? WHERE id = ?')->execute([$accept ? 'accepted' : 'declined', time(), $id]);
+    return ['msg' => $accept ? '💞 Angenommen – ihr seid jetzt verbunden.' : 'Abgelehnt. Die andere Person sieht nur „nicht angenommen“.'];
+}
+/** Zurückziehen (eigene offene Anfrage) oder Verbindung lösen (beide Seiten) */
+function nc_req_withdraw(array $who, int $id): array {
+    $r = nc_req_row($id);
+    if (!$r || ($r['from_id'] !== $who['vrc_id'] && $r['to_id'] !== $who['vrc_id'])) throw new NcError('Nicht gefunden.');
+    if ($r['status'] === 'pending' && $r['from_id'] === $who['vrc_id']) { nc_db()->prepare("UPDATE comm_requests SET status = 'withdrawn', answered = ? WHERE id = ?")->execute([time(), $id]); return ['msg' => 'Anfrage zurückgezogen.']; }
+    if ($r['status'] === 'accepted') {
+        nc_db()->prepare("UPDATE comm_requests SET status = 'ended', answered = ? WHERE id = ?")->execute([time(), $id]);
+        $other = $r['from_id'] === $who['vrc_id'] ? $r['to_id'] : $r['from_id'];
+        nc_db()->prepare("UPDATE comm_sessions SET status = 'ended', ended = ?, ended_by = ?, end_reason = 'unlinked' WHERE status IN ('proposed', 'ready') AND ((a_id = ? AND b_id = ?) OR (a_id = ? AND b_id = ?))")->execute([time(), $who['vrc_id'], $who['vrc_id'], $other, $other, $who['vrc_id']]);
+        return ['msg' => 'Verbindung gelöst.'];
+    }
+    throw new NcError('Nichts zu tun.');
+}
+function nc_names(array $ids): array {
+    $ids = array_values(array_unique(array_filter($ids)));
+    if (!$ids) return [];
+    $q = nc_db()->prepare('SELECT vrc_id, display_name FROM nexus_accounts WHERE vrc_id IN (' . implode(',', array_fill(0, count($ids), '?')) . ')'); $q->execute($ids);
+    return $q->fetchAll(PDO::FETCH_KEY_PAIR);
+}
+function nc_req_list(array $who): array {
+    nc_need_nsfw($who);
+    $me = $who['vrc_id'];
+    $st = nc_db()->prepare("SELECT * FROM comm_requests WHERE (to_id = ? OR from_id = ?) AND (status IN ('pending', 'accepted') OR answered > ?) ORDER BY id DESC LIMIT 300");
+    $st->execute([$me, $me, time() - 30 * 86400]);
+    $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+    $names = nc_names(array_merge(array_column($rows, 'from_id'), array_column($rows, 'to_id')));
+    $in = $out = $con = [];
+    foreach ($rows as $r) {
+        $other = $r['from_id'] === $me ? $r['to_id'] : $r['from_id'];
+        $e = ['id' => (int)$r['id'], 'vrc_id' => $other, 'name' => (string)($names[$other] ?? ''), 'created' => (int)$r['created'], 'answered' => (int)$r['answered'], 'expires' => (int)$r['expires']];
+        if ($r['status'] === 'accepted') { $con[] = $e + ['since' => (int)$r['answered']]; continue; }
+        if ($r['status'] === 'pending' && (int)$r['expires'] < time()) $r['status'] = 'expired';
+        if ($r['to_id'] === $me) { if ($r['status'] === 'pending') $in[] = $e + ['message' => $r['message']]; }
+        else $out[] = $e + ['message' => $r['message'], 'status' => $r['status'] === 'declined' ? 'not_accepted' : $r['status']];   // Ablehnung ohne Details
+    }
+    return ['incoming' => $in, 'outgoing' => $out, 'connections' => $con, 'sessions' => nc_sess_list($who)];
+}
+/** Kompatibilität aus den Vorlieben (kinks: [empfangen, geben], −1 nein … 2 sehr gern) – nur für Verbundene */
+function nc_compat(array $who, string $other): array {
+    nc_need_nsfw($who);
+    $other = strtolower(trim($other));
+    if (!nc_connected($who['vrc_id'], $other) || $other === $who['vrc_id']) throw new NcError('Kompatibilität gibt es nur für Verbindungen (beide haben zugestimmt).');
+    $get = function ($id) { $st = nc_db()->prepare('SELECT nsfw_facts FROM comm_profiles WHERE vrc_id = ?'); $st->execute([$id]); $nf = json_decode((string)$st->fetchColumn(), true) ?: []; return (array)($nf['kinks'] ?? []); };
+    $a = $get($who['vrc_id']); $b = $get($other);
+    $match = $maybe = $conflict = [];
+    foreach (array_intersect(array_keys($a), array_keys($b)) as $k) {
+        // ich empfange ↔ du gibst, ich gebe ↔ du empfängst
+        foreach ([[0, 1], [1, 0]] as [$i, $j]) {
+            $x = $a[$k][$i] ?? null; $y = $b[$k][$j] ?? null;
+            if ($x === null || $y === null) continue;
+            $e = ['k' => $k, 'dir' => $i === 0 ? 'me' : 'you', 'a' => $x, 'b' => $y];
+            if ($x >= 1 && $y >= 1) { if ($x + $y >= 3) $match[] = $e; else $maybe[] = $e; }
+            elseif (($x === -1 && $y >= 1) || ($y === -1 && $x >= 1)) $conflict[] = ['k' => $k, 'dir' => $i === 0 ? 'me' : 'you'];
+        }
+    }
+    $tot = count($match) + count($maybe) + count($conflict);
+    return ['score' => $tot ? (int)round((count($match) + 0.5 * count($maybe)) / $tot * 100) : null, 'match' => $match, 'maybe' => $maybe, 'conflict' => $conflict,
+            'note' => 'Nur ein Gesprächsanfang – redet immer direkt über Grenzen.'];
+}
+// ---------- Consent-Check vor einer gemeinsamen Session ----------
+function nc_terms(array $in): array {
+    $light = in_array($in['light'] ?? '', ['green', 'yellow', 'red'], true) ? $in['light'] : 'yellow';
+    return ['light' => $light, 'limits' => nc_cut((string)($in['limits'] ?? ''), 500), 'safeword' => nc_cut((string)($in['safeword'] ?? ''), 40) ?: 'Rot',
+            'minutes' => max(5, min(240, (int)($in['minutes'] ?? 30))), 'toys' => !empty($in['toys']), 'at' => time()];
+}
+function nc_sess_row(int $id): ?array { $st = nc_db()->prepare('SELECT * FROM comm_sessions WHERE id = ?'); $st->execute([$id]); return $st->fetch(PDO::FETCH_ASSOC) ?: null; }
+function nc_sess_pub(array $s, string $me): array {
+    $mineA = $s['a_id'] === $me;
+    $st = $s['status'] === 'ready' && (int)$s['ends'] < time() ? 'ended' : $s['status'];
+    return ['id' => (int)$s['id'], 'with' => $mineA ? $s['b_id'] : $s['a_id'], 'mine' => json_decode($mineA ? $s['a_terms'] : $s['b_terms'], true) ?: null,
+            'theirs' => json_decode($mineA ? $s['b_terms'] : $s['a_terms'], true) ?: null, 'proposed_by_me' => $mineA, 'status' => $st, 'created' => (int)$s['created'],
+            'ready' => (int)$s['ready'], 'ends' => (int)$s['ends'], 'ended' => (int)$s['ended'], 'ended_by_me' => $s['ended_by'] === $me, 'end_reason' => $s['end_reason']];
+}
+function nc_sess_list(array $who): array {
+    $st = nc_db()->prepare("SELECT * FROM comm_sessions WHERE (a_id = ? OR b_id = ?) AND (status IN ('proposed', 'ready') OR ended > ?) ORDER BY id DESC LIMIT 50");
+    $st->execute([$who['vrc_id'], $who['vrc_id'], time() - 7 * 86400]);
+    return array_map(fn($s) => nc_sess_pub($s, $who['vrc_id']), $st->fetchAll(PDO::FETCH_ASSOC));
+}
+function nc_sess_start(array $who, string $other, array $terms): array {
+    nc_need_nsfw($who);
+    $other = strtolower(trim($other));
+    if (!nc_connected($who['vrc_id'], $other) || $other === $who['vrc_id']) throw new NcError('Consent-Check nur mit Verbindungen.');
+    nc_req_target($other);
+    $t = nc_terms($terms);
+    if ($t['light'] === 'red') throw new NcError('Bei Rot startet keine Session.');
+    $db = nc_db();
+    $db->prepare("UPDATE comm_sessions SET status = 'ended', ended = ?, ended_by = ?, end_reason = 'replaced' WHERE status = 'proposed' AND a_id = ? AND b_id = ?")->execute([time(), $who['vrc_id'], $who['vrc_id'], $other]);
+    $db->prepare('INSERT INTO comm_sessions (a_id, b_id, a_terms, status, created) VALUES (?, ?, ?, \'proposed\', ?)')->execute([$who['vrc_id'], $other, json_encode($t, JSON_UNESCAPED_UNICODE), time()]);
+    return ['session' => nc_sess_pub(nc_sess_row((int)$db->lastInsertId()), $who['vrc_id']), 'msg' => '🤝 Consent-Check geschickt – startet erst, wenn beide zugestimmt haben.'];
+}
+function nc_sess_answer(array $who, int $id, bool $agree, array $terms): array {
+    nc_need_nsfw($who);
+    $s = nc_sess_row($id);
+    if (!$s || $s['b_id'] !== $who['vrc_id'] || $s['status'] !== 'proposed') throw new NcError('Kein offener Consent-Check.');
+    if (!$agree) { nc_db()->prepare("UPDATE comm_sessions SET status = 'ended', ended = ?, ended_by = ?, end_reason = 'declined' WHERE id = ?")->execute([time(), $who['vrc_id'], $id]); return ['msg' => 'Nein ist okay – nichts startet.']; }
+    $t = nc_terms($terms);
+    if ($t['light'] === 'red') throw new NcError('Bei Rot startet keine Session.');
+    $a = json_decode($s['a_terms'], true) ?: [];
+    $min = min((int)($a['minutes'] ?? 30), $t['minutes']);   // die kürzere Zeit gilt
+    nc_db()->prepare("UPDATE comm_sessions SET b_terms = ?, status = 'ready', ready = ?, ends = ? WHERE id = ?")->execute([json_encode($t, JSON_UNESCAPED_UNICODE), time(), time() + $min * 60, $id]);
+    return ['session' => nc_sess_pub(nc_sess_row($id), $who['vrc_id']), 'msg' => '✅ Beide haben zugestimmt – ' . $min . ' min, Safewords gelten sofort.'];
+}
+/** Beenden – jederzeit, von beiden Seiten, ohne Begründung (Safeword) */
+function nc_sess_end(array $who, int $id, string $reason): array {
+    $s = nc_sess_row($id);
+    if (!$s || ($s['a_id'] !== $who['vrc_id'] && $s['b_id'] !== $who['vrc_id'])) throw new NcError('Nicht gefunden.');
+    if (!in_array($s['status'], ['proposed', 'ready'], true)) return ['msg' => 'Schon beendet.'];
+    $reason = in_array($reason, ['safeword', 'done', 'cancel'], true) ? $reason : 'done';
+    nc_db()->prepare("UPDATE comm_sessions SET status = 'ended', ended = ?, ended_by = ?, end_reason = ? WHERE id = ?")->execute([time(), $who['vrc_id'], $reason, $id]);
+    return ['msg' => $reason === 'safeword' ? '🛑 Safeword – beendet.' : 'Beendet.'];
 }

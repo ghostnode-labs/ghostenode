@@ -31,6 +31,15 @@ try {
         case 'follows': $out(nc_follows($who));
         case 'trends': $out(nc_trends($who, (string)($in['rating'] ?? 'sfw')));
         case 'inbox': $out(nc_inbox($who, !empty($in['seen'])));
+        // 6.0 (18+): Anfragen, Verbindungen, Kompatibilität, Consent-Check
+        case 'req_list': $out(nc_req_list($who));
+        case 'req_send': $out(nc_req_send($who, (string)($in['id'] ?? ''), (string)($in['message'] ?? '')));
+        case 'req_answer': $out(nc_req_answer($who, (int)($in['id'] ?? 0), !empty($in['accept'])));
+        case 'req_withdraw': $out(nc_req_withdraw($who, (int)($in['id'] ?? 0)));
+        case 'compat': $out(nc_compat($who, (string)($in['id'] ?? '')));
+        case 'sess_start': $out(nc_sess_start($who, (string)($in['id'] ?? ''), (array)($in['terms'] ?? [])));
+        case 'sess_answer': $out(nc_sess_answer($who, (int)($in['id'] ?? 0), !empty($in['agree']), (array)($in['terms'] ?? [])));
+        case 'sess_end': $out(nc_sess_end($who, (int)($in['id'] ?? 0), (string)($in['reason'] ?? 'done')));
         case 'thread': $out(nc_thread($who, (int)($in['id'] ?? 0)));
         case 'post': $out(nc_create($who, $in));
         case 'edit': $out(nc_edit($who, (int)($in['id'] ?? 0), (string)($in['text'] ?? '')));
