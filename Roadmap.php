@@ -220,25 +220,36 @@ $released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 
 // =====================================================================================================
-// Ausblick: drei Major-Versionen (6.x, 7.x, 8.x) – je Webseite, Client und 🔞 (öffentlich bewusst zurückhaltend formuliert)
+// Ausblick: fünf Major-Versionen (6.x – 10.x) – je Webseite, Client und 🔞 (öffentlich bewusst zurückhaltend formuliert)
 // =====================================================================================================
 $planFuture = [
-    '6.0 – „Verbunden“: API, Baukasten & Anfragen' => ['🔌', 'Nexus wird zur Plattform: alles per API steuerbar, Dashboard und Stream Deck frei zusammenstellbar.', [
+    '6.0 – „Verbunden“: Plattform, Baukasten & Anfragen' => ['🔌', 'Nexus wird zur Plattform: alles per API steuerbar, Dashboard, Stream Deck und Automationen frei zusammenstellbar. Geplant in Schritten 6.0 – 6.5.', [
         '🖥 Client' => [
             'Nexus Client-API über WebSocket (lokal, mit Schlüssel und Rechten je App)',
+            'Rechte je verbundener App (nur lesen / Chatbox / Avatar / alles) mit Freigabe-Dialog',
             'Stream Deck 2.0: Ordner, Mehrfach-Aktionen, Live-Anzeigen (Puls, Spieler, Welt) direkt auf den Tasten',
+            'Stream Deck: Seiten je Welt automatisch umschalten, Drehregler für Parameter und Lautstärke',
             'Dashboard-Baukasten im Client: Widgets frei anordnen, eigene Kacheln aus Aktionen bauen',
             'Automationen 2.0: Wenn-Dann-Regeln (Welt, Uhrzeit, Puls, Freunde) mit Vorschau',
+            'Automationen teilen und importieren (als Datei oder über den Marktplatz)',
+            'Makro-Editor mit Bausteinen statt Text (Ziehen & Ablegen, Testlauf)',
             'Nexus Watch: Zifferblatt-Anzeigen (Puls, Freunde online) und Schnellaktionen',
+            'Nexus Watch: Benachrichtigungen (Freund kommt online, Einladung) mit Antwort-Knöpfen',
+            'Handy als Fernbedienung 2.0: Stream-Deck-Seiten auch auf dem Handy',
             'Offline-Modus für Android mit Abgleich beim nächsten Start',
+            'Globale Suche im Client über Freunde, Welten, Avatare, Einstellungen und Aktionen',
         ],
         '🌐 Webseite' => [
             'Web-API (PHP) mit API-Schlüsseln, Limits und Dokumentations-Seite',
+            'Webhooks: Webseite meldet Ereignisse (neuer Beitrag, Event, Release) an eigene Adressen',
             'Dashboard-Baukasten: Widgets per Drag & Drop, Sichtbarkeit je Gast / angemeldet / Rolle',
+            'Widget-Marktplatz: eigene Widgets einreichen, prüfen lassen, installieren',
             'Öffentliche Profilseiten (freiwillig) mit eigener Adresse',
             'Benachrichtigungs-Center auf der Webseite (Antworten, Events, Releases)',
             'Passkeys als Anmeldung',
             'Download-Center mit Prüfsummen und Installationshilfe',
+            'Nexus Web: Freunde-Orte, Spielerliste und Instanz-Verlauf wie im Client',
+            'Nexus Web als installierbare App (PWA) für das Handy',
         ],
         '🔞 NSFW-Major' => [
             'Profil-Anfragen: 18+-Profile können sich gegenseitig anfragen – nur mit beidseitiger Zustimmung sichtbar',
@@ -246,22 +257,32 @@ $planFuture = [
             'Fantasie- & Szenen-Baukasten: Ablauf, Rollen und Grenzen gemeinsam festlegen',
             'Neue Schnittstellen für weitere Geräte und Inhalte',
             'Einverständnis-Check vor jeder gemeinsamen Session',
+            'Grenzen-Profil zum Teilen (Ja / Vielleicht / Nein) – beim Anfragen automatisch verglichen',
+            'Szenen-Vorlagen mit Zeitplan und Steigerung, jederzeit per Safeword beendet',
+            '18+-Bereich auf der Webseite: Anfragen, Grenzen und Vorlagen auch im Browser',
         ],
     ]],
-    '7.0 – „Gemeinsam“: Gruppen, Events & Erlebnisse' => ['🫂', 'Community wird zu Clubs und Treffen – planen, erleben, erinnern.', [
+    '7.0 – „Gemeinsam“: Clubs, Events & Erlebnisse' => ['🫂', 'Aus der Community werden Clubs und Treffen – planen, erleben, erinnern. Geplant in Schritten 7.0 – 7.5.', [
         '🖥 Client' => [
             'Event-Planer mit Zusagen, Erinnerungen und gemeinsamer Instanz',
+            'Clubs im Client: eigener Feed, Chat, Mitgliederliste und Rollen',
             'Gruppen-Sprachräume (eigener Server, Rollen, Push-to-Talk)',
+            'Bühnen-Modus für Events: Sprecher, Zuhörer, Hand heben',
             'Geteilte Foto-Alben, Ende-zu-Ende verschlüsselt',
             'Treffen-Karte: wer, wo, wie lange – als Zeitachse',
+            'Freundes-Gruppen: gemeinsam einer Instanz beitreten, Sammel-Einladung mit einem Klick',
             'Live-Untertitel und Übersetzung lokal, ohne Cloud',
+            'Erinnerungen: „Heute vor einem Jahr“ mit Fotos und Welten',
         ],
         '🌐 Webseite' => [
             'Clubs & Gruppen mit eigenem Feed, Regeln und Moderatoren',
-            'Event-Seiten mit Anmeldung und Kalender-Abo',
+            'Event-Seiten mit Anmeldung, Warteliste und Kalender-Abo',
+            'Öffentlicher Event-Kalender aller Clubs mit Filter (Sprache, Uhrzeit, Thema)',
             'Creator-Profile mit Welten, Avataren und Shop-Links',
-            'Moderation 2.0: Wortfilter, Warteschlange, Sperren mit Ablauf',
+            'Welt- und Avatar-Steckbriefe mit Bewertungen und Tags der Community',
+            'Moderation 2.0: Wortfilter, Warteschlange, Sperren mit Ablauf, Einspruch',
             'Fediverse-Anbindung für öffentliche Beiträge (Opt-in)',
+            'Discord-Bot 2.0: Clubs, Events und Rollen mit der Webseite abgeglichen',
         ],
         '🔞 NSFW-Major' => [
             'Private 18+-Clubs mit eigenen Einlassregeln',
@@ -269,15 +290,19 @@ $planFuture = [
             'Vorlagen-Bibliothek für Szenen: teilen, bewerten, anpassen',
             'Aftercare: sanfter Check-in nach einer Session',
             'Vertrauensliste für Partner mit eigenen Rechten',
+            '18+-Events mit Altersprüfung und Einlass-Liste',
+            'Club-Moderation für den 18+-Bereich mit eigenem Team',
         ],
     ]],
     '8.0 – „Überall“: Geräte, Föderation & Komfort' => ['🛰', 'Nexus läuft auf allen Geräten und spricht mit anderen Diensten – ohne Kontrolle abzugeben.', [
         '🖥 Client' => [
             'VR-Overlay 2.0 mit Handmenü',
             'Begleiter für Steam Deck und Standalone-Headsets',
+            'Linux- und macOS-Version des Clients',
             'Smart-Home: Licht reagiert auf Welt, Puls oder Panik',
             'Verschlüsselter Einstellungs-Abgleich zwischen allen Geräten',
             'Themes-Marktplatz und Barrierefreiheit (Schriftgröße, Kontrast, Bildschirmleser)',
+            'Gesundheit: Bewegungs- und Pausenstatistik aus Uhr und Spielzeit',
         ],
         '🌐 Webseite' => [
             'Installierbare Web-App (PWA) mit Offline-Ansicht',
@@ -285,6 +310,7 @@ $planFuture = [
             'Mehrsprachig (Deutsch, Englisch, Französisch, Japanisch)',
             'Entwickler-Portal: API-Schlüssel, Plugin-SDK und Einreichung an einem Ort',
             'Selbst hosten: Paket für eigene Server',
+            'Föderation: mehrere Nexus-Server tauschen Profile und Clubs aus',
         ],
         '🔞 NSFW-Major' => [
             'Unterstützung für Wearables und weitere Haptik',
@@ -292,6 +318,44 @@ $planFuture = [
             'Lokaler Szenen-Begleiter ohne Cloud',
             'Sichere Verbindungen zwischen Servern (Föderation) für Fernsteuerung',
             'Sicherheits-Center: Notfall-Kontakte und gemeinsame Sperrlisten',
+        ],
+    ]],
+    '9.0 – „Kreativ“: Creator-Studio & Marktplatz 2.0' => ['🎨', 'Werkzeuge für Leute, die Welten, Avatare und Events bauen – vom ersten Entwurf bis zum Verkauf.', [
+        '🖥 Client' => [
+            'Creator-Studio: Avatar-Parameter, Menüs und OSC-Funktionen visuell planen und testen',
+            'Welt-Statistiken für eigene Welten (Besuche, Favoriten, Trends, Spitzenzeiten)',
+            'Avatar-Test-Bank: Presets, Ausdrücke und Parameter automatisch durchspielen',
+            'Unity-Werkzeuge 2.0: Nexus-Funktionen per Klick in Avatar und Welt einbauen',
+            'Foto-Studio: Kamera-Fahrten, Serienbilder und Bearbeitung im Client',
+        ],
+        '🌐 Webseite' => [
+            'Marktplatz 2.0: Plugins, Widgets, Themes, Automationen und Szenen an einem Ort',
+            'Creator-Seiten mit Portfolio, Aufträgen und Warteliste',
+            'Poster 2.0: Zeitplan-Kalender, Statistiken, Freigaben für Gruppen',
+            'Wettbewerbe und Game-Jams mit Abstimmung',
+            'Unterstützer-Modell für Creator (Links zu eigenen Shops, keine Provision)',
+        ],
+        '🔞 NSFW-Major' => [
+            'Werkzeuge für 18+-Creator (Avatar-Systeme prüfen und testen)',
+            'Eigene 18+-Szenen und Vorlagen im Marktplatz – nur freigeschaltet sichtbar',
+            'Kompatibilitäts-Liste für Avatar-Systeme und Geräte',
+        ],
+    ]],
+    '10.0 – „Nexus OS“: alles aus einem Guss' => ['🌌', 'Langfristiges Ziel: ein zusammenhängendes System aus Client, Webseite, Uhr, Handy und Bot.', [
+        '🖥 Client' => [
+            'Neue Oberfläche aus einem Guss für PC, Handy, Uhr und VR',
+            'Plugins 2.0: abgeschottet, mit eigener Oberfläche im Client und auf der Webseite',
+            'Lokaler Assistent (ohne Cloud) für Fragen, Einstellungen und Automationen',
+            'Vollständige Datensicherung und Umzug auf ein neues Gerät mit einem Klick',
+        ],
+        '🌐 Webseite' => [
+            'Webseite und Client teilen dieselben Bausteine und dasselbe Design-System',
+            'Community-Verwaltung für fremde Gruppen und Clubs (als Dienst)',
+            'Offene Dokumentation aller Schnittstellen mit Spielwiese zum Ausprobieren',
+        ],
+        '🔞 NSFW-Major' => [
+            'Ein durchgehendes 18+-Erlebnis über alle Geräte mit denselben Grenzen und Einstellungen',
+            'Privatsphäre zuerst: alles Intime bleibt verschlüsselt und auf Wunsch nur lokal',
         ],
     ]],
 ];
@@ -471,7 +535,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 <nav class="rm-tabs" role="tablist">
     <button type="button" class="on" data-tab="plan">🚀 5.x-Plan</button>
     <button type="button" data-tab="web">🌐 Webseite 2.0</button>
-    <button type="button" data-tab="future">🔭 6.x – 8.x</button>
+    <button type="button" data-tab="future">🔭 6.x – 10.x</button>
     <button type="button" data-tab="past">✅ 3.x &amp; 4.x</button>
     <button type="button" data-tab="ideas">💡 Ideen</button>
     <button type="button" data-tab="rules">🧭 Grundsätze</button>
@@ -507,7 +571,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 </section>
 
 <section class="rm-pane" data-pane="future" hidden>
-    <p class="rm-note">Ausblick auf die nächsten drei Major-Versionen – je für Client, Webseite und den 🔞-Bereich (Details dazu nur freigeschaltet in der App). Reihenfolge und Umfang können sich ändern.</p>
+    <p class="rm-note">Ausblick auf die nächsten fünf Major-Versionen – je für Client, Webseite und den 🔞-Bereich (Details dazu nur freigeschaltet in der App). Reihenfolge und Umfang können sich ändern.</p>
     <div class="rm-tl">
     <?php foreach ($planFuture as $rel => [$ic, $desc, $cols]): $all = array_merge(...array_values($rowsFuture[$rel])); $d = count(array_filter($all, fn($x) => $x[1] === 'done')); ?>
         <article class="rm-rel<?= $d === count($all) ? ' done' : '' ?>">
