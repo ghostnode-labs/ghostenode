@@ -167,8 +167,10 @@ $plan5 = [
 // Stand der Umsetzung (Vorgabe für alle, die der Bearbeitungsmodus nicht ausdrücklich anders gesetzt hat)
 $rm_default = [
     // Ausblick 6.x (schon begonnen)
-    'Dashboard-Baukasten: Widgets per Drag & Drop, Sichtbarkeit je Gast / angemeldet / Rolle' => 'wip',
+    'Dashboard-Baukasten: Widgets per Drag & Drop, Sichtbarkeit je Gast / angemeldet / Rolle' => 'done',
     'Nexus Client-API über WebSocket (lokal, mit Schlüssel und Rechten je App)' => 'done',
+    'Stream Deck 2.0: Ordner, Mehrfach-Aktionen, Live-Anzeigen (Puls, Spieler, Welt) direkt auf den Tasten' => 'wip',
+    'Dashboard-Baukasten im Client: Widgets frei anordnen, eigene Kacheln aus Aktionen bauen' => 'wip',
     'Web-API (PHP) mit API-Schlüsseln, Limits und Dokumentations-Seite' => 'done',
     'Öffentliche, dokumentierte Nexus-API (mit Schlüsseln und Limits)' => 'done',
     'Entwickler-Bereich: API-Doku und Plugin-Einreichung für den Marktplatz' => 'done',
@@ -214,7 +216,7 @@ $rm_default = [
     'Rollen- und Rechte-Editor mit Änderungsprotokoll' => 'done', 'Automatische Backups mit Wiederherstellung aus dem Admin-Bereich' => 'wip',
     'Sicherheits-Header (CSP), Anfrage-Limits, Schutz vor Spam' => 'wip',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 
 // =====================================================================================================
