@@ -47,6 +47,8 @@ const PERMISSIONS = [
     'posters.upload'         => ['VRChat-Poster: eigene Slots anlegen & Bilder hochladen (Browser, Bildlink, FTP)', 'Poster'],
     'posters.edit'           => ['VRChat-Poster: Slots einstellen, aktives Bild & Poster-URL ändern, Bilder bearbeiten/löschen, Freigaben vergeben', 'Poster'],
     'posters.manage'         => ['VRChat-Poster: alle Slots aller Benutzer verwalten + Admin-Einstellungen', 'Poster'],
+    'market.submit'          => ['Plugin-Marktplatz: eigene VRC-Nexus-Plugins einreichen und aktualisieren', 'Marktplatz'],
+    'market.manage'          => ['Plugin-Marktplatz: Plugins prüfen, freigeben, ablehnen und löschen', 'Marktplatz'],
 ];
 
 function site_db_file(): string { return db_sqlite_file('site'); }

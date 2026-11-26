@@ -36,6 +36,7 @@ const PAGE_DEFAULTS = [
     'nexus.php'            => ['VRC Nexus', '🥽', 'VRChat-Zentrale: Freunde, Verlauf, Statistik, Welten, Avatare & Gruppen – Direkt-Zugriff per Zwischenablage', 'Community', 'users'],
     'discord.php'          => ['Discord-Zentrale', '🤖', 'Discord-Server über deinen Bot: Slash-Befehle, Rollen-Knöpfe, Umfragen, Automatik, Mitglieder & Moderation', 'Community', 'users'],
     'poster.php'           => ['VRChat-Poster', '🖼️', 'Feste Bild-Adressen für VRChat-Welten: Bild tauschen per Upload, Bildlink oder FTP – Rotation, Zeitplan, Rechte', 'Community', 'public'],
+    'market.php'           => ['Plugin-Marktplatz', '🧩', 'Plugins für VRC Nexus finden, prüfen und installieren – oder eigene einreichen', 'Community', 'public'],
     'nsfw.php'             => ['NSFW-Galerie', '🔞', 'Bilder-APIs (e621, Rule34, Danbooru, Gelbooru …) durchsuchen, Favoriten & Discord – 18+', 'Community', 'users'],
     'linkcheck.php'        => ['Link-Check', '🩺', 'Prüft alle Links der Hubs auf Erreichbarkeit', 'System', 'public'],
     'backup.php'           => ['Backup', '💾', 'Alle Daten als ZIP herunterladen', 'System', 'users'],
