@@ -64,7 +64,7 @@ $WS_OPS = [
     ['hello', '–', 'Version, Befehle, Themen (geht ohne Anmeldung; kommt auch automatisch als <code>welcome</code>)'],
     ['auth', '<code>token</code>', 'Anmelden mit dem Zugangsschlüssel aus VRC Nexus (oder <code>?token=</code> in der Adresse)'],
     ['state', '–', 'Kompletter Status: Spiel, Freunde, OSC, Puls, Medien, Makros, Szenen …'],
-    ['action', '<code>action</code> + Felder', 'Aktion ausführen – dieselben wie das Stream-Deck-Plugin (Liste unten)'],
+    ['action', '<code>action</code>, <code>params</code>', 'Aktion ausführen – dieselben wie das Stream-Deck-Plugin (Liste unten). Felder in <code>params</code>, z. B. <code>{"id":3,"op":"action","action":"avpreset","params":{"id":"Party"}}</code> – <code>id</code> außerhalb ist die Anfragenummer'],
     ['subscribe', '<code>topics</code>', 'Ereignisse abonnieren; danach kommen <code>{"event":"heart","data":{…}}</code> bei jeder Änderung'],
     ['unsubscribe', '<code>topics</code>', 'Abo beenden'],
     ['ping', '–', 'Lebenszeichen → <code>{"pong":…}</code>'],
@@ -76,6 +76,7 @@ $WS_ACTIONS = [
     'param' => '<code>name</code>, <code>type</code> (bool · int · float), <code>value</code>', 'toggle' => '<code>name</code> (bool umschalten)', 'param_step' => '<code>name</code>, <code>step</code>, <code>type</code>',
     'input' => '<code>name</code>, <code>value</code>', 'preset' => '<code>id</code> (OSC-Vorlage)', 'avatar' => '<code>id</code> (avtr_…)', 'macro' => '<code>id</code> oder <code>script</code>', 'macro_stop' => '–',
     'rotator' => '<code>on</code>', 'launch' => 'VRChat starten', 'rejoin' => 'Instanz neu betreten', 'instance_create' => '<code>world</code>, <code>type</code>, <code>region</code>',
+    'sleep' => 'Schlafmodus an/aus · <code>on</code> (leer = umschalten), <code>wake</code> (Wecker in Minuten)', 'avpreset' => '<code>id</code> (Name oder ID eines Avatar-Presets)', 'watch_find' => 'gekoppelte Nexus Watch vibrieren lassen',
     'camera' => '<code>cmd</code> (burst · preset · step …)', 'quicktext' => 'Schnelltext', 'scene' => 'OSC-Szene', 'record' => 'OSC-Aufnahme', 'media' => 'Wiedergabe steuern', 'tts' => 'Vorlesen', 'overlay' => 'VR-Overlay', 'speech' => 'Spracheingabe', 'chatmods' => 'Chatbox-Module', 'friend' => 'Freund (Einladen …)', 'open' => 'Seite der App öffnen', 'invite_self' => 'Selbst-Einladung',
 ];
 ?><!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>API · GhostNode</title>
@@ -155,7 +156,7 @@ const { items } = await r.json();</pre>
 <p>Über die API gibt es nie 🔞-Inhalte – auch nicht mit einem freigeschalteten Konto.</p>
 
 <h2 id="client">🖥 Client-API · Verbinden</h2>
-<p>Läuft in <b>VRC Nexus für Windows</b> (ab 5.4). Einschalten unter <b>Einstellungen → Integrationen → Stream-Deck-Schnittstelle</b>; dort stehen auch Port (Standard siehe App) und <b>Zugangsschlüssel</b>. Erreichbar nur vom eigenen PC:</p>
+<p>Läuft in <b>VRC Nexus für Windows</b> (ab 5.4.1). Einschalten unter <b>Einstellungen → Integrationen → Stream-Deck-Schnittstelle</b>; dort stehen auch Port (Standard siehe App) und <b>Zugangsschlüssel</b>. Erreichbar nur vom eigenen PC:</p>
 <pre>ws://127.0.0.1:&lt;Port&gt;/ws?token=&lt;Zugangsschlüssel&gt;</pre>
 <p>Jede Nachricht ist JSON. Anfragen haben eine <code>id</code>, die Antwort kommt mit derselben <code>id</code>: <code>{"id":1,"ok":true,"result":…}</code> oder <code>{"id":1,"ok":false,"error":"…"}</code>. Ereignisse haben keine <code>id</code>, sondern <code>event</code>.</p>
 <p>Schutz: nur <code>127.0.0.1</code>, Verbindungen aus Webseiten im Browser (mit <code>Origin</code>) werden abgewiesen, falscher Schlüssel beendet die Verbindung, höchstens 8 Verbindungen, 64 KB je Nachricht, 30 Befehle pro Sekunde. Im Privat-Modus werden Chatbox und Medien nicht gesendet.</p>
@@ -175,7 +176,7 @@ const { items } = await r.json();</pre>
 const ws = new WebSocket('ws://127.0.0.1:PORT/ws?token=' + TOKEN);
 ws.onopen = () => {
   ws.send(JSON.stringify({ id: 1, op: 'subscribe', topics: ['game', 'heart'] }));
-  ws.send(JSON.stringify({ id: 2, op: 'action', action: 'chatbox', text: 'Hallo aus meinem Skript 👋' }));
+  ws.send(JSON.stringify({ id: 2, op: 'action', action: 'chatbox', params: { text: 'Hallo aus meinem Skript 👋' } }));
 };
 ws.onmessage = e => {
   const m = JSON.parse(e.data);
@@ -186,7 +187,7 @@ ws.onmessage = e => {
 import asyncio, json, websockets
 async def main():
     async with websockets.connect("ws://127.0.0.1:PORT/ws?token=TOKEN") as ws:
-        await ws.send(json.dumps({"id": 1, "op": "action", "action": "status", "status": "join me"}))
+        await ws.send(json.dumps({"id": 1, "op": "action", "action": "status", "params": {"status": "join me"}}))
         print(await ws.recv())
 asyncio.run(main())</pre>
 <p>Die bisherige HTTP-Schnittstelle bleibt: <code>GET /api/state</code> und <code>POST /api/action</code> mit Kopfzeile <code>X-Nexus-Token</code> (genutzt vom Stream-Deck-Plugin).</p>
