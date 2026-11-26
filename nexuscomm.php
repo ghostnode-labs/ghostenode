@@ -37,6 +37,7 @@ try {
         case 'world': $out(nc_world($who, (string)($in['world'] ?? '')));
         case 'world_note': $out(nc_world_note($who, (string)($in['world'] ?? ''), (string)($in['text'] ?? '')) + ['msg' => 'Beschreibung gespeichert.']);
         case 'profile_save': $out(['profile' => nc_profile_save($who, $in), 'msg' => 'Profil gespeichert.']);
+        case 'profile_items': $out(nc_profile_items($who, $in) + ['msg' => '18+-Profil aktualisiert.']);
         case 'mod_queue': $out(nc_mod_queue($who));
         case 'mod': $out(nc_mod($who, (string)($in['do'] ?? ''), $in));
     }

@@ -86,7 +86,32 @@ function nc_nsfw_facts(array $in): array {
         if ($r !== null || $g !== null) $kinks[(string)$k] = [$r, $g];
     }
     if ($kinks) $out['kinks'] = $kinks;
+    // 5.1: NSFW-Avatare und -Welten im 18+-Profil (nur IDs und Namen, Bilder holt die App selbst bei VRChat)
+    foreach (['avatars' => 'avtr', 'worlds' => 'wrld'] as $k => $pre) {
+        $l = [];
+        foreach ((array)($in[$k] ?? []) as $x) {
+            if (count($l) >= 12 || !is_array($x)) continue;
+            $id = strtolower((string)($x['id'] ?? ''));
+            if (!preg_match('/^' . $pre . '_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $id) || isset($l[$id])) continue;
+            $l[$id] = ['id' => $id, 'name' => nc_cut((string)($x['name'] ?? ''), 60), 'note' => nc_cut((string)($x['note'] ?? ''), 120)];
+        }
+        if ($l) $out[$k] = array_values($l);
+    }
     return $out;
+}
+/** 5.1: nur Avatare/Welten des 18+-Profils setzen (der Rest bleibt, wie er ist) */
+function nc_profile_items(array $who, array $in): array {
+    if (!$who['_nsfw']) throw new NcError('NSFW ist nicht freigegeben.');
+    $db = nc_db();
+    $ex = $db->prepare('SELECT nsfw_facts FROM comm_profiles WHERE vrc_id = ?'); $ex->execute([$who['vrc_id']]);
+    $row = $ex->fetch(PDO::FETCH_ASSOC);
+    $nf = $row ? (json_decode((string)$row['nsfw_facts'], true) ?: []) : [];
+    foreach (['avatars', 'worlds'] as $k) if (array_key_exists($k, $in)) $nf[$k] = (array)$in[$k];
+    $nf = nc_nsfw_facts($nf);
+    $j = json_encode($nf ?: (object)[]);
+    if ($row) $db->prepare('UPDATE comm_profiles SET nsfw_facts = ?, updated = ? WHERE vrc_id = ?')->execute([$j, time(), $who['vrc_id']]);
+    else $db->prepare("INSERT INTO comm_profiles (bio, pronouns, languages, interests, links, theme, avatar, banner, nsfw_bio, updated, facts, nsfw_facts, vrc_id) VALUES ('', '', '', '', '[]', '', '', '', '', ?, '{}', ?, ?)")->execute([time(), $j, $who['vrc_id']]);
+    return ['avatars' => $nf['avatars'] ?? [], 'worlds' => $nf['worlds'] ?? []];
 }
 function nc_profile(array $who, string $id): array {
     $id = strtolower($id);
