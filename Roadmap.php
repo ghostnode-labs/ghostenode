@@ -80,9 +80,20 @@ if (isset($_GET['api']) && $_GET['api'] === 'status') {
 }
 
 // =====================================================================================================
-// 5.x – Plan (Status-Vorgabe: geplant; einzelne Punkte mit [Text, 'wip'|'done'])
+// 5.x – Plan nach Themen (Stand je Punkt: $rm_default, im Bearbeitungsmodus änderbar)
 // =====================================================================================================
 $plan5 = [
+    'Bereits erschienen: 5.0 – 5.2' => ['✅', 'Was in der 5.x-Reihe schon in der App steckt (Windows, Android, Wear OS).', [
+        'Avatar-Presets: Outfits und Zustände speichern, laden, als Makro-Schritt',
+        'Komfort: Schlafmodus, Pausen-Hinweise, Puls-Warnungen',
+        'OBS-Anbindung (obs-websocket 5): Szene je Welt, Panik-Szene, Textquelle',
+        'Unity-Werkzeuge für Avatar- und Welt-Bastler',
+        'Stabilität: Absturz-Protokoll, schnellere Datenbank, Schutz vor Endlosfehlern',
+        'Nexus Watch für Wear OS: Puls vom Handgelenk, Hauptmenü, Themen, Hintergrund aus der Uhr-Galerie, Auto-Updater',
+        'Handy ↔ PC direkt im Heimnetz (Kopplung per Code, feste Aktionsliste)',
+        'Nexus Pulse: Reddit wieder verfügbar über die offizielle API (Weg über die GhostNode-Webseite)',
+        '🔞 NSFW-Ausbau (Details im NSFW-Changelog)',
+    ]],
     '5.0 – Plattform & Plugin-Marktplatz' => ['🧩', 'Plugins finden, prüfen und mit einem Klick installieren – sicher und abgeschottet.', [
         'Plugin-Marktplatz in der App (Suchen, Kategorien, Bewertungen, Screenshots)',
         'Nur signierte, geprüfte Pakete; Rechte werden vor der Installation angezeigt',
@@ -153,6 +164,53 @@ $plan5 = [
         'Mehrsprachigkeit ausbauen (weitere Sprachen über die Community)',
     ]],
 ];
+// Stand der Umsetzung (Vorgabe für alle, die der Bearbeitungsmodus nicht ausdrücklich anders gesetzt hat)
+$rm_default = [
+    // schon erschienen
+    'Avatar-Presets: Outfits und Zustände speichern, laden, als Makro-Schritt' => 'done', 'Komfort: Schlafmodus, Pausen-Hinweise, Puls-Warnungen' => 'done',
+    'OBS-Anbindung (obs-websocket 5): Szene je Welt, Panik-Szene, Textquelle' => 'done', 'Unity-Werkzeuge für Avatar- und Welt-Bastler' => 'done',
+    'Stabilität: Absturz-Protokoll, schnellere Datenbank, Schutz vor Endlosfehlern' => 'done',
+    'Nexus Watch für Wear OS: Puls vom Handgelenk, Hauptmenü, Themen, Hintergrund aus der Uhr-Galerie, Auto-Updater' => 'done',
+    'Handy ↔ PC direkt im Heimnetz (Kopplung per Code, feste Aktionsliste)' => 'done',
+    'Nexus Pulse: Reddit wieder verfügbar über die offizielle API (Weg über die GhostNode-Webseite)' => 'done', '🔞 NSFW-Ausbau (Details im NSFW-Changelog)' => 'done',
+    // Plattform & Marktplatz (seit 4.4)
+    'Plugin-Marktplatz in der App (Suchen, Kategorien, Bewertungen, Screenshots)' => 'wip', 'Nur signierte, geprüfte Pakete; Rechte werden vor der Installation angezeigt' => 'done',
+    'Automatische Plugin-Updates mit Änderungsprotokoll' => 'done', 'Plugin-SDK mit Vorlagen, Dokumentation und lokalem Test-Modus' => 'wip',
+    'Einreichen von Plugins über die Website mit Prüf-Workflow' => 'done',
+    // Discord-Bot
+    'Discord-Bot auf dem eigenen Server (dauerhafte Gateway-Verbindung)' => 'done', 'Slash-Befehle: /status, /welt, /puls, /poster, /release' => 'wip',
+    'Neue Releases, Events und Poster automatisch posten' => 'wip',
+    // Web & Foren
+    'WoltLab-Core-Plugin: BBCodes [vrcworld] und [vrcavatar] mit Info-Karten' => 'done', 'Nexus-Web-Dashboard im Browser (Freunde, Welten, Kalender – nur lesen)' => 'done',
+    // Android
+    'Homescreen-Widgets: Freunde online, Puls, nächstes Event' => 'wip', 'Nexus-Knöpfe als Schnellzugriff und Kachel in den Schnelleinstellungen' => 'wip',
+    // Events & Social
+    'Event-Planer mit VRChat-Gruppen-Events, Zusagen und Erinnerungen' => 'wip', 'Gemeinsame Instanz-Einladungen für Freundesgruppen' => 'done',
+    'Treffen-Rückblick: wer, wo, wie lange – als Karte und Zeitachse' => 'done',
+    // Creator & OSC
+    'Avatar-Parameter-Presets: Outfits und Zustände speichern und laden' => 'done', 'OSC-Szenen: mehrere Parameter, Chatbox und Licht in einem Knopf' => 'done',
+    'Welt-Statistiken für eigene Welten (Besuche, Favoriten, Trends)' => 'wip', 'OBS-Anbindung: Szenen je Welt, Panik-Szene, Puls-Overlay' => 'done',
+    // Komfort
+    'Schlafmodus: Status, Stummschalten, gedimmtes Overlay, Wecker' => 'done', 'Spielzeit-Ziele und sanfte Pausen-Hinweise' => 'done', 'Puls-Warnungen (zu hoch / zu niedrig) mit eigenen Grenzen' => 'done',
+    // NSFW
+    'Erweiterungen für Spielzeug, Szenen und Avatar-Systeme' => 'done', 'Mehr Privatsphäre- und Sicherheitsfunktionen' => 'done', 'Weitere Integrationen (nur nach 18+-Freigabe)' => 'done',
+    // Föderation
+    'Mehrsprachigkeit ausbauen (weitere Sprachen über die Community)' => 'wip',
+    // Webseite 2.0
+    'Website auf ghostnode-labs.dev umziehen (SSL, E-Mail, DNS)' => 'done', 'Alte Adressen dauerhaft weiterleiten (301), Suchmaschinen informieren' => 'wip',
+    'VRChat-Poster: alte Bild-Adressen bleiben gültig (Welten nutzen sie fest)' => 'done', 'VRC Nexus: neue Server-Adressen per Update, alte als Rückfall' => 'done',
+    'HypeRate-Weiterleitung und Nexus-Dienste auf Subdomains der neuen Domain' => 'done', 'Discord, GitHub, Patreon und Downloads auf die neue Adresse umstellen' => 'wip',
+    'Einheitlicher Kopfbereich mit Menü auf allen Seiten (statt einzelner Zurück-Links)' => 'done', 'Mobiles Menü und durchgehend handytaugliche Seiten' => 'done',
+    'Anmelden mit Discord oder dem Nexus-Konto (VRChat-ID)' => 'wip', 'Passkeys und Zwei-Faktor-Anmeldung' => 'wip',
+    'Persönliches Dashboard: Widgets per Drag & Drop anordnen' => 'done', 'Benachrichtigungen auf der Website (neue Poster, Events, Releases)' => 'wip',
+    'Download-Center: alle Versionen, Changelog, Prüfsummen, Android und Windows' => 'wip', 'Nexus-Web-Dashboard: Freunde, Welten, Kalender im Browser' => 'done',
+    'Poster 2.0: Zeitplan-Kalender, Statistiken, Freigaben für Gruppen' => 'wip', 'Öffentlicher Event-Kalender mit VRChat-Gruppen-Events' => 'done',
+    'Entwickler-Bereich: API-Doku und Plugin-Einreichung für den Marktplatz' => 'wip',
+    'Rollen- und Rechte-Editor mit Änderungsprotokoll' => 'done', 'Automatische Backups mit Wiederherstellung aus dem Admin-Bereich' => 'wip',
+    'Sicherheits-Header (CSP), Anfrage-Limits, Schutz vor Spam' => 'wip',
+];
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5'];   // bei jedem Release ergänzen
+$ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 $plan5_always = ['Stabilität und Fehlerbehebungen in jedem Release', 'Automatische Tests für jede neue Funktion', 'Keine Geheimnisse in Git – Schlüssel bleiben auf dem Server', 'Alle Texte in Deutsch, Englisch, Französisch und Japanisch', 'Lokale Funktionen bleiben kostenlos, Online-Dienste nur mit Opt-in'];
 // =====================================================================================================
 // Webseite 2.0 (ghostnode) – Phasen
@@ -217,7 +275,7 @@ $modules = [
 '🔞 NSFW (nur mit 18+-Freigabe)'=>['18+-Freigabe über den VRChat-Altersstatus','Spielzeug (Buttplug/Intiface)','Panik-Knopf mit Wallpaper Engine und Entwarnung'],
 ];
 // noch nicht umgesetzt → werden nach 5.x übernommen bzw. sind dort eingeplant
-$open34 = ['Nachrichten an VRChat-Nutzer ohne Nexus', 'Boob-Funktion im Chat', 'Gruppen-Sprachchats (SFU)', 'Admin-PC-Registrierung', 'Discord-Bot', 'Fediverse', 'Push-Benachrichtigungen', 'Homescreen-Widget', 'Voice Chat'];
+$open34 = ['Nachrichten an VRChat-Nutzer ohne Nexus', 'Gruppen-Sprachchats (SFU)', 'Admin-PC-Registrierung', 'Fediverse', 'Push-Benachrichtigungen', 'Voice Chat'];   // erledigt seitdem: Discord-Bot, Homescreen-Widget, Boob-Funktion
 $principles = ['Lokale VRChat-Funktionen bleiben kostenlos.', 'Online-Dienste sind standardmäßig aus und brauchen Opt-in.', 'Die VRChat User ID ist die Grundlage der Identität.', 'Desktop und Android bleiben eine Anwendung.', 'Lokale Funktionen laufen auch ohne GhostNode Online.', 'Schlüssel und Geheimnisse bleiben auf dem Server, nie im Client oder in Git.', 'Privatsphäre zuerst: Ende-zu-Ende-Verschlüsselung, wo es geht.', 'Jede Funktion bekommt Tests und Übersetzungen.'];
 
 // ---------- Status zusammenführen ----------
@@ -226,11 +284,11 @@ $st = function (string $group, string $item, string $def) use ($saved): string {
 $count = ['planned' => 0, 'wip' => 0, 'done' => 0];
 $rows5 = [];
 foreach ($plan5 as $rel => [$ic, $desc, $items]) {
-    foreach ($items as $it) { $s = $st('5x|' . $rel, $it, 'planned'); $count[$s]++; $rows5[$rel][] = [$it, $s, rm_key('5x|' . $rel, $it)]; }
+    foreach ($items as $it) { $s = $st('5x|' . $rel, $it, $rm_default[$it] ?? 'planned'); $count[$s]++; $rows5[$rel][] = [$it, $s, rm_key('5x|' . $rel, $it)]; }
 }
 $rowsWeb = []; $countWeb = ['planned' => 0, 'wip' => 0, 'done' => 0];
 foreach ($planWeb as $rel => [$ic, $desc, $items]) {
-    foreach ($items as $it) { $s = $st('web|' . $rel, $it, 'planned'); $countWeb[$s]++; $rowsWeb[$rel][] = [$it, $s, rm_key('web|' . $rel, $it)]; }
+    foreach ($items as $it) { $s = $st('web|' . $rel, $it, $rm_default[$it] ?? 'planned'); $countWeb[$s]++; $rowsWeb[$rel][] = [$it, $s, rm_key('web|' . $rel, $it)]; }
 }
 $rows34 = [];
 foreach ($modules as $mod => $items) {
@@ -313,7 +371,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 </header>
 
 <div class="rm-stats">
-    <div class="rm-card"><b><?= count($plan5) ?></b><span>Releases in 5.x</span></div>
+    <div class="rm-card"><b><?= count($released5) ?></b><span>5.x-Releases erschienen</span></div>
     <div class="rm-card"><b><?= $all5 ?></b><span>geplante Punkte</span></div>
     <div class="rm-card"><b><?= $count['wip'] ?></b><span>in Arbeit</span></div>
     <div class="rm-card"><b><?= $pct($count['done'], $all5) ?> %</b><span>5.x erledigt</span><div class="rm-bar"><i style="width:<?= $pct($count['done'], $all5) ?>%"></i></div></div>
@@ -335,7 +393,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
     <div class="rm-tl">
     <?php foreach ($plan5 as $rel => [$ic, $desc, $items]): $r = $rows5[$rel]; $d = count(array_filter($r, fn($x) => $x[1] === 'done')); ?>
         <article class="rm-rel<?= $d === count($r) ? ' done' : '' ?>">
-            <header><span class="ic"><?= $ic ?></span><h3><?= e($rel) ?></h3><small><?= $d ?>/<?= count($r) ?> erledigt</small></header>
+            <header><span class="ic"><?= $ic ?></span><h3><?= e(preg_replace('/^5\.\d – /u', '', $rel)) ?></h3><small><?= $d ?>/<?= count($r) ?> erledigt</small></header>
             <p><?= e($desc) ?></p>
             <ul class="rm-items"><?php foreach ($r as [$it, $s, $k]): ?><li class="s-<?= $s ?>" data-s="<?= $s ?>"><span class="t"><?= e($it) ?></span><?= $edit_mode ? '<button type="button" class="rm-st rm-st-' . $s . '" data-k="' . $k . '" data-s="' . $s . '">' . e(RM_STATES[$s]) . '</button>' : $chip($s) ?></li><?php endforeach; ?></ul>
         </article>
@@ -371,7 +429,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 
 <section class="rm-pane" data-pane="ideas" hidden>
     <p class="rm-note">Ideen ohne festen Termin – Wünsche gern im Discord melden.</p>
-    <div class="rm-list"><?php foreach ($ideas as $p): ?><div>💡 <?= e($p) ?></div><?php endforeach; ?></div>
+    <div class="rm-list"><?php foreach ($ideas as $p): ?><div><?= in_array($p, $ideas_done, true) ? '✅ <s>' . e($p) . '</s> <small>schon drin</small>' : '💡 ' . e($p) ?></div><?php endforeach; ?></div>
 </section>
 
 <section class="rm-pane" data-pane="rules" hidden>
