@@ -40,6 +40,7 @@ const PAGE_DEFAULTS = [
     'nsfw.php'             => ['NSFW-Galerie', '🔞', 'Bilder-APIs (e621, Rule34, Danbooru, Gelbooru …) durchsuchen, Favoriten & Discord – 18+', 'Community', 'users'],
     'linkcheck.php'        => ['Link-Check', '🩺', 'Prüft alle Links der Hubs auf Erreichbarkeit', 'System', 'public'],
     'backup.php'           => ['Backup', '💾', 'Alle Daten als ZIP herunterladen', 'System', 'users'],
+    'Roadmap.php'          => ['Roadmap', '🗺️', 'Was als Nächstes kommt: VRC Nexus 5.x, Webseite 2.0 & mehr', 'Community', 'public'],
     'admin.php'            => ['Admin-Zentrale', '⚙️', 'Benutzer, Rechte, Seiten, Protokoll & System', 'System', 'public'],
 ];
 
@@ -47,7 +48,9 @@ const PAGE_DEFAULTS = [
 const PAGE_REQUIRED_PERMISSION = ['budget.php' => 'budget.access', 'con.php' => 'con.access', 'backup.php' => 'backup.download', 'nexus.php' => 'vrcx.access', 'discord.php' => 'discord.manage', 'nsfw.php' => 'nsfw.browse'];
 
 /** Seiten, die nie im Register auftauchen (Hilfsdateien) */
-const PAGE_IGNORE = ['index.php', 'dashboard.php', 'p.php', 'page.php', 'preview.php', 'vrcx.php', 'widgets.php', 'client.php', 'cron.php'];
+const PAGE_IGNORE = ['index.php', 'dashboard.php', 'p.php', 'page.php', 'preview.php', 'vrcx.php', 'widgets.php', 'client.php', 'cron.php',
+    // Schnittstellen (keine Seiten): App-APIs, Anmeldung, Sitzungs-Wächter
+    'auth-discord.php', 'nexusacct.php', 'nexuschat.php', 'nexuscomm.php', 'nexuswarn.php', 'toyrelay.php', 'session.php'];
 
 /** Umbenannte Dateien: alter Name => neuer Name (Einstellungen der Kachel bleiben erhalten) */
 const PAGE_RENAMES = ['vrcx.php' => 'nexus.php'];
@@ -85,6 +88,9 @@ function pages_sync(): void {
             $db->prepare("UPDATE pages SET title = ?, description = ? WHERE slug = ? AND title IN ('VRCX', 'VRCX Lite')")->execute([PAGE_DEFAULTS[$new][0], PAGE_DEFAULTS[$new][2], $new]);
         }
     }
+    // alte, automatisch erzeugte Titel der Roadmap (aus <title>) einmal auf den Standard bringen
+    $db->prepare("UPDATE pages SET title = ?, icon = ?, description = ?, category_id = COALESCE(?, category_id) WHERE slug = 'Roadmap.php' AND kind = 'file' AND icon = '📄'")
+       ->execute([PAGE_DEFAULTS['Roadmap.php'][0], PAGE_DEFAULTS['Roadmap.php'][1], PAGE_DEFAULTS['Roadmap.php'][2], is_file(APP_ROOT . '/Roadmap.php') ? page_category_id('Community') : null]);
     $known = $db->query("SELECT slug FROM pages WHERE kind = 'file'")->fetchAll(PDO::FETCH_COLUMN);
     $first_run = !$known;
     $ins = $db->prepare("INSERT INTO pages (slug, kind, title, description, icon, category_id, sort, access) VALUES (?, 'file', ?, ?, ?, ?, ?, ?)");

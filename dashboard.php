@@ -355,6 +355,7 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
     <?php endif; ?>
 
     <div class="idx-quick" id="idxQuick" hidden></div>
+    <div id="idxMine"></div>
 
     <div id="noResults" class="empty-msg" hidden>Keine lokalen Treffer – <kbd>Enter</kbd> sucht im Web.</div>
 
@@ -495,8 +496,9 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
 </div>
 <?php endif; ?>
 
-<script>window.IDX = { edit: <?php echo $edit ? 'true' : 'false'; ?>, wgEdit: <?php echo $wg_edit ? 'true' : 'false'; ?>, canManage: <?php echo $can_manage ? 'true' : 'false'; ?> };</script>
+<script>window.IDX = { user: <?php echo $user ? json_encode(['id' => (int)$user['id'], 'name' => user_label($user)]) : 'null'; ?>, edit: <?php echo $edit ? 'true' : 'false'; ?>, wgEdit: <?php echo $wg_edit ? 'true' : 'false'; ?>, canManage: <?php echo $can_manage ? 'true' : 'false'; ?> };</script>
 <script src="assets/js/index.js"></script>
+<script src="assets/js/dash-plus.js"></script>
 <script src="assets/js/widgets.js"></script>
 <?php foreach ($wg_assets as $t => $m): if ($m['has_js']): ?><script src="widgets/<?php echo e($t); ?>/widget.js?v=<?php echo (int)$m['mtime']; ?>"></script>
 <?php endif; endforeach; ?>
