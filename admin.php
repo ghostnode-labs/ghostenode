@@ -157,7 +157,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'reg_save' => 'system.manage',
         'tasks_save' => 'system.manage', 'task_run' => 'system.manage', 'tasks_newkey' => 'system.manage', 'backup_delete' => 'backup.download', 'backup_now' => 'backup.download',
         // Nexus (VRC Nexus: Konten, Warnliste, Community, Chat)
-        'nx_service' => 'admin.access', 'nx_ban' => 'admin.access', 'nx_unban' => 'admin.access', 'nx_age_revoke' => 'nexus.age', 'nx_age_grant' => 'nexus.age', 'nx_cadm' => 'nexus.community', 'nx_cron' => 'admin.access',
+        'nx_service' => 'admin.access', 'nx_ban' => 'admin.access', 'nx_unban' => 'admin.access', 'nx_age_revoke' => 'nexus.age', 'nx_age_grant' => 'nexus.age', 'nx_cadm' => 'nexus.community', 'nx_lic' => 'admin.access', 'nx_cron' => 'admin.access',
         'nx_warn_settings' => 'admin.access', 'nx_warn_update' => 'admin.access', 'nx_warn_delete' => 'admin.access', 'nx_warn_clear' => 'admin.access', 'nx_warn_appeal' => 'admin.access',
         'nx_comm' => 'admin.access', 'nx_chat_remove' => 'admin.access',
         // VRChat-Poster

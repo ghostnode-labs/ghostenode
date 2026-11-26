@@ -8,6 +8,7 @@
  */
 require_once __DIR__ . '/../modules/nexuscomm.php';   // lädt auch nexusacct + nexuswarn
 require_once __DIR__ . '/nexus_cadm.php';   // 5.1: Community-Verwaltung
+require_once __DIR__ . '/../modules/nexuslic.php';   // 5.6: Lizenzen 2.0
 
 const NX_ADMIN_TABS = [
     'nx_accounts' => ['🪪', 'Nexus-Konten', 'admin.access'],
@@ -15,6 +16,7 @@ const NX_ADMIN_TABS = [
     'nx_comm'     => ['🫂', 'Community-Moderation', 'admin.access'],
     'nx_cadm'     => ['🗂️', 'Community-Verwaltung', 'nexus.community'],
     'nx_chat'     => ['💬', 'Nexus-Chat', 'admin.access'],
+    'nx_lic'      => ['🔑', 'Lizenzen', 'admin.access'],   // 5.6: Freischalt-Schlüssel & Sperrliste
 ];
 
 /** POST-Aktionen „nx_…“ → Meldung (Fehler als InvalidArgumentException, wie in admin.php üblich) */
@@ -55,6 +57,13 @@ function admin_nexus_post(string $act, array $in): string {
                 audit('Nexus: 18+ manuell vergeben', $id . ' · ' . $days . ' Tage · ' . $note, 'security');
                 return '🔞 18+ für ' . $acc['display_name'] . ' manuell freigegeben bis ' . date('d.m.Y', $until) . '. NSFW muss die Person in der App selbst einschalten.';
             case 'nx_cadm': return admin_nexus_cadm($actor, $in);
+            case 'nx_lic': {   // 5.6: Schlüssel sperren/entsperren – gilt in allen Apps nach dem nächsten Abgleich (spätestens 6 h)
+                $kid = (string)($in['kid'] ?? '');
+                $on = ($in['do'] ?? '') === 'revoke';
+                nl_set_revoked($kid, $on, 'web');
+                nw_log($actor, $on ? 'Admin: Schlüssel gesperrt' : 'Admin: Schlüssel entsperrt', $kid);
+                return $on ? 'Schlüssel gesperrt – Apps übernehmen das beim nächsten Abgleich (spätestens 6 h).' : 'Schlüssel entsperrt.';
+            }
             case 'nx_cron': return nx_cron(50) . ' abgelaufene Freigaben aufgeräumt.';
             // --- Warnliste ---
             case 'nx_warn_settings': case 'nx_warn_update': case 'nx_warn_delete': case 'nx_warn_clear': case 'nx_warn_appeal':
@@ -186,6 +195,24 @@ function admin_nexus_view(string $tab): void {
         return;
     }
     if ($tab === 'nx_cadm') { admin_nexus_cadm_view(); return; }
+    if ($tab === 'nx_lic') {
+        $keys = nl_list(); $now = time();
+        $act = count(array_filter($keys, fn($k) => !$k['revoked'] && (!$k['exp'] || $k['exp'] > $now)));
+        $soon = count(array_filter($keys, fn($k) => !$k['revoked'] && $k['exp'] && $k['exp'] > $now && $k['exp'] < $now + 14 * 86400));
+        echo '<div class="kpis"><div class="kpi"><span class="k">Schlüssel</span><span class="v">' . count($keys) . '</span></div><div class="kpi"><span class="k">Aktiv</span><span class="v">' . $act . '</span></div>'
+            . '<div class="kpi"><span class="k">Laufen in 14 Tagen ab</span><span class="v">' . $soon . '</span></div><div class="kpi"><span class="k">Gesperrt</span><span class="v">' . count(nl_revoked()) . '</span></div></div>';
+        echo '<div class="panel"><div class="panel-title"><span>// Freischalt-Schlüssel (aus der App gemeldet)</span></div><p class="muted small">Ausstellen und Verlängern geht nur in der App (Admin → 🔑), weil nur dort der private Schlüssel liegt. Sperren hier wirkt in allen Apps beim nächsten Abgleich (alle 6 h) und sofort für Warnliste &amp; Community-Moderation.</p>'
+            . '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>VRChat-ID</th><th>Rollen</th><th>Ausgestellt</th><th>Gültig bis</th><th>Zuletzt geprüft</th><th>Status</th><th></th></tr></thead><tbody>';
+        foreach ($keys as $k) {
+            $st = $k['revoked'] ? '⛔ gesperrt' . ($k['revoked_src'] ? ' (' . e($k['revoked_src'] === 'web' ? 'Webseite' : 'App') . ')' : '') : ($k['exp'] && $k['exp'] < $now ? '⌛ abgelaufen' : ($k['exp'] && $k['exp'] < $now + 14 * 86400 ? '⏳ läuft bald ab' : '✔ aktiv'));
+            echo '<tr><td>' . e($k['name'] ?: '–') . ($k['note'] ? '<br><small class="muted">' . e($k['note']) . '</small>' : '') . '</td><td><code>' . e($k['uid']) . '</code></td><td>' . e(str_replace(',', ', ', $k['roles'])) . '</td>'
+                . '<td>' . e(nx_adm_when($k['iat'])) . '</td><td>' . ($k['exp'] ? e(nx_adm_when($k['exp'])) : '∞') . '</td><td>' . e(nx_adm_when($k['last_check'])) . ($k['last_version'] ? '<br><small class="muted">v' . e($k['last_version']) . ' · ' . (int)$k['checks'] . '×</small>' : '') . '</td><td>' . $st . '</td><td>'
+                . nx_adm_form('nx_lic', 'nx_lic', '<input type="hidden" name="kid" value="' . e($k['id']) . '"><input type="hidden" name="do" value="' . ($k['revoked'] ? 'unrevoke' : 'revoke') . '"><button class="btn btn-sm' . ($k['revoked'] ? '' : ' btn-danger') . '">' . ($k['revoked'] ? 'Entsperren' : 'Sperren') . '</button>') . '</td></tr>';
+        }
+        if (!$keys) echo '<tr><td colspan="8" class="muted">Noch keine Schlüssel gemeldet – in der App unter Admin → 🔑 „☁ Mit der Webseite abgleichen“.</td></tr>';
+        echo '</tbody></table></div></div>';
+        return;
+    }
     if ($tab === 'nx_chat') {
         $devs = $db->query('SELECT d.*, a.display_name, (SELECT COUNT(*) FROM chat_opks o WHERE o.device_id = d.device_id) AS opks, (SELECT COUNT(*) FROM chat_inbox i WHERE i.to_device = d.device_id) AS waiting FROM chat_devices d LEFT JOIN nexus_accounts a ON a.vrc_id = d.vrc_id ORDER BY d.last_seen DESC LIMIT 500')->fetchAll(PDO::FETCH_ASSOC);
         $wait = (int)$db->query('SELECT COUNT(*) FROM chat_inbox')->fetchColumn();
