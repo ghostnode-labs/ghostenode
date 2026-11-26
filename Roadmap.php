@@ -168,6 +168,10 @@ $plan5 = [
 $rm_default = [
     // Ausblick 6.x (schon begonnen)
     'Dashboard-Baukasten: Widgets per Drag & Drop, Sichtbarkeit je Gast / angemeldet / Rolle' => 'wip',
+    'Nexus Client-API über WebSocket (lokal, mit Schlüssel und Rechten je App)' => 'done',
+    'Web-API (PHP) mit API-Schlüsseln, Limits und Dokumentations-Seite' => 'done',
+    'Öffentliche, dokumentierte Nexus-API (mit Schlüsseln und Limits)' => 'done',
+    'Entwickler-Bereich: API-Doku und Plugin-Einreichung für den Marktplatz' => 'done',
     // schon erschienen
     'Avatar-Presets: Outfits und Zustände speichern, laden, als Makro-Schritt' => 'done', 'Komfort: Schlafmodus, Pausen-Hinweise, Puls-Warnungen' => 'done',
     'OBS-Anbindung (obs-websocket 5): Szene je Welt, Panik-Szene, Textquelle' => 'done', 'Unity-Werkzeuge für Avatar- und Welt-Bastler' => 'done',
@@ -207,11 +211,10 @@ $rm_default = [
     'Persönliches Dashboard: Widgets per Drag & Drop anordnen' => 'done', 'Benachrichtigungen auf der Website (neue Poster, Events, Releases)' => 'wip',
     'Download-Center: alle Versionen, Changelog, Prüfsummen, Android und Windows' => 'wip', 'Nexus-Web-Dashboard: Freunde, Welten, Kalender im Browser' => 'done',
     'Poster 2.0: Zeitplan-Kalender, Statistiken, Freigaben für Gruppen' => 'wip', 'Öffentlicher Event-Kalender mit VRChat-Gruppen-Events' => 'done',
-    'Entwickler-Bereich: API-Doku und Plugin-Einreichung für den Marktplatz' => 'wip',
     'Rollen- und Rechte-Editor mit Änderungsprotokoll' => 'done', 'Automatische Backups mit Wiederherstellung aus dem Admin-Bereich' => 'wip',
     'Sicherheits-Header (CSP), Anfrage-Limits, Schutz vor Spam' => 'wip',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 
 // =====================================================================================================
