@@ -133,6 +133,7 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
             ['🥽', 'SteamVR-Overlay & HUD', 'Infos, Untertitel und Bedienung direkt in VR – passend zum gewählten Theme.'],
             ['🫂', 'Nexus Community', 'Profile, Feed, Ende-zu-Ende-verschlüsselter Chat und Sprachanrufe.'],
             ['🎛', 'Stream Deck & Stream-Bot', 'Tasten für Avatar, Instanz und Freunde; Bot für Twitch und YouTube.'],
+            ['⌚', 'Nexus Watch & Handy', 'Wear-OS-Uhr: Puls vom Handgelenk, Schlafmodus, Themen. Das Handy steuert den PC direkt im WLAN.'],
         ] as [$ic, $t, $d]): ?>
             <div class="ld-card"><span class="ld-ic"><?php echo $ic; ?></span><b><?php echo e($t); ?></b><p><?php echo e($d); ?></p></div>
         <?php endforeach; ?>
@@ -142,7 +143,15 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
             <figure><a href="assets/img/landing/<?php echo $f; ?>" target="_blank" rel="noopener"><img src="assets/img/landing/<?php echo $f; ?>" alt="<?php echo e($cap); ?>" loading="lazy"></a><figcaption><?php echo e($cap); ?></figcaption></figure>
         <?php endforeach; ?>
     </div>
-    <p class="ld-note">Screenshots mit Testdaten. 🔒 Dein VRChat-Passwort wird nie gespeichert – nur das verschlüsselte Sitzungs-Cookie, alles lokal.</p>
+    <div class="ld-watch">
+        <div class="ld-watch-head"><h3>⌚ Nexus Watch</h3><p>Die App für Wear-OS-Uhren (z. B. Galaxy Watch 4 und neuer, Pixel Watch): Puls direkt vom Uhr-Sensor an VRC Nexus – ohne HypeRate- oder Pulsoid-Konto –, Schlafmodus mit Wecker, sechs Themen, eigener Hintergrund aus der Galerie der Uhr und Updates von selbst. Verbindet sich im Heimnetz direkt mit der Windows-App, gekoppelt mit einem 6-stelligen Code.</p></div>
+        <div class="ld-shots ld-shots-watch">
+            <?php foreach ([['watch-menu.jpg', 'Hauptmenü, Puls & Schlafmodus'], ['watch-themes.jpg', 'Sechs Themen'], ['watch-pair.jpg', 'Koppeln & Einstellungen']] as [$f, $cap]): ?>
+                <figure><a href="assets/img/landing/<?php echo $f; ?>" target="_blank" rel="noopener"><img src="assets/img/landing/<?php echo $f; ?>" alt="<?php echo e($cap); ?>" loading="lazy"></a><figcaption><?php echo e($cap); ?></figcaption></figure>
+            <?php endforeach; ?>
+        </div>
+    </div>
+    <p class="ld-note">Screenshots mit Testdaten; Uhr-Ansichten nachgestellt (gleiche Oberfläche wie in der App). 🔒 Dein VRChat-Passwort wird nie gespeichert – nur das verschlüsselte Sitzungs-Cookie, alles lokal.</p>
     <div class="ld-cta center">
         <a class="btn btn-gold" href="<?php echo e(LANDING_LINKS['download']); ?>" target="_blank" rel="noopener">⬇ Neueste Version</a>
         <a class="btn" href="<?php echo e(LANDING_LINKS['github']); ?>" target="_blank" rel="noopener">📄 Alle Funktionen & Changelog</a>

@@ -72,3 +72,12 @@ body.ld { padding: 0; display: block; }
     .ld-sec, .ld-hero, .ld-stats { padding-left: 16px; padding-right: 16px; }
     .ld-proj { grid-template-columns: 1fr; }
 }
+
+/* Nexus Watch */
+.ld-watch { margin-top: 40px; padding-top: 28px; border-top: 1px solid var(--border-color); }
+.ld-watch-head h3 { margin: 0 0 8px; font-size: 1.3rem; letter-spacing: 2px; color: var(--accent-cyan); }
+.ld-watch-head p { margin: 0; color: var(--text-muted); max-width: 820px; line-height: 1.6; }
+.ld-shots-watch { grid-template-columns: 1.3fr 1fr; }
+.ld-shots-watch figure:first-child { grid-column: 1 / -1; }
+.ld-shots-watch img { background: #05070a; }
+@media (max-width: 760px) { .ld-shots-watch { grid-template-columns: 1fr; } }
