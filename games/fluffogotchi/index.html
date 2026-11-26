@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Fluffogotchi – dein flauschiges Haustier</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%A5%9A%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="hud.css">
+<link rel="stylesheet" href="furhub.css">
+<style>
+body { padding: 0; display: block; }
+.fg-wrap { max-width: 1200px; margin: 0 auto; padding: 20px 16px 50px; }
+.fg-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 18px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px; }
+.fg-head h1 { margin: 4px 0 0; color: var(--fh-a, #ff9f43); letter-spacing: 4px; }
+.fg-head p { margin: 4px 0 0; color: var(--text-muted); font-size: .85rem; }
+.fg-foot { margin-top: 28px; color: var(--text-muted); font-size: .78rem; text-align: center; }
+.fg-foot a { color: var(--accent-cyan); }
+</style>
+</head>
+<body class="fh">
+<div class="fg-wrap">
+    <header class="fg-head">
+        <div><div class="hud-tag">GhostNode · Furry Hub · Spiel</div><h1>🥚 FLUFFOGOTCHI</h1><p>Schlüpfen lassen, füttern, boopen, spielen – dein Haustier lebt weiter, auch wenn das Fenster zu ist (Zeit läuft echt). Spielstände bleiben nur in diesem Browser.</p></div>
+        <div class="fg-ver">v1.0.0</div>
+    </header>
+    <!-- Tamagotchi -->
+    <section class="fh-panel" data-panel="tama">
+        <div class="tama-layout">
+            <div class="tama-col">
+                <div class="tama-device" id="tamaDevice">
+                    <div class="tama-brand" id="tamaBrand">FLUFFOGOTCHI</div>
+                    <div class="tama-screen" id="tamaScreen">
+                        <div class="tama-icons" id="tamaIcons"></div>
+                        <div class="tama-pet" id="tamaPet" title="Boop!"></div>
+                        <div class="tama-poops" id="tamaPoops"></div>
+                        <div class="tama-say" id="tamaSay"></div>
+                    </div>
+                    <div class="tama-hw">
+                        <button type="button" data-hw="a" title="A: Boop">A</button>
+                        <button type="button" data-hw="b" title="B: Füttern (Trockenfutter)">B</button>
+                        <button type="button" data-hw="c" title="C: Ball spielen">C</button>
+                    </div>
+                </div>
+                <div class="tama-quick" id="tamaQuick">
+                    <button type="button" class="fh-btn" data-t="boop">👃 Boop</button>
+                    <button type="button" class="fh-btn" data-t="pat">🤚 Kraulen</button>
+                    <button type="button" class="fh-btn" data-t="hug">🫂 Umarmen</button>
+                    <button type="button" class="fh-btn" data-t="awoo">🐺 Awoo</button>
+                    <button type="button" class="fh-btn" data-t="feed">🍽️ Füttern</button>
+                    <button type="button" class="fh-btn" data-t="play">🎾 Spielen</button>
+                    <button type="button" class="fh-btn" data-t="wash">🛁 Waschen</button>
+                    <button type="button" class="fh-btn" data-t="clean">🧹 Aufräumen</button>
+                    <button type="button" class="fh-btn" data-t="medicine">💊 Medizin</button>
+                    <button type="button" class="fh-btn" data-t="sleep" id="tamaSleep">💡 Licht aus</button>
+                </div>
+                <div class="tama-menu" id="tamaMenu" hidden></div>
+            </div>
+            <div class="tama-side">
+                <div class="fh-card"><div class="fh-ct"><span id="tamaTitle">💗 Zustand</span><span class="coins" id="tamaCoins"></span></div><div id="tamaBars"></div><div class="tama-meta" id="tamaMeta"></div></div>
+                <div class="fh-card">
+                    <div class="tama-tabs"><button type="button" data-tt="shop" class="on">🛒 Shop</button><button type="button" data-tt="bag">🎒 Inventar</button><button type="button" data-tt="custom">🎨 Anpassen</button><button type="button" data-tt="settings">⚙️ Einstellungen</button><button type="button" data-tt="slots">💾 Spielstände</button><button type="button" data-tt="log">📜 Tagebuch</button></div>
+                    <p class="muted small tama-keys">⌨️ Leertaste Boop · F Füttern · P Spielen · W Waschen · C Aufräumen · M Medizin · K Kraulen · H Umarmen · L Licht</p>
+                    <div id="tamaTab"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+
+    <p class="fg-foot">Fluffogotchi 1.0.0 · aus dem <a href="https://ghostnode-labs.dev/furhub.php" target="_blank" rel="noopener">GhostNode Furry Hub</a> · funktioniert offline, ohne Konto und ohne Server · 💾 Spielstände: ⚙️ → Spielstände (Export/Import als Datei)</p>
+</div>
+<div class="fh-toast" id="fhToast" hidden></div>
+<script src="fluffo-core.js"></script>
+<script src="fluffo-game.js"></script>
+<script>document.addEventListener('DOMContentLoaded', () => { const K = window.FHK; if (K.INIT.tama) K.INIT.tama(); if (K.SHOW.tama) K.SHOW.tama(); });</script>
+</body>
+</html>

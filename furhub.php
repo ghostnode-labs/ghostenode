@@ -13,6 +13,21 @@ auth_require_setup();
 $me = current_user();
 if (isset($_GET['img'])) fh_img_serve((string)$_GET['img']);
 if (isset($_GET['avatar'])) fh_avatar_serve((int)$_GET['avatar']);
+// Fluffogotchi als Offline-Spiel (ZIP aus games/fluffogotchi – gleiche Dateien wie im GitHub-Release)
+if (isset($_GET['fluffo_zip'])) {
+    $dir = __DIR__ . '/games/fluffogotchi';
+    if (!class_exists('ZipArchive') || !is_file($dir . '/index.html')) { http_response_code(404); exit('Spiel nicht gefunden.'); }
+    $ver = (string)(json_decode((string)@file_get_contents($dir . '/version.json'), true)['version'] ?? '1.0.0');
+    $tmp = tempnam(sys_get_temp_dir(), 'flz');
+    $zip = new ZipArchive();
+    $zip->open($tmp, ZipArchive::OVERWRITE);
+    foreach (scandir($dir) as $f) if ($f[0] !== '.' && $f !== 'version.json' && is_file($dir . '/' . $f)) $zip->addFile($dir . '/' . $f, 'fluffogotchi/' . $f);
+    $zip->close();
+    header('Content-Type: application/zip');
+    header('Content-Disposition: attachment; filename="Fluffogotchi-' . preg_replace('/[^0-9.]/', '', $ver) . '.zip"');
+    header('Content-Length: ' . filesize($tmp));
+    readfile($tmp); unlink($tmp); exit;
+}
 
 // ---------- JSON-Schnittstelle ----------
 if (isset($_GET['api'])) {
@@ -256,6 +271,7 @@ $EMO = ['neutral' => ['😐', 'Normal'], 'happy' => ['😊', 'Fröhlich'], 'sad'
                     <button type="button" class="fh-btn" data-t="sleep" id="tamaSleep">💡 Licht aus</button>
                 </div>
                 <div class="tama-menu" id="tamaMenu" hidden></div>
+                <p class="muted small" style="margin-top:10px">🎮 Auch als eigenständiges Spiel: <a href="games/fluffogotchi/index.html" target="_blank" rel="noopener">im Browser spielen</a> · <a href="furhub.php?fluffo_zip=1">⬇ ZIP herunterladen</a> (offline, ohne Konto – Spielstände getrennt von hier)</p>
             </div>
             <div class="tama-side">
                 <div class="fh-card"><div class="fh-ct"><span id="tamaTitle">💗 Zustand</span><span class="coins" id="tamaCoins"></span></div><div id="tamaBars"></div><div class="tama-meta" id="tamaMeta"></div></div>

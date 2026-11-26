@@ -1,0 +1,57 @@
+name: Fluffogotchi (Spiel als ZIP)
+
+# Baut das Tamagotchi aus dem Furry Hub als eigenständiges Offline-Spiel und veröffentlicht es als ZIP-Release.
+# Neue Version: games/fluffogotchi/version.json erhöhen – gleiche Version = ZIP wird ersetzt.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'games/fluffogotchi/**'
+      - 'assets/js/furhub.js'
+      - 'assets/js/furhub-tama.js'
+      - 'assets/css/furhub.css'
+      - 'assets/css/hud.css'
+      - 'inc/modules/furhub.php'
+      - 'tools/build-fluffogotchi.js'
+      - '.github/workflows/fluffogotchi.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Bauen
+        run: node tools/build-fluffogotchi.js
+      - name: Prüfen (Syntax)
+        run: |
+          node -e "new Function(require('fs').readFileSync('games/fluffogotchi/fluffo-core.js','utf8'))"
+          node -e "new Function(require('fs').readFileSync('games/fluffogotchi/fluffo-game.js','utf8'))"
+      - name: ZIP packen
+        id: pack
+        run: |
+          VER=$(node -p "require('./games/fluffogotchi/version.json').version")
+          echo "ver=$VER" >> "$GITHUB_OUTPUT"
+          mkdir -p dist
+          (cd games && zip -r -9 "../dist/Fluffogotchi-$VER.zip" fluffogotchi -x 'fluffogotchi/version.json')
+          cp "dist/Fluffogotchi-$VER.zip" dist/Fluffogotchi.zip
+          ls -la dist
+      - name: Release veröffentlichen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VER: ${{ steps.pack.outputs.ver }}
+        run: |
+          TAG="fluffogotchi-v$VER"
+          NOTES="Fluffogotchi $VER – das Tamagotchi aus dem GhostNode Furry Hub als Offline-Spiel. ZIP entpacken und index.html im Browser öffnen (ohne Installation, ohne Konto). Spielstände bleiben im Browser. Build: ${GITHUB_SHA::7}"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/Fluffogotchi-$VER.zip dist/Fluffogotchi.zip --clobber
+            gh release edit "$TAG" --notes "$NOTES"
+          else
+            gh release create "$TAG" dist/Fluffogotchi-$VER.zip dist/Fluffogotchi.zip --title "Fluffogotchi $VER" --notes "$NOTES"
+          fi
