@@ -1055,7 +1055,8 @@ cmd_migrate() {
         step "Webseite auf diesem Server einrichten (Rolle „alles“)"
         if [ -f "$CONF" ]; then sed -i "s/^ROLE=.*/ROLE='alles'/" "$CONF"; grep -q '^ROLE=' "$CONF" || echo "ROLE='alles'" >> "$CONF"; fi
         local yes=(); [ "$YES" = 1 ] && yes=(--yes)
-        ROLE=alles DB_ENGINE=mariadb bash "$0" install "${yes[@]}" --no-tls || die "Einrichtung der Webseite fehlgeschlagen."   # Zertifikate erst nach der DNS-Umstellung (certs)
+        ROLE=alles DB_ENGINE=mariadb bash "$0" install "${yes[@]}" --no-tls || warn "Einrichtung meldet offene Punkte (z. B. Bot/HypeRate noch ohne Schlüssel) – Umzug der Webseite geht weiter."
+        load_conf; [ "${ROLE:-}" = alles ] && [ -d "${WEB_DIR:-/var/www/ghostnode}/.git" ] || die "Die Webseite wurde nicht eingerichtet – Ausgabe oben prüfen."   # Zertifikate erst nach der DNS-Umstellung (certs)
         exec bash "$0" migrate "${ARGS[@]}"
     fi
     [ "$DB_ENGINE" = mariadb ] || die "Die Webseite hier nutzt SQLite – für den MySQL-Umzug DB_ENGINE='mariadb' in $CONF setzen und „install“ erneut ausführen."
