@@ -79,7 +79,17 @@ function db_get(string $module, ?string $driver = null): Db {
     $m = DB_MODULES[$module];
     $db = $driver === 'mysql' ? db_open_mysql(db_cfg(), $module) : db_open_sqlite($module);
     $pool[$driver][$module] = $db;
-    if (function_exists($m['migrate'])) ($m['migrate'])($db);
+    // 8.2.1: Einrichtung nie überspringen – auch wenn die Datei des Moduls noch nicht geladen ist (sonst fehlen auf einer frischen
+    // Datenbank Tabellen wie settings/api_keys dauerhaft, weil die geöffnete Verbindung zwischengespeichert bleibt)
+    if (!function_exists($m['migrate']) && isset(DB_MODULE_FILES[$module])) require_once dirname(__DIR__) . DB_MODULE_FILES[$module];
+    if (function_exists($m['migrate'])) {
+        try { ($m['migrate'])($db); }
+        catch (Throwable $e) {   // Einrichtung abgebrochen → Verbindung nicht behalten, beim nächsten Zugriff erneut versuchen
+            unset($pool[$driver][$module]);
+            try { if ($db->inTransaction()) $db->rollBack(); } catch (Throwable $x) { /* egal */ }
+            throw $e;
+        }
+    }
     return $db;
 }
 

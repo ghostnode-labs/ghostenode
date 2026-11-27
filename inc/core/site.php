@@ -245,3 +245,9 @@ function set_setting(string $key, string $value): void {
     $cache = &setting_cache();
     $cache[$key] = $value;
 }
+
+// 8.2.1: Domain-Schutz nachholen, falls common.php ihn während des Ladens dieser Datei zurückgestellt hat
+if (!empty($GLOBALS['__dom_guard_pending'])) {
+    unset($GLOBALS['__dom_guard_pending']);
+    try { require_once APP_ROOT . '/inc/modules/domains.php'; dom_guard(); } catch (Throwable $e) { /* nie blockieren */ }
+}

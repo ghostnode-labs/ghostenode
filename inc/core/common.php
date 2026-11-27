@@ -158,7 +158,10 @@ function emoji_favicon(string $emoji): string {
 
 // 8.1: Neben-Domains → Haupt-Domain (Admin → System → Domains)
 if (PHP_SAPI !== 'cli' && !empty($_SERVER['HTTP_HOST'])) {
-    try { require_once __DIR__ . '/site.php'; require_once APP_ROOT . '/inc/modules/domains.php'; dom_guard(); } catch (Throwable $e) { /* nie blockieren */ }
+    // 8.2.1: nicht, während site.php selbst noch geladen wird (dann fehlen dort Konstanten wie SITE_SCHEMA_VERSION und die
+    // Datenbank-Einrichtung bräche auf einer frischen Datenbank ab) – site.php holt den Schutz am Ende nach
+    if (!defined('SITE_SCHEMA_VERSION') && in_array(realpath(__DIR__ . '/site.php'), get_included_files(), true)) $GLOBALS['__dom_guard_pending'] = true;
+    else { try { require_once __DIR__ . '/site.php'; require_once APP_ROOT . '/inc/modules/domains.php'; dom_guard(); } catch (Throwable $e) { /* nie blockieren */ } }
 }
 
 // Webseite 2.0: einheitliches Menü auf allen Seiten
