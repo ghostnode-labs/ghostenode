@@ -1,6 +1,6 @@
 <?php
 /**
- * 🧩 Plugin-Marktplatz für VRC Nexus – Katalog (öffentlich), Einreichen (market.submit), Prüfen (market.manage).
+ * 🧩 Plugin-Marktplatz für VRC Nexus und D2 Nexus – Katalog (öffentlich), Einreichen (market.submit), Prüfen (market.manage).
  * Die App lädt den signierten Katalog über market.php?api=index und Pakete über market.php?dl=<id>&v=<version>.
  */
 require_once __DIR__ . '/inc/modules/market.php';
@@ -20,7 +20,7 @@ if (isset($_GET['api'])) {
         if (!is_logged_in()) throw new InvalidArgumentException('Bitte anmelden.');
         if (!same_origin_request()) throw new InvalidArgumentException('Anfrage abgelehnt (fremde Herkunft).');
         switch ($act) {
-            case 'submit': $r = mk_submit($_FILES['file'] ?? [], (string)($_POST['category'] ?? ''), (string)($_POST['changelog'] ?? ''));
+            case 'submit': $r = mk_submit($_FILES['file'] ?? [], (string)($_POST['category'] ?? ''), (string)($_POST['changelog'] ?? ''), (string)($_POST['tags'] ?? ''));
                 $out(['msg' => $r['plugin']['name'] . ' ' . $r['plugin']['version'] . ($r['status'] === 'approved' ? ' ist veröffentlicht.' : ' ist eingereicht und wartet auf Prüfung.')]);
             case 'review': mk_review((string)($_POST['id'] ?? ''), (string)($_POST['version'] ?? ''), (string)($_POST['decision'] ?? ''), (string)($_POST['note'] ?? '')); $out(['msg' => 'Gespeichert.']);
             case 'delete': mk_delete((string)($_POST['id'] ?? ''), (string)($_POST['version'] ?? '')); $out(['msg' => 'Gelöscht.']);
@@ -43,6 +43,10 @@ $mine = $me ? array_filter($all, fn($p) => (int)$p['owner'] === (int)$me['id']) 
 $pending = [];
 if ($canManage) foreach ($all as $p) foreach ($p['versions'] as $v) if ($v['status'] === 'pending') $pending[] = [$p, $v];
 $permChips = fn(array $perms) => implode('', array_map(fn($p) => '<span class="mk-perm" title="' . e(MK_PERMS[$p][1] ?? $p) . '">' . (MK_PERMS[$p][0] ?? '?') . ' ' . e(MK_PERMS[$p][1] ?? $p) . '</span>', $perms)) ?: '<span class="mk-perm ok">✔ keine besonderen Rechte</span>';
+$allTags = [];
+foreach ($public as [$p, $v]) foreach (($v['tags'] ?? []) as $t) $allTags[$t] = ($allTags[$t] ?? 0) + 1;
+arsort($allTags);
+$appChips = fn(array $apps) => implode('', array_map(fn($a) => '<span class="mk-app mk-app-' . e($a) . '" title="' . e(MK_APPS[$a][2] ?? $a) . '">' . (MK_APPS[$a][0] ?? '') . ' ' . e(MK_APPS[$a][1] ?? $a) . '</span>', $apps));
 $fmtSize = fn(int $b) => $b > 1048576 ? round($b / 1048576, 1) . ' MB' : max(1, round($b / 1024)) . ' KB';
 $ST = ['pending' => '⏳ wartet auf Prüfung', 'approved' => '✅ freigegeben', 'rejected' => '⛔ abgelehnt'];
 ?>
@@ -74,6 +78,12 @@ $ST = ['pending' => '⏳ wartet auf Prüfung', 'approved' => '✅ freigegeben', 
 .mk-note{color:var(--text-muted);font-size:.82rem}
 .mk-toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel-bg);border:1px solid var(--accent-cyan);padding:9px 14px;z-index:9}
 .mk-card[hidden]{display:none}
+.mk-apps{display:flex;gap:6px;flex-wrap:wrap}.mk-app{font-size:.72rem;padding:2px 8px;border:1px solid var(--accent-cyan);color:var(--accent-cyan)}.mk-app-d2{border-color:#9b7bff;color:#b7a2ff}
+.mk-tags{display:flex;gap:5px;flex-wrap:wrap}.mk-tag{font-size:.7rem;padding:1px 7px;background:rgba(255,255,255,.06);color:var(--text-muted);cursor:pointer;border:1px solid transparent}
+.mk-tag.on,.mk-tag:hover{border-color:var(--accent-cyan);color:var(--accent-cyan)}
+.mk-games{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}.mk-games button{background:transparent;border:1px solid var(--border-color);color:var(--text-muted);padding:7px 14px;cursor:pointer;font:inherit}
+.mk-games button.on{border-color:var(--accent-cyan);color:var(--accent-cyan);background:rgba(56,213,230,.08)}
+.mk-tagcloud{display:flex;gap:6px;flex-wrap:wrap;margin:-6px 0 14px}
 </style>
 </head>
 <body>
@@ -81,18 +91,22 @@ $ST = ['pending' => '⏳ wartet auf Prüfung', 'approved' => '✅ freigegeben', 
 <div class="wrapper mk-wrap">
     <div class="nav-bar"><a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a><div class="nav-tabs"><a href="nexus.php" class="nav-tab">🥽 VRC Nexus</a><a href="themes.php" class="nav-tab">🎨 Themes</a><a href="dev.php" class="nav-tab">🛠 Entwickler</a></div></div>
     <header class="mk-head">
-        <div class="mk-eyebrow">VRC NEXUS // PLUGINS</div>
+        <div class="mk-eyebrow">VRC NEXUS · D2 NEXUS // PLUGINS</div>
         <h1>🧩 Plugin-Marktplatz</h1>
         <p class="muted">Erweiterungen für die Windows-App von VRC Nexus. Jedes Plugin wird vor der Veröffentlichung geprüft, läuft in der App abgeschottet und bekommt nur die Rechte, die du bei der Installation bestätigst. Installieren: in der App unter <b>Plugins → Marktplatz</b>.</p>
     </header>
 
+    <div class="mk-games" role="group" aria-label="Spiel"><button class="on" data-game="">Alle Spiele</button><?php foreach (MK_APPS as $k => [$ic, $g, $app]): ?><button data-game="<?= e($k) ?>"><?= $ic ?> <?= e($g) ?> <small class="muted">(<?= e($app) ?>)</small></button><?php endforeach; ?></div>
     <div class="mk-bar"><input type="search" id="mkQ" placeholder="Plugins suchen …" aria-label="Suchen"><select id="mkCat" aria-label="Kategorie"><option value="">Alle Kategorien</option><?php foreach (MK_CATS as $k => $l): ?><option value="<?= e($k) ?>"><?= e($l) ?></option><?php endforeach; ?></select></div>
+    <?php if ($allTags): ?><div class="mk-tagcloud"><?php foreach (array_slice($allTags, 0, 30, true) as $t => $n): ?><span class="mk-tag" data-tag="<?= e($t) ?>">#<?= e($t) ?> <small><?= (int)$n ?></small></span><?php endforeach; ?></div><?php endif; ?>
     <div class="mk-grid" id="mkGrid">
     <?php if (!$public): ?><p class="muted">Noch keine Plugins veröffentlicht.<?= $canSubmit ? ' Reich unten das erste ein!' : '' ?></p><?php endif; ?>
     <?php foreach ($public as [$p, $v]): ?>
-        <article class="mk-card" data-cat="<?= e($p['category'] ?? 'other') ?>" data-q="<?= e(mb_strtolower($v['name'] . ' ' . $v['description'] . ' ' . $v['author'] . ' ' . $p['id'])) ?>">
+        <article class="mk-card" data-cat="<?= e($p['category'] ?? 'other') ?>" data-apps="<?= e(implode(' ', $v['apps'] ?? ['vrc'])) ?>" data-tags="<?= e(implode(' ', $v['tags'] ?? [])) ?>" data-q="<?= e(mb_strtolower($v['name'] . ' ' . $v['description'] . ' ' . $v['author'] . ' ' . $p['id'] . ' ' . implode(' ', $v['tags'] ?? []))) ?>">
             <header><span class="ic"><?= e($v['icon']) ?></span><div><h3><?= e($v['name']) ?></h3><small><?= e($v['version']) ?><?= $v['author'] !== '' ? ' · von ' . e($v['author']) : '' ?> · <?= e(MK_CATS[$p['category'] ?? 'other'] ?? '') ?></small></div></header>
+            <div class="mk-apps"><?= $appChips($v['apps'] ?? ['vrc']) ?></div>
             <p><?= e($v['description']) ?></p>
+            <?php if (!empty($v['tags'])): ?><div class="mk-tags"><?php foreach ($v['tags'] as $t): ?><span class="mk-tag" data-tag="<?= e($t) ?>">#<?= e($t) ?></span><?php endforeach; ?></div><?php endif; ?>
             <div class="mk-perms"><?= $permChips($v['permissions']) ?></div>
             <div class="mk-meta"><span>⬇ <?= (int)($p['downloads'] ?? 0) ?></span><span>📦 <?= $fmtSize((int)$v['size']) ?></span><span>🗓 <?= date('d.m.Y', (int)$v['uploaded']) ?></span><?php if ($v['nexus']): ?><span>Nexus <?= e($v['nexus']) ?></span><?php endif; ?><?php if ($v['homepage']): ?><a href="<?= e($v['homepage']) ?>" target="_blank" rel="noopener nofollow">Website ↗</a><?php endif; ?></div>
             <?php if (($v['changelog'] ?? '') !== ''): ?><details class="mk-note"><summary>Neu in <?= e($v['version']) ?></summary><?= nl2br(e($v['changelog'])) ?></details><?php endif; ?>
@@ -106,6 +120,8 @@ $ST = ['pending' => '⏳ wartet auf Prüfung', 'approved' => '✅ freigegeben', 
             <p class="mk-note">Eine <code>.nxp</code>-Datei mit <code>plugin.json</code> (Aufbau: siehe <a href="https://github.com/ghostnode-labs/vrc_nexus/blob/main/docs/PLUGINS.md" target="_blank" rel="noopener">Plugin-Doku</a>). Gleiche ID + höhere Version = Update. <?= $canManage ? 'Als Prüfer wird deine Einreichung sofort veröffentlicht.' : 'Nach der Prüfung erscheint es im Katalog.' ?></p>
             <input type="file" name="file" accept=".nxp,.zip" required>
             <div class="mk-row"><label class="small">Kategorie</label><select name="category"><?php foreach (MK_CATS as $k => $l): ?><option value="<?= e($k) ?>"><?= e($l) ?></option><?php endforeach; ?></select></div>
+            <input name="tags" maxlength="200" placeholder="Tags, z. B. raid, loadout, chatbox (zusätzlich zu den Tags in plugin.json)">
+            <p class="mk-note">Für welches Spiel? Steht in <code>plugin.json</code> als <code>"apps": ["vrc", "d2"]</code> – fehlt es, gilt das Plugin nur für VRC Nexus.</p>
             <textarea name="changelog" rows="3" maxlength="1000" placeholder="Was ist neu? (optional)"></textarea>
             <button class="btn btn-gold">Einreichen</button>
         </form>
@@ -130,7 +146,7 @@ $ST = ['pending' => '⏳ wartet auf Prüfung', 'approved' => '✅ freigegeben', 
         <table class="mk-tbl">
         <?php foreach ($pending as [$p, $v]): ?>
             <tr><td><b><?= e($v['icon'] . ' ' . $v['name']) ?></b> <?= e($v['version']) ?><br><small class="muted"><?= e($p['id']) ?> · <?= e($v['author']) ?> · SHA-256 <?= e(substr($v['sha256'], 0, 16)) ?>…</small><br><?= e($v['description']) ?></td>
-                <td><div class="mk-perms"><?= $permChips($v['permissions']) ?></div><?= $v['groups'] ? '<small class="muted">Gruppen: ' . e(implode(', ', $v['groups'])) . '</small>' : '' ?></td>
+                <td><div class="mk-apps"><?= $appChips($v['apps'] ?? ['vrc']) ?></div><div class="mk-perms"><?= $permChips($v['permissions']) ?></div><?= $v['groups'] ? '<small class="muted">Gruppen: ' . e(implode(', ', $v['groups'])) . '</small>' : '' ?></td>
                 <td><a class="btn btn-sm" href="market.php?dl=<?= e(rawurlencode($p['id'])) ?>&amp;v=<?= e(rawurlencode($v['version'])) ?>">⬇ Paket</a>
                     <button class="btn btn-sm btn-gold" data-rev="approved" data-id="<?= e($p['id']) ?>" data-v="<?= e($v['version']) ?>">✅ Freigeben</button>
                     <button class="btn btn-sm btn-danger" data-rev="rejected" data-id="<?= e($p['id']) ?>" data-v="<?= e($v['version']) ?>">⛔ Ablehnen</button></td></tr>
@@ -145,8 +161,12 @@ $ST = ['pending' => '⏳ wartet auf Prüfung', 'approved' => '✅ freigegeben', 
     const toast = m => { const t = document.createElement('div'); t.className = 'mk-toast'; t.textContent = m; document.body.appendChild(t); setTimeout(() => t.remove(), 3500); };
     const post = (act, fd) => fetch('market.php?api=' + act, { method: 'POST', body: fd, credentials: 'same-origin' }).then(r => r.json()).then(d => { if (d.error) throw new Error(d.error); return d; });
     const q = document.getElementById('mkQ'), c = document.getElementById('mkCat');
-    const filter = () => { const s = q.value.trim().toLowerCase(), k = c.value; document.querySelectorAll('.mk-card').forEach(el => { el.hidden = !((!k || el.dataset.cat === k) && (!s || el.dataset.q.includes(s))); }); };
+    let game = '', tag = '';
+    const filter = () => { const s = q.value.trim().toLowerCase(), k = c.value; document.querySelectorAll('.mk-card').forEach(el => { el.hidden = !((!k || el.dataset.cat === k) && (!s || el.dataset.q.includes(s)) && (!game || el.dataset.apps.split(' ').includes(game)) && (!tag || el.dataset.tags.split(' ').includes(tag))); });
+        document.querySelectorAll('.mk-tag').forEach(t => t.classList.toggle('on', t.dataset.tag === tag)); };
     q.addEventListener('input', filter); c.addEventListener('change', filter);
+    document.querySelectorAll('.mk-games button').forEach(b => b.addEventListener('click', () => { game = b.dataset.game; document.querySelectorAll('.mk-games button').forEach(x => x.classList.toggle('on', x === b)); filter(); }));
+    document.addEventListener('click', e => { const t = e.target.closest('.mk-tag'); if (t) { tag = tag === t.dataset.tag ? '' : t.dataset.tag; filter(); } });
     const f = document.getElementById('mkSubmit');
     if (f) f.addEventListener('submit', e => { e.preventDefault(); const b = f.querySelector('button'); b.disabled = true; post('submit', new FormData(f)).then(d => { toast(d.msg); setTimeout(() => location.reload(), 1200); }).catch(er => toast('⚠ ' + er.message)).finally(() => { b.disabled = false; }); });
     document.addEventListener('click', e => {

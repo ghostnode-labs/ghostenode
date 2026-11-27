@@ -8,7 +8,14 @@ require_once __DIR__ . '/nexuswarn.php';   // nw_rate_over
 const WA_SCOPES = [
     'read'      => ['Lesen', 'Profil, Seiten, Kalender, Changelog, News'],
     'community' => ['Community', 'Nexus-Community lesen und posten (braucht ein verbundenes VRChat-Konto in VRC Nexus Web)'],
+    'admin'     => ['Admin', 'Nur für Konten mit Admin-Rechten: Server-Übersicht, Plugins prüfen, Benutzer, Protokoll, D2-Chat moderieren (Admin-Plugin in VRC Nexus und D2 Nexus)'],
 ];
+
+/** Rechte eines Benutzers (für API-Aufrufe ohne Browser-Sitzung) */
+function wa_permissions(array $user): array {
+    $st = site_db()->prepare('SELECT is_system FROM roles WHERE id = ?'); $st->execute([(int)$user['role_id']]);
+    return role_permissions((int)$user['role_id'], (bool)$st->fetchColumn());
+}
 
 function wa_schema(): void {
     static $done = false;
@@ -68,6 +75,14 @@ function wa_route(string $method, string $path, ?array $key): array {
         return $key[1];
     };
     $q = fn(string $k, $d = '') => $_GET[$k] ?? $d;
+    // Admin-Endpunkte: Recht „admin“ am Schlüssel UND Admin-Rechte des Kontos (jedes Mal neu geprüft – entzogene Rechte wirken sofort)
+    $admin = function (string $perm = 'admin.access') use ($need): array {
+        $u = $need('admin');
+        $u['permissions'] = wa_permissions($u);
+        if (!in_array('admin.access', $u['permissions'], true) || !in_array($perm, $u['permissions'], true)) throw new WaError('Dein Konto hat dafür keine Rechte (' . $perm . ').', 403);
+        return $u;
+    };
+    $body = function (): array { static $b = null; if ($b === null) $b = json_decode((string)file_get_contents('php://input', false, null, 0, 20000), true) ?: []; return $b; };
     switch ("$method $path") {
         case 'GET status':
             return ['ok' => true, 'service' => 'ghostnode-web-api', 'version' => 1, 'time' => time(), 'authed' => (bool)$key, 'docs' => 'api.php'];
@@ -95,7 +110,78 @@ function wa_route(string $method, string $path, ?array $key): array {
         }
         case 'GET me': {
             $u = $need('read');
-            return ['id' => (int)$u['id'], 'name' => user_label($u), 'username' => $u['username'], 'role_id' => (int)$u['role_id'], 'scopes' => $key[0]['scopes']];
+            $perms = wa_permissions($u);
+            $out = ['id' => (int)$u['id'], 'name' => user_label($u), 'username' => $u['username'], 'role_id' => (int)$u['role_id'], 'scopes' => $key[0]['scopes'], 'admin' => in_array('admin.access', $perms, true)];
+            if (in_array('admin', $key[0]['scopes'], true)) $out['permissions'] = $perms;
+            return $out;
+        }
+        /* ---------- Admin (Plugin „Admin-Panel“ in VRC Nexus und D2 Nexus) ---------- */
+        case 'GET admin/overview': {
+            $u = $admin();
+            $db = site_db();
+            $n = fn(string $sql) => (int)$db->query($sql)->fetchColumn();
+            $out = ['user' => user_label($u), 'permissions' => $u['permissions'],
+                'users' => ['total' => $n('SELECT COUNT(*) FROM users'), 'active' => $n('SELECT COUNT(*) FROM users WHERE active = 1'), 'locked' => $n('SELECT COUNT(*) FROM users WHERE active = 0')]];
+            require_once __DIR__ . '/market.php';
+            $out['market'] = ['pending' => count(mk_pending()), 'published' => count(json_decode(mk_index()['index'], true)['plugins'] ?? [])];
+            $f = '/var/lib/ghostnode/status.json';
+            if (is_readable($f) && ($st = json_decode((string)file_get_contents($f), true))) {
+                $svc = array_map(fn($x) => ['name' => (string)($x['name'] ?? ''), 'active' => !empty($x['active'])], (array)($st['services'] ?? []));
+                $out['server'] = ['time' => (int)($st['time'] ?? 0), 'load' => $st['load'] ?? null, 'uptime' => $st['uptime'] ?? null, 'disk' => $st['disk'] ?? null, 'mem' => $st['mem'] ?? null,
+                    'services' => $svc, 'down' => array_values(array_map(fn($x) => $x['name'], array_filter($svc, fn($x) => !$x['active'])))];
+            } else $out['server'] = null;
+            try { require_once __DIR__ . '/d2chat.php'; $out['d2'] = d2c_admin(['id' => 'gn' . $u['id'], 'name' => $u['username']], 'stats', [], true); } catch (Throwable $e) { $out['d2'] = null; }
+            $out['audit'] = $db->query("SELECT ts, username, action, detail, level FROM audit_log ORDER BY id DESC LIMIT 12")->fetchAll(PDO::FETCH_ASSOC);
+            return $out;
+        }
+        case 'GET admin/market': {
+            $admin('market.manage');
+            require_once __DIR__ . '/market.php';
+            return ['pending' => mk_pending()];
+        }
+        case 'POST admin/market/review': {
+            $u = $admin('market.manage');
+            require_once __DIR__ . '/market.php';
+            $b = $body();
+            mk_review((string)($b['id'] ?? ''), (string)($b['version'] ?? ''), (string)($b['decision'] ?? ''), (string)($b['note'] ?? ''), $u);
+            audit('Plugin geprüft (App)', ($b['id'] ?? '') . ' ' . ($b['version'] ?? '') . ' → ' . ($b['decision'] ?? ''), 'info', $u);
+            return ['ok' => true];
+        }
+        case 'GET admin/users': {
+            $admin('users.view');
+            $s = '%' . str_replace(['%', '_'], '', mb_substr((string)$q('q'), 0, 40)) . '%';
+            $st = site_db()->prepare('SELECT u.id, u.username, u.display_name, u.active, u.last_login, r.name AS role FROM users u LEFT JOIN roles r ON r.id = u.role_id WHERE u.username LIKE ? OR u.display_name LIKE ? ORDER BY u.last_login DESC LIMIT 100');
+            $st->execute([$s, $s]);
+            return ['users' => array_map(fn($r) => ['id' => (int)$r['id'], 'username' => $r['username'], 'name' => $r['display_name'], 'role' => (string)$r['role'], 'active' => (bool)$r['active'], 'lastLogin' => $r['last_login']], $st->fetchAll(PDO::FETCH_ASSOC))];
+        }
+        case 'POST admin/users/active': {
+            $u = $admin('users.manage');
+            $b = $body(); $id = (int)($b['id'] ?? 0); $on = !empty($b['active']);
+            if ($id === (int)$u['id']) throw new WaError('Dein eigenes Konto sperrst du besser nicht.');
+            $st = site_db()->prepare('SELECT r.is_system FROM users x JOIN roles r ON r.id = x.role_id WHERE x.id = ?'); $st->execute([$id]);
+            $sys = $st->fetchColumn();
+            if ($sys === false) throw new WaError('Benutzer nicht gefunden.', 404);
+            if ((int)$sys) throw new WaError('Der Besitzer kann nicht gesperrt werden.', 403);
+            site_db()->prepare('UPDATE users SET active = ?, session_version = session_version + 1 WHERE id = ?')->execute([$on ? 1 : 0, $id]);
+            audit($on ? 'Benutzer entsperrt (App)' : 'Benutzer gesperrt (App)', '#' . $id, 'security', $u);
+            return ['ok' => true];
+        }
+        case 'GET admin/audit': {
+            $admin('audit.view');
+            $n = max(1, min(200, (int)$q('limit', 50)));
+            return ['items' => site_db()->query("SELECT ts, username, action, detail, level, ip FROM audit_log ORDER BY id DESC LIMIT $n")->fetchAll(PDO::FETCH_ASSOC)];
+        }
+        case 'GET admin/d2':
+        case 'POST admin/d2': {
+            $u = $admin();
+            require_once __DIR__ . '/d2chat.php';
+            $in = $method === 'POST' ? $body() : $_GET;
+            $op = (string)($in['op'] ?? '');
+            if (in_array($op, ['delete', 'block', 'announce'], true) && $method !== 'POST') throw new WaError('Nur POST.', 405);
+            try { $r = d2c_admin(['id' => 'gn' . $u['id'], 'name' => user_label($u), 'code' => 0, 'clan' => '', 'clanName' => ''], $op, $in, true); }
+            catch (D2cError $e) { throw new WaError($e->getMessage(), $e->status); }
+            if (in_array($op, ['delete', 'block', 'announce'], true)) audit('D2-Chat-Admin (App): ' . $op, json_encode(array_intersect_key($in, array_flip(['id', 'blocked'])), JSON_UNESCAPED_UNICODE), 'security', $u);
+            return $r;
         }
         case 'GET pages': {
             $u = $need('read');

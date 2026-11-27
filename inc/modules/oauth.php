@@ -11,6 +11,10 @@
 require_once __DIR__ . '/webapi.php';
 
 const OA_CODE_TTL = 300;
+/** Fest eingebauter, öffentlicher Zugang für die eigenen Apps (VRC Nexus, D2 Nexus): PKCE + Rückleitung an den eigenen PC
+ *  (http://127.0.0.1:<beliebiger Port>/callback, RFC 8252). Wird automatisch angelegt, gehört keinem Konto. */
+const OA_APPS_CLIENT = 'gnc_6e6578757361707073303031';
+const OA_APPS_REDIRECT = '#^http://127\.0\.0\.1:\d{2,5}/callback$#';
 
 function oa_schema(): void {
     static $done = false;
@@ -57,6 +61,11 @@ function oa_app_by_client(string $cid): ?array {
     $st = site_db()->prepare('SELECT * FROM oauth_apps WHERE client_id = ?');
     $st->execute([$cid]);
     $a = $st->fetch(PDO::FETCH_ASSOC);
+    if (!$a && $cid === OA_APPS_CLIENT) {
+        site_db()->prepare('INSERT INTO oauth_apps (user_id, name, client_id, secret_hash, redirects, homepage, created) VALUES (0, ?, ?, \'\', ?, ?, ?)')
+            ->execute(['GhostNode Apps (VRC Nexus · D2 Nexus)', OA_APPS_CLIENT, json_encode(['http://127.0.0.1/callback']), 'https://ghostnode-labs.dev', time()]);
+        $st->execute([$cid]); $a = $st->fetch(PDO::FETCH_ASSOC);
+    }
     return $a ? oa_row($a) : null;
 }
 
@@ -96,7 +105,8 @@ function oa_check_request(array $q): array {
     if (!$app) throw new InvalidArgumentException('Unbekannte App (client_id).');
     $red = (string)($q['redirect_uri'] ?? '');
     if ($red === '' && count($app['redirects']) === 1) $red = $app['redirects'][0];
-    if (!in_array($red, $app['redirects'], true)) throw new InvalidArgumentException('Diese Weiterleitungs-Adresse ist für die App nicht eingetragen.');
+    $builtinOk = $app['client_id'] === OA_APPS_CLIENT && preg_match(OA_APPS_REDIRECT, $red);
+    if (!$builtinOk && !in_array($red, $app['redirects'], true)) throw new InvalidArgumentException('Diese Weiterleitungs-Adresse ist für die App nicht eingetragen.');
     if ((string)($q['response_type'] ?? 'code') !== 'code') throw new InvalidArgumentException('Nur response_type=code wird unterstützt.');
     $scopes = array_values(array_intersect(array_keys(WA_SCOPES), preg_split('/[\s,+]+/', (string)($q['scope'] ?? 'read')))) ?: ['read'];
     $ch = (string)($q['code_challenge'] ?? '');

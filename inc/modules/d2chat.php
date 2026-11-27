@@ -141,8 +141,9 @@ function d2c_send(array $who, string $chan, string $text): array {
 }
 
 /* ---------- Admin (D2-Nexus-Plugin „Admin-Panel“) ---------- */
-function d2c_admin(array $who, string $op, array $in): array {
-    if (!d2c_is_admin($who)) throw new D2cError('Nur für Admins.', 403);
+/** $trusted = Aufruf über die Web-API mit geprüftem GhostNode-Admin-Konto (Admin-Plugin) */
+function d2c_admin(array $who, string $op, array $in, bool $trusted = false): array {
+    if (!$trusted && !d2c_is_admin($who)) throw new D2cError('Nur für Admins.', 403);
     $db = d2c_db();
     switch ($op) {
         case 'stats':
@@ -171,7 +172,10 @@ function d2c_admin(array $who, string $op, array $in): array {
             if (!empty($in['purge'])) $db->prepare("DELETE FROM msgs WHERE from_id = ? AND chan NOT LIKE 'dm:%'")->execute([$id]);
             return ['ok' => true];
         case 'announce':
-            return d2c_send($who, 'news', (string)($in['text'] ?? ''));
+            $text = trim((string)($in['text'] ?? ''));
+            if ($text === '' || mb_strlen($text) > D2C_MAX_LEN) throw new D2cError('Text fehlt oder ist zu lang.');
+            $db->prepare('INSERT INTO msgs (chan, from_id, from_name, body, ts) VALUES (?, ?, ?, ?, ?)')->execute(['news', (string)$who['id'], '📢 ' . mb_substr((string)$who['name'], 0, 40), $text, time()]);
+            return ['ok' => true, 'id' => (int)$db->lastInsertId()];
     }
     throw new D2cError('Unbekannte Admin-Aktion.', 404);
 }
