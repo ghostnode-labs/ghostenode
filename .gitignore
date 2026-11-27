@@ -38,3 +38,4 @@ clients/nexus-desktop/dist/
 *.spec
 GhostNodeNexus-windows.zip
 data/roadmap_status.json
+ghostnode-selfhost*.zip

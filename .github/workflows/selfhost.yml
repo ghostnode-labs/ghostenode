@@ -1,0 +1,33 @@
+name: Selbst-hosten-Paket
+
+# 8.1: Bei jedem Push auf main wird das Paket für eigene Server gebaut (ohne data/, Schlüssel, Uploads)
+# und an das Release „selfhost-latest“ gehängt (ersetzt das vorige).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP-Syntax prüfen
+        run: |
+          php -v | head -1
+          find . -name '*.php' -not -path './data/*' -not -path './.git/*' -print0 | xargs -0 -n1 -P4 php -l | grep -v '^No syntax errors' || true
+          ! find . -name '*.php' -not -path './data/*' -not -path './.git/*' -print0 | xargs -0 -n1 php -l 2>&1 | grep -q 'Parse error'
+      - name: Paket bauen
+        run: sh tools/selfhost-pack.sh ghostnode-selfhost.zip
+      - name: Release „selfhost-latest“ aktualisieren
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          NOTES=$(printf '%s\n' "GhostNode-Webseite zum Selbst-Hosten (ohne persönliche Daten)." "" "Anleitung: SELBST-HOSTEN.md im ZIP." "" "Stand: ${GITHUB_SHA:0:7} · $(date -u '+%Y-%m-%d %H:%M') UTC")
+          gh release view selfhost-latest -R "$REPO" >/dev/null 2>&1 || gh release create selfhost-latest -R "$REPO" --target "$GITHUB_SHA" --title "GhostNode selbst hosten" --notes "$NOTES" --latest=false
+          gh release upload selfhost-latest -R "$REPO" --clobber ghostnode-selfhost.zip
+          gh release edit selfhost-latest -R "$REPO" --notes "$NOTES"
