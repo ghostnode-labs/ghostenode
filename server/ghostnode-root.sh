@@ -452,6 +452,15 @@ nginx_site() {   # nginx_site NAME "HOSTS" PORT web|sse|plain|redirect
     local name=$1 hosts=$2 port=$3 kind=$4 f=/etc/nginx/sites-available/$1.conf up
     up=$port; [[ "$up" == *:* ]] || up="127.0.0.1:$up"
     command -v nginx >/dev/null || { apt-get install -y -qq nginx >/dev/null; rm -f /etc/nginx/sites-enabled/default; }
+    # HTTPS-Standard: unbekannte Namen ablehnen – sonst beantwortet der erste Block mit Zertifikat alles (z. B. die turn/voice-
+    # Umleitung → Weiterleitungs-Schleife). Nur, wenn noch kein anderer default_server auf 443 existiert (z. B. Pterodactyl-Panel).
+    local dflt=/etc/nginx/sites-available/00-ghostnode-default-tls.conf
+    if [ ! -f "$dflt" ] && ! grep -rqs 'listen[^;]*443[^;]*default_server' /etc/nginx/sites-enabled/ /etc/nginx/conf.d/; then
+        { echo "# erzeugt von ghostnode-root.sh – unbekannte Namen auf HTTPS ablehnen"; echo "server {"; echo "    listen 443 ssl default_server;"
+          [ -s /proc/net/if_inet6 ] && echo "    listen [::]:443 ssl default_server;"; echo "    server_name _;"; echo "    ssl_reject_handshake on;"; echo "}"; } > "$dflt"
+        ln -sf "$dflt" /etc/nginx/sites-enabled/00-ghostnode-default-tls.conf
+        nginx -t >/dev/null 2>&1 || rm -f /etc/nginx/sites-enabled/00-ghostnode-default-tls.conf "$dflt"   # zu altes nginx → weglassen
+    fi
     {
         echo "# erzeugt von ghostnode-root.sh – GhostNode neben anderen nginx-Seiten (z. B. Pterodactyl-Panel)"
         echo "server {"
@@ -1139,6 +1148,9 @@ setup_tls() {
     [ "$NO_TLS" = 1 ] && { warn "--no-tls: keine Zertifikate. Später: $0 certs"; return; }
     [ -n "${LE_EMAIL:-}" ] || { warn "Keine E-Mail für Let's Encrypt angegeben – später: $0 certs"; return; }
     if [ "$FRONT" = nginx ]; then apt-get install -y -qq certbot python3-certbot-nginx >/dev/null; else apt-get install -y -qq certbot python3-certbot-apache >/dev/null; fi
+    if [ "$FRONT" = nginx ] && want web && [ ! -f /etc/nginx/sites-available/ghostnode.conf ]; then
+        warn "Die Webseite ist in nginx noch nicht eingerichtet – Zertifikate erst danach (sonst landen alle Namen in einem falschen Block). Zuerst: $0 install"; return 0
+    fi
     local names=() n
     local all=("$HR_HOST" "$BOT_HOST" "$TURN_HOST" "$VOICE_HOST"); if want web; then all=("$DOMAIN" "www.$DOMAIN" "${all[@]}"); fi
     for n in "${all[@]}"; do
@@ -1199,6 +1211,16 @@ http_code() { local c; c=$(lcurl "$1" "$2" -o /dev/null -w '%{http_code}' 2>/dev
 check_all() {
     step "Prüfung"
     FAILS=0
+    if [ -d /etc/letsencrypt/live/ghostnode ]; then   # HTTPS: leitet ein Name auf sich selbst um? (Schleife)
+        local h u r
+        for h in $(want web && echo "$DOMAIN") "$HR_HOST" "$BOT_HOST"; do
+            [ -n "$h" ] || continue
+            r=$(curl -s -m 8 -o /dev/null -w '%{http_code} %{redirect_url}' --resolve "$h:443:127.0.0.1" "https://$h/" 2>/dev/null) || true
+            u=${r#* }
+            if [[ "$r" =~ ^30 ]] && [ "${u%/}" = "https://$h" ]; then fail "https://$h leitet auf sich selbst um (Schleife) – Reparatur: $0 install --yes && $0 certs"
+            else ok "https://$h → ${r%% *}"; fi
+        done
+    fi
     if want web && [ "$RUN_MODE" = systemd ] && [ -f /opt/ghostnode/live/live.js ]; then
         local lc; lc=$(curl -s -m 8 "http://127.0.0.1:$LIVE_PORT/live/health" 2>/dev/null) || true
         [[ "$lc" == *'"ghostnode-live"'* ]] && ok "Live-Dienst antwortet (Fernsteuerung in Echtzeit)" || fail "Live-Dienst antwortet nicht (journalctl -u ghostnode-live)"
