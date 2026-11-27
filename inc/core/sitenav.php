@@ -90,9 +90,13 @@ function sitenav_html(): string {
         . '<button type="button" class="gn-burger" aria-label="Menü" aria-expanded="false">☰</button><div class="gn-menu">';
     foreach (SITENAV_MAIN as [$href, $icon, $title]) $o .= '<a href="' . $h($href) . '"' . ($here === $href ? ' class="on" aria-current="page"' : '') . '>' . $icon . ' ' . $h($title) . '</a>';
     if ($more) {
-        $o .= '<div class="gn-more"><button type="button" aria-expanded="false">Mehr ▾</button><div class="gn-drop">';
-        foreach ($more as $m) $o .= '<a href="' . $h($m['href']) . '"' . ($here === $m['href'] ? ' class="on"' : '') . ' title="' . $h($m['desc']) . '">' . $h($m['icon']) . ' ' . $h($m['title']) . ($m['lock'] ? ' 🔒' : '') . '</a>';
-        $o .= '</div></div>';
+        // Kachel-Popup mit allen weiteren Seiten (Filter, Esc schließt)
+        $o .= '<div class="gn-more"><button type="button" aria-expanded="false" aria-haspopup="dialog">Mehr ▾</button><div class="gn-drop" role="dialog" aria-label="Weitere Seiten">'
+            . '<div class="gn-drop-h"><b>◈ Alle Seiten</b><input type="search" class="gn-drop-q" placeholder="Filtern …" aria-label="Seiten filtern" autocomplete="off"><button type="button" class="gn-drop-x" aria-label="Schließen">✕</button></div><div class="gn-tiles">';
+        foreach ($more as $m) $o .= '<a class="gn-tile' . ($here === $m['href'] ? ' on' : '') . '" href="' . $h($m['href']) . '" title="' . $h($m['desc']) . '" data-q="' . $h(mb_strtolower($m['title'] . ' ' . $m['desc'])) . '">'
+            . '<span class="gi">' . $h($m['icon']) . '</span><span class="gt">' . $h($m['title']) . ($m['lock'] ? ' <i title="Nur nach Anmeldung">🔒</i>' : '') . '</span>'
+            . ($m['desc'] !== '' ? '<small>' . $h(mb_strimwidth($m['desc'], 0, 70, '…')) . '</small>' : '') . '</a>';
+        $o .= '</div><div class="gn-tiles-none" hidden>Keine Seite gefunden.</div></div></div>';
     }
     $o .= '<div class="gn-search"><input type="search" placeholder="Suchen … ( / )" aria-label="Seiten suchen" autocomplete="off"><div class="gn-res" hidden></div></div>';
     if ($u) { try { require_once APP_ROOT . '/inc/modules/me.php'; $o = me_style((int)$u['id']) . $o; } catch (Throwable $e) { /* ohne Darstellung */ } }   // 6.6: Darstellung je Konto
@@ -110,8 +114,19 @@ function sitenav_html(): string {
 .gn-menu{display:flex;align-items:center;gap:4px;flex:1;min-width:0}
 .gn-menu>a,.gn-more>button{color:#94a3b8;text-decoration:none;font-size:.78rem;letter-spacing:1px;padding:7px 10px;border:1px solid transparent;background:none;cursor:pointer;font-family:inherit;white-space:nowrap}
 .gn-menu>a:hover,.gn-more>button:hover,.gn-menu>a.on{color:#38d5e6;border-color:rgba(56,213,230,.35)}
-.gn-more{position:relative}.gn-drop{display:none;position:absolute;top:100%;left:0;min-width:260px;max-height:70vh;overflow:auto;background:rgba(6,9,13,.97);border:1px solid rgba(56,213,230,.35);padding:6px;z-index:61}
-.gn-more.open .gn-drop{display:block}.gn-drop a{display:block;padding:8px 10px;color:#e2e8f0;text-decoration:none;font-size:.85rem}.gn-drop a:hover,.gn-drop a.on{background:rgba(56,213,230,.1);color:#38d5e6}
+.gn-more{position:relative}
+.gn-drop{display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);width:min(940px,calc(100vw - 32px));max-height:calc(100vh - 84px);overflow:auto;background:rgba(6,9,13,.98);border:1px solid rgba(56,213,230,.35);border-radius:10px;padding:14px;z-index:61;box-shadow:0 0 0 100vmax rgba(0,0,0,.55),0 20px 60px rgba(0,0,0,.6);box-sizing:border-box}
+.gn-more.open .gn-drop{display:block;animation:gnPop .14s ease-out}@keyframes gnPop{from{opacity:0;transform:translate(-50%,-6px)}to{opacity:1;transform:translate(-50%,0)}}
+.gn-drop-h{display:flex;align-items:center;gap:10px;margin-bottom:12px}.gn-drop-h b{color:#38d5e6;letter-spacing:2px;font-size:.8rem;white-space:nowrap}
+.gn-drop-q{flex:1;min-width:0;padding:7px 10px;font-size:.85rem;background:rgba(255,255,255,.04);border:1px solid rgba(56,213,230,.25);color:#e2e8f0;border-radius:6px}
+.gn-drop-x{background:none;border:1px solid rgba(56,213,230,.25);color:#94a3b8;border-radius:6px;padding:5px 10px;cursor:pointer;font-family:inherit}.gn-drop-x:hover{color:#38d5e6;border-color:#38d5e6}
+.gn-tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.gn-tile{display:flex;flex-direction:column;align-items:center;text-align:center;gap:6px;padding:16px 10px 12px;border:1px solid rgba(56,213,230,.16);border-radius:10px;background:linear-gradient(160deg,rgba(56,213,230,.06),rgba(255,255,255,.015));color:#e2e8f0;text-decoration:none;transition:transform .12s,border-color .12s,background .12s;min-height:104px;box-sizing:border-box}
+.gn-tile:hover,.gn-tile:focus-visible{transform:translateY(-2px);border-color:rgba(56,213,230,.6);background:linear-gradient(160deg,rgba(56,213,230,.14),rgba(255,255,255,.03))}
+.gn-tile.on{border-color:#f3c262;background:linear-gradient(160deg,rgba(243,194,98,.14),rgba(255,255,255,.02))}
+.gn-tile .gi{font-size:1.9rem;line-height:1}.gn-tile .gt{font-weight:700;font-size:.86rem}.gn-tile .gt i{font-style:normal;font-size:.75rem}
+.gn-tile small{color:#94a3b8;font-size:.7rem;line-height:1.3}
+.gn-tiles-none{color:#94a3b8;text-align:center;padding:18px;font-size:.85rem}
 .gn-search{position:relative;margin-left:auto}.gn-search input{width:200px;padding:6px 10px;font-size:.8rem;background:rgba(255,255,255,.04);border:1px solid rgba(56,213,230,.25);color:#e2e8f0}
 .gn-res{position:absolute;right:0;top:110%;width:320px;max-height:60vh;overflow:auto;background:rgba(6,9,13,.97);border:1px solid rgba(56,213,230,.35);z-index:61}
 .gn-res a{display:block;padding:8px 10px;color:#e2e8f0;text-decoration:none;font-size:.85rem}.gn-res a small{display:block;color:#94a3b8;font-size:.72rem}.gn-res a.sel,.gn-res a:hover{background:rgba(56,213,230,.12)}
@@ -119,7 +134,7 @@ function sitenav_html(): string {
 .gn-burger{display:none;margin-left:auto;background:none;border:1px solid rgba(56,213,230,.35);color:#e2e8f0;font-size:1.1rem;padding:4px 10px;cursor:pointer}
 .auth-corner,.nav-back[href="dashboard.php"],.nav-back[href="index.php"]{display:none!important}
 @media(max-width:900px){.gn-burger{display:block}.gn-menu{display:none;position:fixed;top:50px;left:0;right:0;flex-direction:column;align-items:stretch;background:rgba(4,6,9,.97);border-bottom:1px solid rgba(56,213,230,.25);padding:10px 16px;max-height:calc(100vh - 50px);overflow:auto}
-.gn-nav.open .gn-menu{display:flex}.gn-menu>a,.gn-more>button{padding:11px 8px;text-align:left}.gn-drop{position:static;display:block;border:none;background:none;padding:0 0 0 12px;min-width:0;max-height:none}.gn-more>button{display:none}
+.gn-nav.open .gn-menu{display:flex}.gn-menu>a,.gn-more>button{padding:11px 8px;text-align:left}.gn-drop{position:static;display:block;transform:none;width:auto;border:none;background:none;padding:4px 0;min-width:0;max-height:none;box-shadow:none;animation:none!important}.gn-more>button{display:none}.gn-drop-h{display:none}.gn-tiles{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}.gn-tile{min-height:0;padding:10px 6px}.gn-tile .gi{font-size:1.4rem}.gn-tile small{display:none}
 .gn-search{margin:6px 0}.gn-search input{width:100%;box-sizing:border-box}.gn-res{position:static;width:auto}}
 </style>
 CSS
@@ -130,7 +145,18 @@ CSS
     const ITEMS = __ITEMS__;
     const b = nav.querySelector('.gn-burger'), more = nav.querySelector('.gn-more'), inp = nav.querySelector('.gn-search input'), res = nav.querySelector('.gn-res');
     b.addEventListener('click', () => { const o = nav.classList.toggle('open'); b.setAttribute('aria-expanded', o); });
-    if (more) { const mb = more.querySelector('button'); mb.addEventListener('click', e => { e.stopPropagation(); const o = more.classList.toggle('open'); mb.setAttribute('aria-expanded', o); }); document.addEventListener('click', () => more.classList.remove('open')); }
+    if (more) {
+        const mb = more.querySelector('button'), drop = more.querySelector('.gn-drop'), fq = more.querySelector('.gn-drop-q'), tiles = [...more.querySelectorAll('.gn-tile')], none = more.querySelector('.gn-tiles-none');
+        const close = () => { more.classList.remove('open'); mb.setAttribute('aria-expanded', 'false'); };
+        const filter = () => { const q = fq.value.trim().toLowerCase(); let n = 0; tiles.forEach(t => { const ok = !q || t.dataset.q.includes(q); t.hidden = !ok; if (ok) n++; }); none.hidden = n > 0; };
+        mb.addEventListener('click', e => { e.stopPropagation(); const o = more.classList.toggle('open'); mb.setAttribute('aria-expanded', o); if (o && matchMedia('(min-width:901px)').matches) { fq.value = ''; filter(); setTimeout(() => fq.focus(), 30); } });
+        drop.addEventListener('click', e => e.stopPropagation());
+        more.querySelector('.gn-drop-x').addEventListener('click', () => { close(); mb.focus(); });
+        fq.addEventListener('input', filter);
+        fq.addEventListener('keydown', e => { if (e.key === 'Enter') { const t = tiles.find(x => !x.hidden); if (t) location.href = t.getAttribute('href'); } });
+        document.addEventListener('keydown', e => { if (e.key === 'Escape' && more.classList.contains('open')) { close(); mb.focus(); } });
+        document.addEventListener('click', close);
+    }
     const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
     let sel = 0, hits = [];
     const draw = () => { const q = inp.value.trim().toLowerCase(); if (!q) { res.hidden = true; return; }
