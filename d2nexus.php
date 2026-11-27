@@ -129,7 +129,7 @@ body.d2{padding:0;display:block}.d2-wrap{box-sizing:border-box;max-width:1180px;
   <div class="d2-card"><div class="bd">
     <p class="muted">Damit sich Nutzer in D2 Nexus nur noch anmelden müssen, tauscht dieser Server den Anmelde-Code mit dem Client-Secret ein (<code>d2auth.php</code>). Bungie-App: Typ <b>Confidential</b>, Redirect-URL <code>https://<?= e($_SERVER['HTTP_HOST'] ?? 'ghostnode-labs.dev') ?>/d2-callback</code>.
       Am besten per SSH: <code>ghostnode-root.sh secrets</code> → GN_BUNGIE_KEY, GN_BUNGIE_CLIENT_ID, GN_BUNGIE_CLIENT_SECRET. Sonst hier:</p>
-    <p class="muted">Status: <?= d2_oauth() ? '<b style="color:#4ade80">eingerichtet</b>' . (getenv('GN_BUNGIE_CLIENT_SECRET') ? ' (aus der Umgebung)' : '') : '<b>fehlt</b> (API-Key oben, Client-ID und Secret)' ?></p>
+    <p class="muted">Status: <?= d2_oauth() ? '<b style="color:#4ade80">eingerichtet</b>' . (getenv('GN_BUNGIE_CLIENT_SECRET') ? ' (aus der Umgebung)' : '') : '<b>fehlt:</b> ' . e(implode(', ', d2_oauth_missing())) ?></p>
     <form method="post" style="display:flex;gap:8px;flex-wrap:wrap"><input type="hidden" name="action" value="d2_oauth">
       <input name="d2_cid" placeholder="OAuth client_id" value="<?= e(setting('d2_client_id', '')) ?>" autocomplete="off" style="width:180px">
       <input name="d2_csec" type="password" placeholder="<?= setting('d2_client_secret', '') !== '' ? '•••••• (leer = behalten)' : 'OAuth client_secret' ?>" autocomplete="off" style="flex:1;min-width:240px">

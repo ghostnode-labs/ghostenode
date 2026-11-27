@@ -22,6 +22,17 @@ function d2_oauth(): ?array {
     return preg_match('/^\d{1,10}$/', $id) && strlen($sec) >= 16 && $key !== '' ? ['id' => $id, 'secret' => $sec, 'key' => $key] : null;
 }
 
+/** Was fehlt für die Anmeldung? (nur Namen, keine Werte) */
+function d2_oauth_missing(): array {
+    $m = [];
+    if (d2_key() === '') $m[] = 'Bungie-API-Key (GN_BUNGIE_KEY)';
+    $id = (string)getenv('GN_BUNGIE_CLIENT_ID'); if ($id === '' && function_exists('setting')) $id = setting('d2_client_id', '');
+    if (!preg_match('/^\d{1,10}$/', $id)) $m[] = 'OAuth-Client-ID (GN_BUNGIE_CLIENT_ID)';
+    $sec = (string)getenv('GN_BUNGIE_CLIENT_SECRET'); if ($sec === '' && function_exists('setting')) $sec = setting('d2_client_secret', '');
+    if (strlen($sec) < 16) $m[] = 'OAuth-Client-Secret (GN_BUNGIE_CLIENT_SECRET)';
+    return $m;
+}
+
 function d2_cache_dir(string $sub = ''): string {
     $d = DATA_DIR . '/cache/d2' . ($sub !== '' ? '/' . $sub : '');
     if (!is_dir($d)) @mkdir($d, 0755, true);

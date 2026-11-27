@@ -20,7 +20,7 @@ $out = function (array $o, int $code = 200) { http_response_code($code); echo js
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') $out(['error' => 'Nur POST.'], 405);
 if (nw_rate_over('d2auth|' . client_ip(), 20)) $out(['error' => 'Zu viele Anfragen – bitte kurz warten.'], 429);
 $cfg = d2_oauth();
-if (!$cfg) $out(['error' => 'Die Anmeldung ist auf dem Server noch nicht eingerichtet.'], 503);
+if (!$cfg) $out(['error' => 'Die Anmeldung ist auf dem Server noch nicht eingerichtet – es fehlt: ' . implode(', ', d2_oauth_missing()) . '.'], 503);
 if (!hash_equals($cfg['id'], (string)($_SERVER['HTTP_X_D2_CLIENT'] ?? ''))) $out(['error' => 'Falsche App.'], 403);
 
 $in = json_decode((string)file_get_contents('php://input', false, null, 0, 8192), true);
