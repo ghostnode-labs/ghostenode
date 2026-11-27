@@ -9,6 +9,7 @@ declare(strict_types=1);
  * 18+-Clubs kommen mit 7.3 (dort gelten dann die NSFW-Regeln); hier nur SFW.
  */
 require_once __DIR__ . '/nexuscomm.php';
+require_once __DIR__ . '/clubs2.php';   // 7.2: Moderation 2.0, Tickets, Partner, Einladungslinks, Statistik
 
 const CL_JOIN = ['open' => 'offen', 'apply' => 'mit Bewerbung', 'invite' => 'nur mit Einladung'];
 const CL_TOPICS = ['allgemein' => '💬 Allgemein', 'furry' => '🦊 Furry', 'musik' => '🎵 Musik & DJ', 'rp' => '🎭 Rollenspiel', 'tanz' => '💃 Tanzen', 'kunst' => '🎨 Kunst & Avatare', 'chill' => '😌 Chillen', 'games' => '🎮 Spiele', 'lernen' => '📚 Lernen & Sprache', 'events' => '🎉 Partys'];
@@ -35,7 +36,7 @@ function cl_schema(): void {
     ");
     set_setting('clubs_schema', '1');
 }
-function cl_db(): PDO { cl_schema(); return nc_db(); }
+function cl_db(): PDO { cl_schema(); cl2_schema(); return nc_db(); }
 function cl_need_ok(array $who): void { $s = nc_sanction($who['vrc_id']); if (!empty($s['banned']) || (int)($s['mute_until'] ?? 0) > time()) throw new NcError('Dein Konto ist für die Community gerade gesperrt.'); }
 function cl_get(string $key): array {
     $st = cl_db()->prepare(ctype_digit($key) ? 'SELECT * FROM clubs WHERE id = ? AND status = \'active\'' : 'SELECT * FROM clubs WHERE slug = ? AND status = \'active\'');
@@ -112,12 +113,16 @@ function cl_list(array $who, array $opt): array {
 function cl_view(array $who, string $key): array {
     $c = cl_get($key); $role = cl_role($c, $who); $mem = in_array($role, ['owner', 'mod', 'member', 'site_mod'], true);
     $db = cl_db();
-    $out = ['club' => cl_pub($c, $who), 'events' => cl_events_of($who, $c, false), 'is_member' => $mem, 'is_staff' => cl_is_staff($c, $who)];
+    $out = ['club' => cl_pub($c, $who), 'events' => cl_events_of($who, $c, false), 'is_member' => $mem, 'is_staff' => cl_is_staff($c, $who),
+        'partners' => array_values(array_filter(cl2_partners($c), fn($x) => $x['status'] === 'active' || cl_is_staff($c, $who)))];
+    if ($b = cl2_ban((int)$c['id'], $who['vrc_id'])) $out['ban'] = ['until' => (int)$b['until'], 'reason' => $b['reason'], 'appeal_status' => $b['appeal_status']];
+    if ($out['is_staff']) { $qn = $db->prepare("SELECT COUNT(*) FROM club_posts WHERE club_id = ? AND status = 'pending'"); $qn->execute([$c['id']]); $out['queue'] = (int)$qn->fetchColumn();
+        $tn = $db->prepare("SELECT COUNT(*) FROM club_tickets WHERE club_id = ? AND status = 'open'"); $tn->execute([$c['id']]); $out['tickets_open'] = (int)$tn->fetchColumn(); }
     if ($mem || $c['join_mode'] === 'open') {
-        $p = $db->prepare('SELECT * FROM club_posts WHERE club_id = ? ORDER BY pinned DESC, id DESC LIMIT 50'); $p->execute([$c['id']]); $posts = $p->fetchAll(PDO::FETCH_ASSOC);
+        $p = $db->prepare("SELECT * FROM club_posts WHERE club_id = ? AND (status = 'ok' OR author = ?) ORDER BY pinned DESC, id DESC LIMIT 50"); $p->execute([$c['id'], $who['vrc_id']]); $posts = $p->fetchAll(PDO::FETCH_ASSOC);
         $g = $db->prepare('SELECT * FROM club_gallery WHERE club_id = ? ORDER BY id DESC LIMIT 60'); $g->execute([$c['id']]); $gal = $g->fetchAll(PDO::FETCH_ASSOC);
         $names = nc_names(array_merge(array_column($posts, 'author'), array_column($gal, 'author')));
-        $out['posts'] = array_map(fn($x) => ['id' => (int)$x['id'], 'author' => $x['author'], 'name' => (string)($names[$x['author']] ?? ''), 'text' => $x['text'], 'own' => $x['author'] === $who['vrc_id'], 'pinned' => (bool)$x['pinned'], 'created' => (int)$x['created']], $posts);
+        $out['posts'] = array_map(fn($x) => ['id' => (int)$x['id'], 'author' => $x['author'], 'name' => (string)($names[$x['author']] ?? ''), 'text' => $x['text'], 'own' => $x['author'] === $who['vrc_id'], 'held' => ($x['status'] ?? 'ok') === 'pending', 'pinned' => (bool)$x['pinned'], 'created' => (int)$x['created']], $posts);
         $out['gallery'] = array_map(fn($x) => ['id' => (int)$x['id'], 'url' => $x['url'], 'caption' => $x['caption'], 'name' => (string)($names[$x['author']] ?? ''), 'created' => (int)$x['created']], $gal);
     }
     if ($mem) {
@@ -133,17 +138,20 @@ function cl_view(array $who, string $key): array {
     }
     return $out;
 }
-function cl_join(array $who, string $key, array $answers): array {
+function cl_join(array $who, string $key, array $answers, string $code = ''): array {
     cl_need_ok($who);
     $c = cl_get($key); $m = cl_member((int)$c['id'], $who['vrc_id']);
+    if ($b = cl2_ban((int)$c['id'], $who['vrc_id'])) throw new NcError('Du bist in diesem Club gesperrt' . ((int)$b['until'] ? ' bis ' . date('d.m.Y H:i', (int)$b['until']) : '') . ($b['reason'] !== '' ? ' (' . $b['reason'] . ')' : '') . '. Einspruch ist im Club möglich.');
+    $invited = $code !== '' && $c['join_mode'] !== 'open' && cl2_invite_use($c, $code);
+    if ($code !== '' && $c['join_mode'] !== 'open' && !$invited) throw new NcError('Der Einladungslink ist ungültig oder abgelaufen.');
     if ($m && $m['status'] === 'active') return ['msg' => 'Du bist schon Mitglied.'];
     if ($m && $m['status'] === 'banned') throw new NcError('Du bist aus diesem Club ausgeschlossen.');
     if ($m && $m['status'] === 'pending') return ['msg' => 'Deine Bewerbung wird geprüft.'];
-    if ($c['join_mode'] === 'invite') throw new NcError('Diesem Club tritt man nur mit Einladung bei.');
+    if ($c['join_mode'] === 'invite' && !$invited) throw new NcError('Diesem Club tritt man nur mit Einladung bei.');
     $q = json_decode($c['questions'], true) ?: [];
     $ans = [];
-    if ($c['join_mode'] === 'apply') foreach ($q as $i => $qq) { $a = nc_cut((string)($answers[$i] ?? ''), 500); if ($a === '') throw new NcError('Bitte alle Einlass-Fragen beantworten.'); $ans[] = ['q' => $qq, 'a' => $a]; }
-    $status = $c['join_mode'] === 'open' ? 'active' : 'pending';
+    if ($c['join_mode'] === 'apply' && !$invited) foreach ($q as $i => $qq) { $a = nc_cut((string)($answers[$i] ?? ''), 500); if ($a === '') throw new NcError('Bitte alle Einlass-Fragen beantworten.'); $ans[] = ['q' => $qq, 'a' => $a]; }
+    $status = $c['join_mode'] === 'open' || $invited ? 'active' : 'pending';
     cl_db()->prepare('INSERT OR REPLACE INTO club_members (club_id, vrc_id, role, status, answers, joined) VALUES (?, ?, \'member\', ?, ?, ?)')->execute([$c['id'], $who['vrc_id'], $status, json_encode($ans, JSON_UNESCAPED_UNICODE), time()]);
     return ['msg' => $status === 'active' ? '🎉 Willkommen im Club!' : '📨 Bewerbung gesendet – die Club-Leitung meldet sich.', 'status' => $status];
 }
@@ -168,7 +176,7 @@ function cl_manage(array $who, string $key, string $do, string $target): array {
         case 'promote': if (!$isOwner) throw new NcError('Nur die Besitzer:in vergibt Rollen.'); $db->prepare("UPDATE club_members SET role = 'mod' WHERE club_id = ? AND vrc_id = ? AND status = 'active'")->execute([$c['id'], $target]); return ['msg' => 'Jetzt Moderator:in.'];
         case 'demote': $db->prepare("UPDATE club_members SET role = 'member' WHERE club_id = ? AND vrc_id = ?")->execute([$c['id'], $target]); return ['msg' => 'Jetzt Mitglied.'];
         case 'kick': $db->prepare('DELETE FROM club_members WHERE club_id = ? AND vrc_id = ?')->execute([$c['id'], $target]); return ['msg' => 'Entfernt.'];
-        case 'ban': $db->prepare("INSERT OR REPLACE INTO club_members (club_id, vrc_id, role, status, joined) VALUES (?, ?, 'member', 'banned', ?)")->execute([$c['id'], $target, time()]); return ['msg' => 'Ausgeschlossen.'];
+        case 'ban': return cl2_ban_set($who, $c, $target, 0, '');   // 7.2: Sperren mit Ablauf über cl2_action('ban')
         case 'transfer': if ($c['owner'] !== $who['vrc_id']) throw new NcError('Nur die Besitzer:in.'); if (!$m || $m['status'] !== 'active') throw new NcError('Nur an Mitglieder.');
             $db->prepare('UPDATE clubs SET owner = ? WHERE id = ?')->execute([$target, $c['id']]); $db->prepare("UPDATE club_members SET role = 'owner' WHERE club_id = ? AND vrc_id = ?")->execute([$c['id'], $target]);
             $db->prepare("UPDATE club_members SET role = 'mod' WHERE club_id = ? AND vrc_id = ?")->execute([$c['id'], $who['vrc_id']]); return ['msg' => 'Leitung übergeben.'];
@@ -179,8 +187,9 @@ function cl_post(array $who, string $key, string $text): array {
     cl_need_ok($who); $c = cl_get($key); cl_need_member($c, $who);
     $t = nc_cut($text, 2000); if ($t === '') throw new NcError('Leerer Beitrag.');
     if (nw_rate_over('clp|' . $who['vrc_id'], 20)) throw new NcError('Zu viele Beiträge – kurz warten.');
-    cl_db()->prepare('INSERT INTO club_posts (club_id, author, text, created) VALUES (?, ?, ?, ?)')->execute([$c['id'], $who['vrc_id'], $t, time()]);
-    return ['msg' => 'Gepostet.'];
+    $held = !cl_is_staff($c, $who) && cl2_filtered($c, $t);
+    cl_db()->prepare('INSERT INTO club_posts (club_id, author, text, created, status) VALUES (?, ?, ?, ?, ?)')->execute([$c['id'], $who['vrc_id'], $t, time(), $held ? 'pending' : 'ok']);
+    return ['msg' => $held ? '⏳ Dein Beitrag wird von der Club-Leitung geprüft (Wortfilter).' : 'Gepostet.'];
 }
 function cl_post_mod(array $who, string $key, int $id, string $do): array {
     $c = cl_get($key); $st = cl_db()->prepare('SELECT * FROM club_posts WHERE id = ? AND club_id = ?'); $st->execute([$id, $c['id']]); $p = $st->fetch(PDO::FETCH_ASSOC);
@@ -304,7 +313,7 @@ function cl_action(array $who, string $a, array $in): array {
         case 'view': return cl_view($who, $k);
         case 'create': return cl_create($who, $in);
         case 'update': return cl_update($who, $k, $in);
-        case 'join': return cl_join($who, $k, (array)($in['answers'] ?? []));
+        case 'join': return cl_join($who, $k, (array)($in['answers'] ?? []), (string)($in['code'] ?? ''));
         case 'leave': return cl_leave($who, $k);
         case 'manage': return cl_manage($who, $k, (string)($in['do'] ?? ''), (string)($in['target'] ?? ''));
         case 'post': return cl_post($who, $k, (string)($in['text'] ?? ''));
@@ -316,5 +325,5 @@ function cl_action(array $who, string $a, array $in): array {
         case 'rsvp': return cl_rsvp($who, (int)($in['id'] ?? 0), (string)($in['status'] ?? ''));
         case 'calendar': return cl_calendar($who, $in);
     }
-    throw new NcError('Unbekannte Aktion.');
+    return cl2_action($who, $a, $in);   // 7.2
 }

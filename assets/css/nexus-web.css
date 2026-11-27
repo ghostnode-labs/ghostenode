@@ -132,3 +132,10 @@ body.nav-side .vx-sidefoot { display: flex; flex-direction: column; gap: 2px; ma
 .cl-mem { padding: 4px 0; border-bottom: 1px solid var(--border-color); }
 #nwClubs .nw-row select, #nwClubs .nw-row input[type=search] { width: auto; flex: 1; min-width: 130px; }
 #nwClubs a[data-goclub], #nwClubs a[data-goclub]:visited { color: var(--accent-cyan); }
+/* 7.2 Clubs 2.0 */
+.cl-held { opacity: .7; border-style: dashed; }
+.cl-ban-box { margin-top: 8px; padding: 8px 10px; border: 1px solid var(--accent-red, #ff5c7a); background: rgba(255, 92, 122, .08); }
+.cl-msg { padding: 8px 0; border-bottom: 1px solid var(--border-color); } .cl-msg.staff b { color: var(--accent-cyan); }
+.cl-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 10px; margin-bottom: 10px; }
+.cl-kpis .nw-card { text-align: center; } .cl-kpis span { font-size: 1.4rem; display: block; } .cl-kpis b { font-size: 1.5rem; display: block; color: var(--accent-gold); } .cl-kpis small { color: var(--text-muted); }
+.cl-spark { display: flex; align-items: flex-end; gap: 6px; height: 90px; } .cl-spark i { flex: 1; background: linear-gradient(var(--accent-gold), var(--accent-cyan)); min-height: 4px; }
