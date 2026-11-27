@@ -50,7 +50,7 @@ const PAGE_DEFAULTS = [
 const PAGE_REQUIRED_PERMISSION = ['budget.php' => 'budget.access', 'con.php' => 'con.access', 'backup.php' => 'backup.download', 'nexus.php' => 'vrcx.access', 'discord.php' => 'discord.manage', 'nsfw.php' => 'nsfw.browse'];
 
 /** Seiten, die nie im Register auftauchen (Hilfsdateien) */
-const PAGE_IGNORE = ['index.php', 'events.php', 'nexusclubs.php', 'dashboard.php', 'p.php', 'page.php', 'preview.php', 'vrcx.php', 'widgets.php', 'client.php', 'cron.php',
+const PAGE_IGNORE = ['index.php', 'events.php', 'nexusclubs.php', 'twitchext.php', 'dashboard.php', 'p.php', 'page.php', 'preview.php', 'vrcx.php', 'widgets.php', 'client.php', 'cron.php',
     // Schnittstellen (keine Seiten): App-APIs, Anmeldung, Sitzungs-Wächter
     'auth-discord.php', 'nexuspulse.php', 'nexuslic.php', 'nexusacct.php', 'nexuschat.php', 'nexuscomm.php', 'nexuswarn.php', 'toyrelay.php', 'session.php',
     // 6.6: eigene Bereiche (im Menü fest bzw. persönlich)

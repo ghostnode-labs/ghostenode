@@ -17,6 +17,7 @@ $KINDS = [
     'android'  => ['📱', 'Android', fn($n) => str_ends_with($n, '-android.apk'), 'APK auf dem Handy öffnen und „Aus dieser Quelle installieren“ erlauben. Danach aktualisiert sich die App selbst. Nicht die Wear-OS-Datei nehmen!'],
     'watch'    => ['⌚', 'Wear OS (Nexus Watch)', fn($n) => str_contains($n, 'Watch') && str_ends_with($n, '.apk'), 'Für die Uhr: per ADB installieren oder über die Handy-App (Werkzeuge → Nexus Watch). Braucht Wear OS 3 oder neuer.'],
     'pet'      => ['🐾', 'Nexus Pet (Android)', fn($n) => str_starts_with($n, 'Nexus-Pet') && str_ends_with($n, '.apk'), 'Eigene App: ein virtuelles Haustier – zieh deinen Geistling auf (füttern, spielen, putzen, Entwicklung in 13 Formen, Widget). Unabhängig von VRC Nexus; funktioniert ohne Konto und ohne Internet.'],
+    'twitch'   => ['🟣', 'Twitch-Panel (Erweiterung)', fn($n) => str_contains($n, 'Twitch-Extension') && str_ends_with($n, '.zip'), 'Für Streamer: zeigt Zuschauern unter dem Stream Welt, Puls, Song, Ziel, Umfrage (mit Abstimmen), Befehle und Belohnungen. In der Twitch-Entwicklerkonsole hochladen – Anleitung im Repo (apps/twitch-extension).'],
     'deck'     => ['🎛', 'Stream-Deck-Plugin', fn($n) => str_ends_with($n, '.streamDeckPlugin'), 'Doppelklicken – die Stream-Deck-App installiert das Plugin. Liegt auch der Windows-App bei (Werkzeuge → Stream Deck).'],
 ];
 $size = fn(int $b) => $b > 1048576 ? number_format($b / 1048576, 1, ',', '.') . ' MB' : max(1, (int)round($b / 1024)) . ' KB';
