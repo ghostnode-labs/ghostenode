@@ -36,11 +36,10 @@ Stehen die Einträge noch nicht, läuft trotzdem alles. Die Zertifikate holst du
 ## Einrichten
 
 ```bash
-# als root auf dem Server
-apt-get update && apt-get install -y git
-git clone https://github.com/ghostnode-labs/ghostenode.git /root/ghostenode
-bash /root/ghostenode/server/ghostnode-root.sh install
+# als root auf dem Server – holt Git, das Repo (oder aktualisiert es) und startet die Einrichtung
+curl -fsSL https://raw.githubusercontent.com/ghostnode-labs/ghostenode/main/server/install.sh | bash
 ```
+Derselbe Befehl später noch einmal führt ein Update aus.
 
 Das Script fragt nach Rolle, Domain, E-Mail für Let's Encrypt, Adressen und Schlüsseln.
 **Alle Schlüssel sind optional.** Lässt du einen leer, bleibt die Funktion aus, bis du sie mit `… secrets` nachträgst.
@@ -111,12 +110,32 @@ Optionen: `--yes` (keine Rückfragen), `--no-tls`, `--only=hr,bot`, `--skip=voic
 
 Logs: `journalctl -u ghostnode-bot -f`, `journalctl -u ghostnode-hr -f` (mit Eggs: Konsole im Panel), `/var/log/nginx/`, `/var/log/apache2/ghostnode-error.log`.
 
-## Umzug der Webseite von Plesk (nur wenn du später auf `alles` wechselst)
+## Umzug von Plesk auf den Root-Server (alles)
 
-1. Auf dem alten Server: Admin → System → Backup erstellen und herunterladen.
-2. `ROLE=alles` in `/etc/ghostnode/setup.conf` setzen, `… install` erneut ausführen, Besitzer-Konto anlegen.
-3. Admin → System → **Backup-Datei hochladen und wiederherstellen**.
-4. DNS für `<domain>`/`www` umstellen, dann `… certs`.
+Auf dem neuen Server laufen danach Webseite, MySQL/MariaDB, HypeRate, Bot, TURN und Mumble. nginx steht als Reverse Proxy vorne und übernimmt HTTPS.
+
+**1. In Plesk zwei Dateien holen**
+- Datenbank: Websites & Domains → Datenbanken → deine Datenbank → **Exportieren** (Dump, ergibt eine `.zip`)
+- Dateien: Dateien → `httpdocs` → `data` und `uploads` anhaken → **Zu Archiv hinzufügen** (zip) → herunterladen
+
+Beide Dateien per SFTP/WinSCP nach `/root/` auf den neuen Server laden.
+
+**2. Auf dem neuen Server (als root)**
+```bash
+curl -fsSL https://raw.githubusercontent.com/ghostnode-labs/ghostenode/main/server/install.sh | bash -s -- migrate --db=/root/DATENBANK.zip --files=/root/DATEIEN.zip
+```
+Das Script richtet die Webseite ein (Rolle `alles`), sichert den bisherigen Stand und spielt die Datenbank ein. Dabei werden `DEFINER`-Angaben von Plesk entfernt und das Tabellen-Präfix wird übernommen. Danach übernimmt es `data/` mit den Schlüsseln, JSON-Daten und Bildern sowie `uploads/`. Schlägt der Import fehl, wird der vorherige Stand automatisch zurückgespielt.
+
+Statt der Export-Datei geht auch die direkte Verbindung zur Plesk-MySQL. Dafür muss in Plesk beim Datenbank-Benutzer der Fernzugriff erlaubt sein:
+```bash
+bash /root/ghostenode/server/ghostnode-root.sh migrate --from=PLESK-HOST --src-db=NAME --src-user=BENUTZER --files=/root/DATEIEN.zip
+```
+
+**3. Umschalten**
+1. Testen: in der `hosts`-Datei deines PCs `<Server-IP> <domain> www.<domain>` eintragen und die Seite öffnen.
+2. DNS: A-Einträge für `<domain>`, `www`, `hr`, `discord`, `turn`, `voice` auf die neue IP setzen; CNAMEs auf Plesk löschen.
+3. `bash /root/ghostenode/server/ghostnode-root.sh certs` holt die Zertifikate.
+4. Plesk erst abschalten, wenn alles läuft. Die Sicherung vom Stand vor dem Umzug liegt unter `/var/backups/ghostnode/vor-umzug-…`.
 
 ## Getestet
 

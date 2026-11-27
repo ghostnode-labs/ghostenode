@@ -27,6 +27,10 @@
 #    bash ghostnode-root.sh secrets            Schlüssel (Discord, HypeRate, SMTP …) ändern und übernehmen
 #    bash ghostnode-root.sh check              alles prüfen (Dienste, Seiten, PHP-Erweiterungen, Zertifikate)
 #    bash ghostnode-root.sh backup             Server-Backup jetzt (Datenbank, data/, Bot-Daten, Einstellungen)
+#    bash ghostnode-root.sh migrate …          Umzug von Plesk: MySQL-Datenbank + data/ + uploads/ (richtet die Webseite hier ein)
+#        --db=/root/plesk-dump.zip            Datenbank-Export aus Plesk (.sql, .sql.gz oder .zip)
+#        --from=HOST --src-db=NAME --src-user=BENUTZER [--src-port=3306]   … oder direkt von der Plesk-MySQL (Passwort wird gefragt)
+#        --files=/root/httpdocs.zip           Zip/Tar des Plesk-Webordners (oder nur data/ + uploads/)
 #  Optionen:
 #    --yes            keine Rückfragen (Werte aus /etc/ghostnode/setup.conf bzw. Umgebung)
 #    --no-tls         keine Zertifikate holen (Test / DNS noch nicht umgestellt)
@@ -74,13 +78,20 @@ trap 'echo "${c_err}✖ Abbruch in Zeile $LINENO: $BASH_COMMAND${c_0}" >&2' ERR
 
 # ---------------------------------------------------------------- Optionen
 CMD=${1:-install}; [ $# -gt 0 ] && shift
-YES=0; NO_TLS=0; ONLY=""; SKIP=""
+ARGS=("$@")
+YES=0; NO_TLS=0; ONLY=""; SKIP=""; MIG_DB=""; MIG_FILES=""; MIG_FROM=""; MIG_SRC_DB=""; MIG_SRC_USER=""; MIG_SRC_PORT=3306
 for a in "$@"; do
     case "$a" in
         --yes|-y) YES=1 ;;
         --no-tls) NO_TLS=1 ;;
         --only=*) ONLY=${a#--only=} ;;
         --skip=*) SKIP=${a#--skip=} ;;
+        --db=*) MIG_DB=${a#--db=} ;;
+        --files=*) MIG_FILES=${a#--files=} ;;
+        --from=*) MIG_FROM=${a#--from=} ;;
+        --src-db=*) MIG_SRC_DB=${a#--src-db=} ;;
+        --src-user=*) MIG_SRC_USER=${a#--src-user=} ;;
+        --src-port=*) MIG_SRC_PORT=${a#--src-port=} ;;
         -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
         *) die "Unbekannte Option: $a (Hilfe: --help)" ;;
     esac
@@ -253,7 +264,8 @@ detect_env() {
 # Rolle „dienste“: Webseite bleibt auf Plesk → Teile der Webseite auslassen, nginx vorne
 apply_role() {
     ROLE=${ROLE:-alles}; RUN_MODE=${RUN_MODE:-systemd}; VOICE_HOST=${VOICE_HOST:-voice.${DOMAIN:-example.org}}
-    if [ "$ROLE" = dienste ]; then SKIP="${SKIP:+$SKIP,}web,db,ftp,mail"; FRONT=nginx; fi
+    if [ "$ROLE" = dienste ]; then SKIP="${SKIP:+$SKIP,}web,db,ftp,mail"; fi
+    FRONT=nginx   # immer nginx als Reverse Proxy vorne (80/443, TLS) – Webseite (Apache intern), Bot, HypeRate dahinter
     return 0
 }
 port_owner() { { ss -ltnupH "sport = :$1" 2>/dev/null | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2; } || true; }
@@ -408,7 +420,7 @@ EOF
     ok "Apache: $DOMAIN → $WEB_DIR$([ "$FRONT" = nginx ] && echo " (über nginx → 127.0.0.1:$BACKEND_PORT)")"
 }
 
-# nginx vorne (Pterodactyl-Modus): ein Server-Block je Name, Ziel = interner Port
+# nginx als Reverse Proxy vorne: ein Server-Block je Name, Ziel = interner Port (Apache, Bot, HypeRate, Panel-Zuweisung)
 nginx_site() {   # nginx_site NAME "HOSTS" PORT web|sse|plain|redirect
     local name=$1 hosts=$2 port=$3 kind=$4 f=/etc/nginx/sites-available/$1.conf up
     up=$port; [[ "$up" == *:* ]] || up="127.0.0.1:$up"
@@ -442,7 +454,7 @@ nginx_site() {   # nginx_site NAME "HOSTS" PORT web|sse|plain|redirect
         rm -f "/etc/nginx/sites-enabled/$name.conf" "$f"
         die "nginx-Konfiguration fehlerhaft ($name) – zurückgenommen, nichts verändert: $why"
     fi
-    svc reload nginx 2>/dev/null || svc restart nginx
+    if is_active nginx; then svc reload nginx 2>/dev/null || svc restart nginx; else svc enable nginx 2>/dev/null || true; svc restart nginx; fi   # z. B. frisch installiert, während Apache noch auf 80 lag
 }
 
 setup_db() {
@@ -992,6 +1004,122 @@ summary() {
     if [ ${#WARNINGS[@]} -gt 0 ]; then echo; echo "${c_warn}Hinweise:${c_0}"; for w in "${WARNINGS[@]}"; do echo "  ⚠ $w"; done; fi
 }
 
+# ---------------------------------------------------------------- Umzug von Plesk (MySQL + Dateien)
+mig_extract() {   # mig_extract ARCHIV ZIEL – Zip oder Tar sicher entpacken (keine absoluten Pfade, kein „..“, keine Links)
+    python3 - "$1" "$2" <<'PY'
+import sys, os, zipfile, tarfile
+src, dst = sys.argv[1], os.path.realpath(sys.argv[2])
+def safe(n):
+    p = os.path.realpath(os.path.join(dst, n))
+    return p == dst or p.startswith(dst + os.sep)
+if zipfile.is_zipfile(src):
+    with zipfile.ZipFile(src) as z:
+        for i in z.infolist():
+            if not safe(i.filename) or (i.external_attr >> 16) & 0o170000 == 0o120000: continue
+            z.extract(i, dst)
+else:
+    with tarfile.open(src) as t:
+        for m in t.getmembers():
+            if (m.isfile() or m.isdir()) and safe(m.name): t.extract(m, dst, set_attrs=False)
+PY
+}
+mig_sql() {   # Datenbank-Export → $1 (reines SQL)
+    local out=$1 tmp
+    if [ -n "$MIG_FROM" ]; then
+        [ -n "$MIG_SRC_DB" ] && [ -n "$MIG_SRC_USER" ] || die "Für --from bitte auch --src-db=NAME und --src-user=BENUTZER angeben."
+        local pw="${MIG_SRC_PASS:-}"
+        if [ -z "$pw" ]; then [ -t 0 ] || die "Passwort fehlt (MIG_SRC_PASS setzen oder im Terminal starten)."; read -r -s -p "  Passwort der Plesk-Datenbank ($MIG_SRC_USER@$MIG_FROM): " pw; echo; fi
+        tmp=$(mktemp); chmod 600 "$tmp"
+        printf '[client]\nhost=%s\nport=%s\nuser=%s\npassword="%s"\n' "$MIG_FROM" "$MIG_SRC_PORT" "$MIG_SRC_USER" "${pw//\"/\\\"}" > "$tmp"
+        ok "Hole die Datenbank „$MIG_SRC_DB“ direkt von $MIG_FROM …"
+        if ! mysqldump --defaults-extra-file="$tmp" --single-transaction --quick --skip-lock-tables --no-tablespaces --default-character-set=utf8mb4 "$MIG_SRC_DB" > "$out" 2>"$out.err"; then
+            rm -f "$tmp"; die "Plesk-MySQL nicht erreichbar oder Zugang falsch: $(tail -1 "$out.err") – in Plesk für den Datenbank-Benutzer Fernzugriff erlauben (oder Export-Datei mit --db nutzen)."
+        fi
+        rm -f "$tmp" "$out.err"; return
+    fi
+    [ -f "$MIG_DB" ] || die "Datenbank-Export nicht gefunden: $MIG_DB"
+    case "$MIG_DB" in
+        *.gz) gunzip -c "$MIG_DB" > "$out" ;;
+        *.zip)
+            tmp=$(mktemp -d); mig_extract "$MIG_DB" "$tmp"
+            local f; f=$(find "$tmp" -type f -name '*.sql' -printf '%s %p\n' | sort -rn | head -1 | cut -d' ' -f2-)
+            [ -n "$f" ] || die "Im Zip ist keine .sql-Datei."
+            mv "$f" "$out"; rm -r "$tmp" ;;
+        *) cp "$MIG_DB" "$out" ;;
+    esac
+}
+cmd_migrate() {
+    [ -n "$MIG_DB$MIG_FROM" ] || die "Datenbank angeben: --db=/root/export.zip oder --from=HOST --src-db=NAME --src-user=BENUTZER (Hilfe: --help)"
+    [ -z "$MIG_FILES" ] || [ -f "$MIG_FILES" ] || die "Datei-Archiv nicht gefunden: $MIG_FILES"
+    if [ ! -f "$CONF" ] || [ "${ROLE:-}" != alles ] || [ ! -d "$WEB_DIR/.git" ]; then
+        step "Webseite auf diesem Server einrichten (Rolle „alles“)"
+        if [ -f "$CONF" ]; then sed -i "s/^ROLE=.*/ROLE='alles'/" "$CONF"; grep -q '^ROLE=' "$CONF" || echo "ROLE='alles'" >> "$CONF"; fi
+        local yes=(); [ "$YES" = 1 ] && yes=(--yes)
+        ROLE=alles DB_ENGINE=mariadb bash "$0" install "${yes[@]}" --no-tls || die "Einrichtung der Webseite fehlgeschlagen."   # Zertifikate erst nach der DNS-Umstellung (certs)
+        exec bash "$0" migrate "${ARGS[@]}"
+    fi
+    [ "$DB_ENGINE" = mariadb ] || die "Die Webseite hier nutzt SQLite – für den MySQL-Umzug DB_ENGINE='mariadb' in $CONF setzen und „install“ erneut ausführen."
+    command -v python3 >/dev/null || apt-get install -y -qq python3 >/dev/null
+    local ts work sql cfg="$WEB_DIR/data/config.php" pre safety
+    ts=$(date +%Y%m%d-%H%M%S); work=$(mktemp -d /root/ghostnode-umzug.XXXXXX); chmod 700 "$work"; sql="$work/datenbank.sql"
+    step "Datenbank-Export lesen"
+    mig_sql "$sql"
+    [ -s "$sql" ] || die "Der Export ist leer."
+    pre=$(grep -m1 -oE 'CREATE TABLE (IF NOT EXISTS )?`[A-Za-z0-9_]*users`' "$sql" | sed -E 's/.*`([A-Za-z0-9_]*)users`/\1/' || true)
+    grep -m1 -E 'CREATE TABLE (IF NOT EXISTS )?`[A-Za-z0-9_]*users`' "$sql" >/dev/null || die "Das sieht nicht nach der GhostNode-Datenbank aus (keine Tabelle …users)."
+    ok "$(grep -c '^CREATE TABLE' "$sql" || true) Tabellen, Präfix „${pre:-–}“, $(du -h "$sql" | cut -f1)"
+    sed -i -E 's/DEFINER=`[^`]*`@`[^`]*`//g; s/^SET @@GLOBAL\.GTID_PURGED.*$//' "$sql"   # Plesk-Benutzer gibt es hier nicht
+    step "Sicherung vor dem Umzug"
+    mkdir -p /var/backups/ghostnode; safety=/var/backups/ghostnode/vor-umzug-$ts
+    mkdir -p "$safety"; chmod 700 "$safety"
+    mysqldump --single-transaction "$DB_NAME" > "$safety/datenbank.sql"
+    tar -czf "$safety/data.tar.gz" -C "$WEB_DIR" data $( [ -d "$WEB_DIR/uploads" ] && echo uploads ) 2>/dev/null || true
+    ok "$safety"
+    step "Datenbank übernehmen"
+    svc stop apache2 >/dev/null 2>&1 || true   # kurz Wartung: nginx zeigt 502, nichts schreibt dazwischen
+    mysql --protocol=socket -uroot -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci; GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost'; FLUSH PRIVILEGES;"
+    if ! mysql --protocol=socket -uroot --default-character-set=utf8mb4 "$DB_NAME" < "$sql" 2>"$work/import.err"; then
+        warn "Import fehlgeschlagen: $(tail -1 "$work/import.err") – stelle den vorherigen Stand wieder her."
+        mysql --protocol=socket -uroot -e "DROP DATABASE IF EXISTS \`$DB_NAME\`; CREATE DATABASE \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"
+        mysql --protocol=socket -uroot "$DB_NAME" < "$safety/datenbank.sql"; svc start apache2 || true
+        die "Umzug abgebrochen, alter Stand wiederhergestellt. Export prüfen (vollständig? richtige Datenbank?)."
+    fi
+    ok "$(mysql --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME'") Tabellen importiert"
+    if [ -n "$pre" ] && [ -f "$cfg" ]; then
+        sed -i -E "s/\"prefix\": *\"[A-Za-z0-9_]*\"/\"prefix\": \"$pre\"/" "$cfg"; ok "Tabellen-Präfix „$pre“ in data/config.php"
+    fi
+    if [ -n "$MIG_FILES" ]; then
+        step "Dateien übernehmen (data/, uploads/)"
+        local x="$work/dateien" d u
+        mkdir -p "$x"; mig_extract "$MIG_FILES" "$x"
+        d=$(find "$x" -maxdepth 4 -type d -name data \( -exec test -d '{}/keys' \; -o -exec test -d '{}/json' \; -o -exec test -d '{}/db' \; \) -print | head -1)
+        u=$(find "$x" -maxdepth 4 -type d -name uploads -print | head -1)
+        [ -z "$d" ] && [ -n "$(find "$x" -maxdepth 1 -mindepth 1 -name keys -o -maxdepth 1 -mindepth 1 -name json)" ] && d=$x   # Archiv enthält direkt den Inhalt von data/
+        [ -n "$d$u" ] || die "Im Archiv weder data/ noch uploads/ gefunden."
+        if [ -n "$d" ]; then
+            rm -f "$d/config.php"   # Datenbank-Zugang dieses Servers behalten
+            cp -a "$d/." "$WEB_DIR/data/"; ok "data/ übernommen (Schlüssel: $(ls "$d"/keys/.*_key_*.php 2>/dev/null | wc -l))"
+            [ -d "$d/keys" ] || warn "Keine Schlüssel (data/keys) im Archiv – verschlüsselte Einstellungen (z. B. Discord-Secret) müssen neu eingetragen werden."
+        fi
+        if [ -n "$u" ]; then mkdir -p "$WEB_DIR/uploads"; cp -a "$u/." "$WEB_DIR/uploads/"; ok "uploads/ übernommen ($(find "$u" -type f | wc -l) Dateien)"; fi
+        chown -R "$APP_USER:$APP_USER" "$WEB_DIR/data" "$WEB_DIR/uploads" 2>/dev/null || true
+        chmod 600 "$cfg"
+    else
+        warn "Ohne --files: Schlüssel, JSON-Daten und Bilder aus Plesk fehlen (data/, uploads/) – später mit „migrate --db=… --files=…“ nachholen."
+    fi
+    svc start apache2
+    rm -rf "$work"
+    step "Ergebnis"
+    local c; c=$(http_code "$DOMAIN" "/")
+    [[ "$c" =~ ^(200|301|302)$ ]] && ok "Webseite antwortet ($c)" || fail "Webseite antwortet mit $c – Log: /var/log/apache2/ghostnode-error.log"
+    echo
+    echo "  ${c_b}Nächste Schritte:${c_0}"
+    echo "   1. Anmelden testen:  in /etc/hosts deines PCs „$(public_ip) $DOMAIN www.$DOMAIN“ eintragen und https://$DOMAIN öffnen (oder erst nach DNS)."
+    echo "   2. DNS: A-Einträge für $DOMAIN und www.$DOMAIN auf $(public_ip) (CNAMEs auf Plesk löschen)."
+    echo "   3. Zertifikat:  bash $0 certs"
+    echo "   4. Plesk erst abschalten, wenn alles läuft. Sicherung vom Stand vorher: $safety"
+}
+
 # ---------------------------------------------------------------- Befehle
 load_conf
 detect_env
@@ -1035,6 +1163,7 @@ case "$CMD" in
         want mail && setup_mail; want web && setup_web; want hr && setup_hr; want bot && setup_bot
         check_all || true ;;
     check)  [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; check_all ;;
+    migrate) cmd_migrate ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
-    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup)" ;;
+    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate)" ;;
 esac
