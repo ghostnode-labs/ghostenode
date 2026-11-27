@@ -17,6 +17,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($k !== '' && !preg_match('/^[a-f0-9]{32}$/i', $k)) $msg = '✖ Der API-Key hat 32 Zeichen (0-9, a-f).';
         else { set_setting('d2_bungie_key', $k); audit('D2 Nexus: Bungie-API-Key ' . ($k === '' ? 'entfernt' : 'gespeichert'), '', 'security'); @unlink(d2_cache_dir() . '/overview.json'); $msg = $k === '' ? '✔ Key entfernt.' : '✔ Key gespeichert.'; }
     }
+    if (($_POST['action'] ?? '') === 'd2_oauth') {
+        $id = trim((string)($_POST['d2_cid'] ?? '')); $sec = trim((string)($_POST['d2_csec'] ?? ''));
+        if ($id !== '' && !preg_match('/^\d{1,10}$/', $id)) $msg = '✖ Die Client-ID ist eine Zahl.';
+        elseif ($sec !== '' && strlen($sec) < 16) $msg = '✖ Das Client-Secret ist zu kurz.';
+        else {
+            set_setting('d2_client_id', $id);
+            if ($sec !== '' || !empty($_POST['d2_csec_del'])) set_setting('d2_client_secret', $sec);
+            audit('D2 Nexus: Bungie-OAuth geändert', 'Client-ID ' . ($id ?: '–'), 'security');
+            $msg = '✔ Anmelde-Einstellungen gespeichert.';
+        }
+    }
     if (($_POST['action'] ?? '') === 'd2_refresh') { d2_overview(true); $msg = '✔ Neu geladen.'; }
 }
 
@@ -113,6 +124,16 @@ body.d2{padding:0;display:block}.d2-wrap{box-sizing:border-box;max-width:1180px;
       Status: <?= d2_key() !== '' ? '<b style="color:#4ade80">eingetragen</b>' . (getenv('GN_BUNGIE_KEY') ? ' (aus der Umgebung)' : '') : '<b>fehlt</b>' ?></p>
     <form method="post" style="display:flex;gap:8px;flex-wrap:wrap"><input type="hidden" name="action" value="d2_key"><input name="d2_key" type="password" placeholder="32 Zeichen (leer = entfernen)" autocomplete="off" style="flex:1;min-width:240px"><button class="btn">Speichern</button></form>
     <form method="post" style="margin-top:8px"><input type="hidden" name="action" value="d2_refresh"><button class="btn">⟳ Jetzt neu laden</button></form>
+  </div></div>
+  <div class="sec">// Admin: Anmeldung der D2-Nexus-App (eingebaute Bungie-App)</div>
+  <div class="d2-card"><div class="bd">
+    <p class="muted">Damit sich Nutzer in D2 Nexus nur noch anmelden müssen, tauscht dieser Server den Anmelde-Code mit dem Client-Secret ein (<code>d2auth.php</code>). Bungie-App: Typ <b>Confidential</b>, Redirect-URL <code>https://<?= e($_SERVER['HTTP_HOST'] ?? 'ghostnode-labs.dev') ?>/d2-callback</code>.
+      Am besten per SSH: <code>ghostnode-root.sh secrets</code> → GN_BUNGIE_KEY, GN_BUNGIE_CLIENT_ID, GN_BUNGIE_CLIENT_SECRET. Sonst hier:</p>
+    <p class="muted">Status: <?= d2_oauth() ? '<b style="color:#4ade80">eingerichtet</b>' . (getenv('GN_BUNGIE_CLIENT_SECRET') ? ' (aus der Umgebung)' : '') : '<b>fehlt</b> (API-Key oben, Client-ID und Secret)' ?></p>
+    <form method="post" style="display:flex;gap:8px;flex-wrap:wrap"><input type="hidden" name="action" value="d2_oauth">
+      <input name="d2_cid" placeholder="OAuth client_id" value="<?= e(setting('d2_client_id', '')) ?>" autocomplete="off" style="width:180px">
+      <input name="d2_csec" type="password" placeholder="<?= setting('d2_client_secret', '') !== '' ? '•••••• (leer = behalten)' : 'OAuth client_secret' ?>" autocomplete="off" style="flex:1;min-width:240px">
+      <label class="muted"><input type="checkbox" name="d2_csec_del" value="1"> Secret löschen</label><button class="btn">Speichern</button></form>
   </div></div>
 <?php endif; ?>
 <p class="muted" style="margin-top:24px">D2 Nexus ist nicht mit Bungie verbunden oder von Bungie unterstützt. Destiny ist eine Marke von Bungie, Inc.</p>

@@ -13,6 +13,15 @@ function d2_key(): string {
     return preg_match('/^[a-f0-9]{32}$/i', $k) ? $k : '';
 }
 
+/** OAuth der eingebauten D2-Nexus-App: Umgebung (GN_BUNGIE_*) vor Einstellung; null = nicht eingerichtet */
+function d2_oauth(): ?array {
+    $id = (string)getenv('GN_BUNGIE_CLIENT_ID'); $sec = (string)getenv('GN_BUNGIE_CLIENT_SECRET');
+    if ($id === '' && function_exists('setting')) $id = setting('d2_client_id', '');
+    if ($sec === '' && function_exists('setting')) $sec = setting('d2_client_secret', '');
+    $key = d2_key();
+    return preg_match('/^\d{1,10}$/', $id) && strlen($sec) >= 16 && $key !== '' ? ['id' => $id, 'secret' => $sec, 'key' => $key] : null;
+}
+
 function d2_cache_dir(string $sub = ''): string {
     $d = DATA_DIR . '/cache/d2' . ($sub !== '' ? '/' . $sub : '');
     if (!is_dir($d)) @mkdir($d, 0755, true);

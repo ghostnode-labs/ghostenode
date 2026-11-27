@@ -146,7 +146,7 @@ save_kv() {   # save_kv DATEI VAR... – Format VAR='wert', lesbar für bash und
 }
 SECRET_VARS=(HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET
              GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM STATUS_WEBHOOK
-             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET OLD_DB_PASS LIVE_SECRET)
+             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET OLD_DB_PASS LIVE_SECRET GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET)
 CONF_VARS=(ROLE RUN_MODE DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST VOICE_HOST HR_UPSTREAM BOT_UPSTREAM FTP_USER TZ_NAME OLD_DB_HOST OLD_DB_PORT OLD_DB_NAME OLD_DB_USER OLD_DB_MIRROR AUTO_UPDATE)
 
 ask_config() {
@@ -206,6 +206,9 @@ ask_secrets() {
         ask GN_DISCORD_CLIENT_ID     "Discord-Client-ID für „Mit Discord anmelden“ auf der Webseite (optional, sonst im Admin)" ""
         ask GN_DISCORD_CLIENT_SECRET "… und das zugehörige Client-Secret" "" s
         ask STATUS_WEBHOOK           "Status-Webhook (z. B. Discord, optional)" ""
+        ask GN_BUNGIE_KEY            "Bungie-API-Key (D2 Nexus: Anmeldung + Webseite, optional)" "" s
+        ask GN_BUNGIE_CLIENT_ID      "… Bungie-OAuth-Client-ID" ""
+        ask GN_BUNGIE_CLIENT_SECRET  "… Bungie-OAuth-Client-Secret" "" s
     fi
     if want mail; then
         ask SMTP_HOST "SMTP-Server für E-Mails (leer = kein Mailversand)" ""
@@ -377,7 +380,7 @@ setup_web() {
         echo "php_admin_value[max_execution_time] = 120"; echo "php_admin_value[date.timezone] = $TZ_NAME"; echo "php_admin_flag[expose_php] = off"
         echo "php_admin_value[session.cookie_secure] = 1"; echo "php_admin_value[session.cookie_httponly] = 1"
         [ -x /usr/bin/msmtp ] && echo "php_admin_value[sendmail_path] = \"/usr/bin/msmtp -t -i\""
-        for v in GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL GN_LIVE_SECRET; do
+        for v in GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL GN_LIVE_SECRET GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET; do
             [ -n "${!v:-}" ] && printf 'env[%s] = "%s"\n' "$v" "${!v//\"/}"
         done
         echo 'env[PATH] = /usr/local/bin:/usr/bin:/bin'
@@ -386,7 +389,7 @@ setup_web() {
     # Standard-Pool „www“ bleibt (das Pterodactyl-Panel nutzt ihn); ältere Script-Versionen hatten ihn abgeschaltet → zurückholen
     if [ -f "/etc/php/$PV/fpm/pool.d/www.conf.aus" ] && [ ! -f "/etc/php/$PV/fpm/pool.d/www.conf" ]; then mv "/etc/php/$PV/fpm/pool.d/www.conf.aus" "/etc/php/$PV/fpm/pool.d/www.conf"; fi
     # gleiche Variablen für Cron (Kommandozeile)
-    save_kv "$CONF_DIR/web.env" GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL GN_LIVE_SECRET
+    save_kv "$CONF_DIR/web.env" GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL GN_LIVE_SECRET GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET
     chown root:"$APP_USER" "$CONF_DIR/web.env" "$CONF_DIR"; chmod 640 "$CONF_DIR/web.env"; chmod 750 "$CONF_DIR"
     # Kommandozeilen-PHP: gleiche Grenzen
     printf 'memory_limit = 384M\ndate.timezone = %s\n%s\n' "$TZ_NAME" "$([ -x /usr/bin/msmtp ] && echo 'sendmail_path = "/usr/bin/msmtp -t -i"')" > "/etc/php/$PV/cli/conf.d/90-ghostnode.ini"
@@ -1712,7 +1715,7 @@ case "$CMD" in
         NO_TLS=0; setup_tls; check_all || true ;;
     secrets)
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
-        for v in HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
+        for v in HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
             [ -n "${!v:-}" ] && echo "  $v: gesetzt (Enter = behalten, - = löschen)" || echo "  $v: leer"
             if [ -t 0 ]; then read -r -s -p "  neuer Wert für $v: " nv; echo; [ "$nv" = "-" ] && printf -v "$v" '%s' "" || { [ -n "$nv" ] && printf -v "$v" '%s' "$nv"; }; fi
         done
