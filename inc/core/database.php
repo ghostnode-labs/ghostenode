@@ -22,10 +22,11 @@ const DB_MODULES = [
     'vrchat'   => ['file' => 'vrcx',     'prefix' => 'nx_',   'migrate' => 'vrc_migrate',  'fk' => false, 'label' => 'VRC Nexus'],
     'furhub'   => ['file' => 'furhub',   'prefix' => 'fh_',   'migrate' => 'fh_migrate',   'fk' => false, 'label' => 'Furry Hub'],
     'posters'  => ['file' => 'posters',  'prefix' => 'ps_',   'migrate' => 'ps_migrate',   'fk' => false, 'label' => 'VRChat-Poster'],
+    'd2'       => ['file' => 'd2',       'prefix' => 'd2_',   'migrate' => 'd2c_migrate',  'fk' => false, 'label' => 'D2 Nexus (Chat)'],
 ];
 /** Dateien, in denen die Migrationsfunktionen stehen (für Umzug & Werkzeuge) */
 const DB_MODULE_FILES = ['site' => '/core/site.php', 'calendar' => '/modules/calendar.php', 'feed' => '/modules/feed.php',
-                         'vrchat' => '/modules/vrchat.php', 'furhub' => '/modules/furhub.php', 'posters' => '/modules/posters.php'];
+                         'vrchat' => '/modules/vrchat.php', 'furhub' => '/modules/furhub.php', 'posters' => '/modules/posters.php', 'd2' => '/modules/d2chat.php'];
 
 const DB_CONFIG_FILE = DATA_DIR . '/config.php';
 
