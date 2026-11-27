@@ -28,6 +28,7 @@
 #    bash ghostnode-root.sh check              alles prüfen (Dienste, Seiten, PHP-Erweiterungen, Zertifikate)
 #    bash ghostnode-root.sh backup             Server-Backup jetzt (Datenbank, data/, Bot-Daten, Einstellungen)
 #    bash ghostnode-root.sh login …            Notfall-Zugang zur Webseite: liste | entsperren | passwort BENUTZER | 2fa-aus BENUTZER | aktivieren BENUTZER
+#    bash ghostnode-root.sh bericht            Zustand zum Weitergeben (Versionen, Dienste, Datenbank, letzte Fehler) – ohne Passwörter
 #    bash ghostnode-root.sh usedb              Webseite auf die MariaDB umschalten (zeigt vorher die Konten dort)
 #    bash ghostnode-root.sh olddb              alte MySQL (z. B. Plesk) übernehmen bzw. erneut holen (--force), Zugang ändern (--neu)
 #    bash ghostnode-root.sh crons              geplante Aufgaben (Webseite, Wächter, Backup, Auto-Update) mit letztem Ergebnis
@@ -546,6 +547,31 @@ mariadb_prefix() {   # Präfix der GhostNode-Tabellen in der MariaDB (z. B. gn_)
         JOIN information_schema.tables u ON u.table_schema = r.table_schema AND u.table_name = CONCAT(LEFT(r.table_name, LENGTH(r.table_name) - 5), 'users')
         JOIN information_schema.tables s ON s.table_schema = r.table_schema AND s.table_name = CONCAT(LEFT(r.table_name, LENGTH(r.table_name) - 5), 'settings')
         WHERE r.table_schema = '$DB_NAME' AND r.table_name LIKE '%roles' ORDER BY LENGTH(r.table_name) LIMIT 1" 2>/dev/null || true
+}
+cmd_bericht() {   # Zustand zum Weitergeben (z. B. an Claude) – ohne Passwörter, Tokens oder Schlüssel
+    local mask='s/(pass(word)?|secret|token|key|supw)([^=:]*)[=:]["'"'"' ]*[^"'"'"' ,}]+/\1\3=***/Ig'
+    echo "===== GhostNode-Bericht $(date '+%d.%m.%Y %H:%M') ====="
+    echo "System:     $(. /etc/os-release; echo "$PRETTY_NAME") · $(uname -r) · $(nproc) Kerne · RAM $(free -h | awk '/^Mem/{print $3"/"$2}') · Platte $(df -h / | awk 'NR==2{print $3"/"$2" ("$5")"}')"
+    echo "Rolle:      ${ROLE:-?} · Domain ${DOMAIN:-?} · Datenbank ${DB_ENGINE:-?} · Betrieb ${RUN_MODE:-?} · Auto-Update ${AUTO_UPDATE:-1}"
+    echo "Installer:  $(git -C "$(dirname "$(readlink -f "$0")")/.." log -1 --format='%h %cd' --date=short 2>/dev/null || echo ?)"
+    want web && echo "Webseite:   $(git -c safe.directory='*' -C "$WEB_DIR" log -1 --format='%h %cd' --date=short 2>/dev/null || echo ?) · DB-Treiber $(grep -o '"driver": *"[a-z]*"' "$WEB_DIR/data/config.php" 2>/dev/null | cut -d'"' -f4 || echo ?) · Präfix $(grep -o '"prefix": *"[A-Za-z0-9_]*"' "$WEB_DIR/data/config.php" 2>/dev/null | cut -d'"' -f4)"
+    [ -f /opt/ghostnode/discord-bot/package.json ] && echo "Bot:        $(grep -o '"version": *"[^"]*"' /opt/ghostnode/discord-bot/package.json | cut -d'"' -f4)"
+    echo "PHP:        $(php -r 'echo PHP_VERSION;' 2>/dev/null) · Node $(node -v 2>/dev/null) · nginx $(nginx -v 2>&1 | cut -d/ -f2) · MariaDB $(mysql -V 2>/dev/null | grep -o 'Distrib [0-9.]*\|from [0-9.]*' | head -1)"
+    [ -f /var/lib/ghostnode/old-db-imported ] && echo "Alte MySQL: übernommen am $(cat /var/lib/ghostnode/old-db-imported) · Spiegeln ${OLD_DB_MIRROR:-0}"
+    if [ "$DB_ENGINE" = mariadb ] && want db; then
+        local pre; pre=$(mariadb_prefix)
+        echo "MariaDB:    $(mysql --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME'" 2>/dev/null) Tabellen · Präfix ${pre:-–} · Konten: $(mysql --protocol=socket -uroot -N -e "SELECT GROUP_CONCAT(username SEPARATOR ', ') FROM \`$DB_NAME\`.\`${pre}users\`" 2>/dev/null)"
+    fi
+    echo; echo "--- Dienste"
+    local u; for u in nginx apache2 "php$(php_ver 2>/dev/null)-fpm" mariadb ghostnode-live ghostnode-bot ghostnode-hr coturn mumble-server vsftpd cron fail2ban; do
+        if [ -f "/lib/systemd/system/$u.service" ] || [ -f "/etc/systemd/system/$u.service" ] || [ -x "/etc/init.d/$u" ]; then printf '  %-22s %s\n' "$u" "$(is_active "$u" && echo läuft || echo AUS)"; fi
+    done
+    echo; echo "--- Geplante Aufgaben"; for u in /var/lib/ghostnode/cron-*.status; do [ -f "$u" ] && { read -r t rc < "$u"; printf '  %-22s %s rc=%s\n' "$(basename "$u" .status | cut -c6-)" "$(date -d "@$t" '+%d.%m. %H:%M')" "$rc"; }; done
+    echo; echo "--- Letzte Fehler Webseite (apache)"; tail -n 12 /var/log/apache2/ghostnode-error.log 2>/dev/null | cut -c1-300 | sed -E "$mask" | sed 's/^/  /'
+    echo; echo "--- Letzte Fehler PHP-FPM"; tail -n 8 /var/log/php*-fpm.log 2>/dev/null | cut -c1-300 | sed 's/^/  /'
+    for u in ghostnode-bot ghostnode-hr ghostnode-live; do echo; echo "--- $u (letzte Zeilen)"; journalctl -u "$u" -n 6 --no-pager -o cat 2>/dev/null | cut -c1-240 | sed -E "$mask" | sed 's/^/  /'; done
+    echo; echo "--- Cron-Protokoll"; tail -n 10 /var/log/ghostnode-cron.log 2>/dev/null | sed 's/^/  /'
+    echo "===== Ende (enthält keine Passwörter/Schlüssel) ====="
 }
 cmd_usedb() {   # Webseite auf die lokale MariaDB umschalten (z. B. nach Übernahme der alten MySQL)
     step "Webseite auf MariaDB umschalten"
@@ -1598,6 +1624,7 @@ case "$CMD" in
     check)  [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; check_all || exit 1 ;;
     migrate) cmd_migrate ;;
     crons) cmd_crons ;;
+    bericht|report) [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; cmd_bericht ;;
     usedb) [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; cmd_usedb ;;
     login)   # Notfall-Zugang zur Webseite über SSH (Sperre aufheben, Passwort, Zwei-Faktor)
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
@@ -1616,5 +1643,5 @@ case "$CMD" in
         [[ " ${ARGS[*]} " == *" --force "* ]] && rm -f /var/lib/ghostnode/old-db-imported
         setup_olddb; want cron && setup_cron ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
-    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons, olddb, login, usedb)" ;;
+    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons, olddb, login, usedb, bericht)" ;;
 esac
