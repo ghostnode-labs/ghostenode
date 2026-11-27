@@ -24,7 +24,7 @@ function botsso_new_secret(): string {
 }
 /** Adresse des Bot-Dashboards (https://… oder http://IP:Port) */
 function botsso_url(): string {
-    $u = rtrim(trim(setting('botsso_url', '')), '/');
+    $u = rtrim(trim((string)getenv('GN_BOT_SSO_URL') ?: setting('botsso_url', '')), '/');   // Root-Server: automatisch aus web.env
     return botsso_url_ok($u) ? $u : '';
 }
 function botsso_url_ok(string $u): bool {

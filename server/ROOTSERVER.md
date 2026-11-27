@@ -7,8 +7,8 @@ Er verträgt sich mit **Pterodactyl** (Panel + Wings) auf demselben Server.
 
 | Rolle | Was hier läuft | Was woanders bleibt |
 |---|---|---|
-| `dienste` (Standard) | HypeRate-Weiterleitung, Discord-Bot, TURN für Anrufe, Mumble, Firewall, Backup | Webseite, MySQL, FTP, Mail und Aufgabenplaner bleiben auf **Plesk** |
-| `alles` | zusätzlich die Webseite (Apache + PHP-FPM, MariaDB, Poster-FTPS, Mail, Aufgabenplaner) | – |
+| `alles` (Standard) | alles von GitHub: Webseite (`ghostenode`, Apache + PHP-FPM), MariaDB, Discord-Bot (`node_discord`), HypeRate-Weiterleitung (`vrc_nexus`), TURN, Mumble, Poster-FTPS, Mail, Aufgabenplaner, Firewall, Backup | – |
+| `dienste` | nur Bot, HypeRate, TURN, Mumble, Firewall, Backup | Webseite, MySQL, FTP, Mail bleiben z. B. auf Plesk |
 
 Die Rolle fragt das Script beim `install` ab. Sie steht danach in `/etc/ghostnode/setup.conf`.
 
@@ -54,32 +54,19 @@ Das Script fragt nach Rolle, Domain, E-Mail für Let's Encrypt, Adressen und Sch
 
 Bei Rolle `alles` öffnest du danach `https://<domain>/admin.php` und legst das **Besitzer-Konto** an.
 
-## Mit Pterodactyl
+## Reverse Proxy
 
-Das Script erkennt Panel und Wings (`/etc/pterodactyl/config.yml`) und richtet sich danach:
+nginx steht immer vorne auf 80/443 und übernimmt HTTPS. Dahinter laufen nur intern (127.0.0.1):
 
-- **nginx bleibt vorne.** Das Script legt eigene nginx-Seiten an und rührt die Panel-Seite nicht an. Schlägt `nginx -t` fehl, nimmt es die eigene Seite sofort wieder zurück. Bei Rolle `alles` läuft Apache nur intern auf `127.0.0.1:18080`.
-- **PHP und MySQL des Panels bleiben unverändert.** Eine vorhandene MySQL/MariaDB wird mitbenutzt, mit eigener Datenbank und eigenem Benutzer.
-- **Die Firewall wird nie zurückgesetzt.** Die Wings-Ports (API und SFTP) werden freigegeben. Lauschen schon unbekannte öffentliche Ports, schaltet das Script ufw nicht selbst ein, sondern sagt Bescheid.
-- **Weiterleitung und Bot laufen als Eggs** (Betriebsart `egg`, Standard mit Pterodactyl). Das Script macht nur nginx + HTTPS davor.
+| Name | Dienst |
+|---|---|
+| `<domain>`, `www.<domain>` | Apache + PHP-FPM auf `127.0.0.1:18080` |
+| `hr.<domain>` | HypeRate-Weiterleitung, Dienst `ghostnode-hr` auf `127.0.0.1:18091` |
+| `discord.<domain>` | Discord-Bot mit Dashboard, Dienst `ghostnode-bot` auf `127.0.0.1:18092` |
 
-### Eggs importieren
+Pterodactyl-Eggs werden nicht mehr genutzt. Läuft auf dem Server trotzdem ein Pterodactyl-Panel, bleibt es unangetastet.
 
-Admin → Nests → *Import Egg*:
-
-| Egg | Datei | Zuweisung (Allocation) |
-|---|---|---|
-| GhostNode Discord-Bot | [`node_discord/pterodactyl/egg-ghostnode-discord-bot.json`](https://github.com/ghostnode-labs/node_discord/tree/HEAD/pterodactyl) | `127.0.0.1:18092` |
-| GhostNode HypeRate-Weiterleitung | [`vrc_nexus/apps/hyperate-relay/egg-ghostnode-hyperate-relay.json`](https://github.com/ghostnode-labs/vrc_nexus/tree/HEAD/apps/hyperate-relay) | `127.0.0.1:18091` |
-| Mumble | im Panel mitgeliefertes Egg „Mumble Server“ (Nest „Voice Servers“) | `<Server-IP>:64738` |
-
-Lege die Zuweisungen für Bot und Weiterleitung auf `127.0.0.1` an (Admin → Nodes → Allocation). Dann sind sie nur über nginx/HTTPS erreichbar. Beim `install` fragt das Script nach genau diesen Zuweisungen.
-Die Schlüssel (Bot-Token, HypeRate-Key …) trägst du im Panel als Variablen des jeweiligen Servers ein, nicht im Script.
-Mit `AUTO_UPDATE = 1` holt sich der Server beim Neustart die neueste Version aus Git.
-
-Mumble verbindet direkt, ohne nginx. Docker-Ports umgehen ufw, die Freigabe macht also Pterodactyl.
-
-Ohne Pterodactyl (oder mit Betriebsart `systemd`) laufen Weiterleitung und Bot als eigene Dienste (`ghostnode-hr`, `ghostnode-bot`). Mumble läuft dann als `mumble-server`.
+Die Anmeldung am Bot-Dashboard läuft über die Webseite (`botdash.php`). Den gemeinsamen Schlüssel trägt das Script automatisch auf beiden Seiten ein.
 
 ## Rolle „dienste“: Anrufe für die Plesk-Webseite
 
@@ -103,12 +90,12 @@ Optionen: `--yes` (keine Rückfragen), `--no-tls`, `--only=hr,bot`, `--skip=voic
 | Pfad | Inhalt |
 |---|---|
 | `/etc/ghostnode/` | `setup.conf` (Einstellungen), `secrets.env` (Schlüssel, nur root), `bot.env`, `hr.env`, `web.env`, `turn-fuer-plesk.json` |
-| `/opt/ghostnode/hyperate-relay`, `/opt/ghostnode/discord-bot` | Weiterleitung und Bot im Betrieb `systemd` (mit Eggs liegen sie in Pterodactyl) |
+| `/opt/ghostnode/hyperate-relay`, `/opt/ghostnode/discord-bot` | Weiterleitung und Bot |
 | `/var/www/ghostnode` | nur Rolle `alles`: Webseite (Git-Checkout); `data/` = Datenbank-Zugang, Schlüssel, Uploads, nie öffentlich |
 | `/root/ghostnode-zugaenge.txt` | erzeugte Zugänge (Datenbank, Poster-FTPS, Mumble-SuperUser), nur root |
 | `/var/backups/ghostnode` | tägliche Backups (Datenbank, `data/`, Bot-Daten, Mumble, Einstellungen) |
 
-Logs: `journalctl -u ghostnode-bot -f`, `journalctl -u ghostnode-hr -f` (mit Eggs: Konsole im Panel), `/var/log/nginx/`, `/var/log/apache2/ghostnode-error.log`.
+Logs: `journalctl -u ghostnode-bot -f`, `journalctl -u ghostnode-hr -f`, `/var/log/nginx/`, `/var/log/apache2/ghostnode-error.log`.
 
 ## Umzug von Plesk auf den Root-Server (alles)
 
@@ -150,10 +137,12 @@ Getestet auf Ubuntu 24.04 mit Testdomain, ohne Let's Encrypt:
   - Mail-Konfiguration, TLS für TURN/FTPS, Backup, Update
 - **Mit Pterodactyl (nachgestellt):**
   - Panel-nginx auf 80/443, Wings-Ports, Apache dahinter auf 127.0.0.1
-- **Rolle `dienste` mit Eggs:**
-  - Bot- und Weiterleitungs-Egg mit ihren Install-Scripts aufgesetzt und mit ihrem Startbefehl gestartet
-  - nginx/HTTPS davor, `/health` beider Dienste, TURN-Datei für Plesk
-  - `check` ohne Fehler
+- **Umzug von Plesk (`migrate`):** von Rolle `dienste` auf `alles`
+  - MySQL-Export als `.zip` mit Plesk-`DEFINER` und Präfix `gn_`
+  - 83 Tabellen inklusive View übernommen
+  - Schlüssel, `data/` und `uploads/` übernommen
+  - Webseite über nginx → 200
+  - bei absichtlich kaputtem Export: Stand vorher automatisch wiederhergestellt
 
 Nicht getestet:
 

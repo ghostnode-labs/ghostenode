@@ -2,10 +2,10 @@
 # =====================================================================================================
 #  GhostNode Root-Server – Einrichtung, Updates und Prüfung (Debian 12 / Ubuntu 22.04 / 24.04)
 #
-#  Rollen: „dienste“ (Standard) – Webseite bleibt auf Plesk (mit MySQL, FTP, Mail, Cron); hier laufen HypeRate-Weiterleitung,
-#          Discord-Bot, TURN für Anrufe und Mumble.   „alles“ – zusätzlich die Webseite auf diesem Server.
-#  Mit Pterodactyl laufen Weiterleitung und Bot als Eggs (siehe node_discord/pterodactyl und vrc_nexus/apps/hyperate-relay),
-#  Mumble über das mitgelieferte Egg „Mumble Server“ – das Script macht dann nginx + HTTPS davor, TURN, Firewall und Prüfung.
+#  Rollen: „alles“ (Standard) – Webseite (GitHub ghostenode), MariaDB, Discord-Bot (node_discord), HypeRate-Weiterleitung
+#          (vrc_nexus), TURN, Mumble, FTPS, Mail, Cron, Backup.   „dienste“ – Webseite bleibt woanders (z. B. Plesk).
+#  nginx ist immer der Reverse Proxy vorne (80/443, TLS); Webseite (Apache intern), Bot und HypeRate-Weiterleitung laufen
+#  dahinter als eigene Dienste. Umzug von Plesk: „migrate“ (MySQL-Export + data/ + uploads/).
 #
 #  Bausteine:
 #    web   Webseite (Apache + PHP-FPM, eigener Benutzer „ghostnode“, Git-Checkout → Updates per git pull)
@@ -27,6 +27,7 @@
 #    bash ghostnode-root.sh secrets            Schlüssel (Discord, HypeRate, SMTP …) ändern und übernehmen
 #    bash ghostnode-root.sh check              alles prüfen (Dienste, Seiten, PHP-Erweiterungen, Zertifikate)
 #    bash ghostnode-root.sh backup             Server-Backup jetzt (Datenbank, data/, Bot-Daten, Einstellungen)
+#    bash ghostnode-root.sh crons              geplante Aufgaben (Webseite, Wächter, Backup, Auto-Update) mit letztem Ergebnis
 #    bash ghostnode-root.sh migrate …          Umzug von Plesk: MySQL-Datenbank + data/ + uploads/ (richtet die Webseite hier ein)
 #        --db=/root/plesk-dump.zip            Datenbank-Export aus Plesk (.sql, .sql.gz oder .zip)
 #        --from=HOST --src-db=NAME --src-user=BENUTZER [--src-port=3306]   … oder direkt von der Plesk-MySQL (Passwort wird gefragt)
@@ -138,12 +139,12 @@ save_kv() {   # save_kv DATEI VAR... – Format VAR='wert', lesbar für bash und
 }
 SECRET_VARS=(HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET
              GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM STATUS_WEBHOOK
-             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS)
+             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET)
 CONF_VARS=(ROLE RUN_MODE DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST VOICE_HOST HR_UPSTREAM BOT_UPSTREAM FTP_USER TZ_NAME)
 
 ask_config() {
     step "Einstellungen"
-    ask ROLE      "Rolle: dienste (Webseite bleibt auf Plesk) oder alles (auch die Webseite hier)" "dienste"
+    ask ROLE      "Rolle: alles (Webseite + Dienste hier) oder dienste (Webseite bleibt auf Plesk)" "alles"
     ask DOMAIN    "Haupt-Domain der Webseite" "ghostnode-labs.dev"
     ask LE_EMAIL  "E-Mail für Let's Encrypt (Ablauf-Warnungen)" ""
     if [ "$ROLE" = alles ]; then
@@ -154,7 +155,7 @@ ask_config() {
     ask BOT_HOST   "Adresse des Discord-Bot-Dashboards" "discord.$DOMAIN"
     ask TURN_HOST  "Adresse des TURN-Servers (Anrufe)" "turn.$DOMAIN"
     ask VOICE_HOST "Adresse des Mumble-Servers" "voice.$DOMAIN"
-    ask RUN_MODE   "Weiterleitung & Bot: egg (läuft in Pterodactyl) oder systemd (eigener Dienst)" "$([ "$PTERO" = 1 ] && echo egg || echo systemd)"
+    RUN_MODE=${RUN_MODE:-systemd}   # Weiterleitung & Bot laufen als eigene Dienste (keine Pterodactyl-Eggs mehr; egg nur noch per RUN_MODE=egg)
     if [ "$RUN_MODE" = egg ]; then
         ask HR_UPSTREAM  "Zuweisung des HypeRate-Servers im Panel (IP:Port, am besten 127.0.0.1:…)" "127.0.0.1:$HR_PORT"
         ask BOT_UPSTREAM "Zuweisung des Bot-Servers im Panel (IP:Port)" "127.0.0.1:$BOT_PORT"
@@ -197,7 +198,7 @@ ask_secrets() {
         fi
     fi
     if want voice && [ "$PTERO" = 0 ]; then ask MUMBLE_PASS "Mumble-Serverpasswort (leer = offen für alle)" "" s; fi
-    DB_PASS=${DB_PASS:-$(rand 32)}; TURN_SECRET=${TURN_SECRET:-$(rand 48)}; FTP_PASS=${FTP_PASS:-$(rand 20)}; MUMBLE_SUPW=${MUMBLE_SUPW:-$(rand 24)}
+    DB_PASS=${DB_PASS:-$(rand 32)}; TURN_SECRET=${TURN_SECRET:-$(rand 48)}; FTP_PASS=${FTP_PASS:-$(rand 20)}; MUMBLE_SUPW=${MUMBLE_SUPW:-$(rand 24)}; BOT_SSO_SECRET=${BOT_SSO_SECRET:-$(rand 48)}
     save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
     ok "gespeichert in $SECRETS (nur root lesbar)"
 }
@@ -306,6 +307,8 @@ install_node() {
 }
 
 setup_web() {
+    # Bot-Dashboard-Anmeldung über die Webseite (botdash.php): gemeinsamer Schlüssel, automatisch auf beiden Seiten
+    local GN_BOT_SSO_SECRET="${BOT_SSO_SECRET:-}" GN_BOT_SSO_URL="https://${BOT_HOST:-discord.$DOMAIN}"
     step "Webseite (Apache + PHP-FPM$([ "$FRONT" = nginx ] && echo ' hinter nginx'))"
     # Vorhandenes PHP (z. B. vom Pterodactyl-Panel) behalten: gleiche Version nachinstallieren, nichts umstellen
     local PV0="" pk; command -v php >/dev/null && PV0=$(php_ver)
@@ -347,7 +350,7 @@ setup_web() {
         echo "php_admin_value[max_execution_time] = 120"; echo "php_admin_value[date.timezone] = $TZ_NAME"; echo "php_admin_flag[expose_php] = off"
         echo "php_admin_value[session.cookie_secure] = 1"; echo "php_admin_value[session.cookie_httponly] = 1"
         [ -x /usr/bin/msmtp ] && echo "php_admin_value[sendmail_path] = \"/usr/bin/msmtp -t -i\""
-        for v in GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET; do
+        for v in GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL; do
             [ -n "${!v:-}" ] && printf 'env[%s] = "%s"\n' "$v" "${!v//\"/}"
         done
         echo 'env[PATH] = /usr/local/bin:/usr/bin:/bin'
@@ -356,7 +359,7 @@ setup_web() {
     # Standard-Pool „www“ bleibt (das Pterodactyl-Panel nutzt ihn); ältere Script-Versionen hatten ihn abgeschaltet → zurückholen
     if [ -f "/etc/php/$PV/fpm/pool.d/www.conf.aus" ] && [ ! -f "/etc/php/$PV/fpm/pool.d/www.conf" ]; then mv "/etc/php/$PV/fpm/pool.d/www.conf.aus" "/etc/php/$PV/fpm/pool.d/www.conf"; fi
     # gleiche Variablen für Cron (Kommandozeile)
-    save_kv "$CONF_DIR/web.env" GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET
+    save_kv "$CONF_DIR/web.env" GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL
     chown root:"$APP_USER" "$CONF_DIR/web.env" "$CONF_DIR"; chmod 640 "$CONF_DIR/web.env"; chmod 750 "$CONF_DIR"
     # Kommandozeilen-PHP: gleiche Grenzen
     printf 'memory_limit = 384M\ndate.timezone = %s\n%s\n' "$TZ_NAME" "$([ -x /usr/bin/msmtp ] && echo 'sendmail_path = "/usr/bin/msmtp -t -i"')" > "/etc/php/$PV/cli/conf.d/90-ghostnode.ini"
@@ -518,6 +521,7 @@ setup_bot() {
     if [ "$RUN_MODE" = egg ]; then
         nginx_site ghostnode-bot "$BOT_HOST" "$BOT_UPSTREAM" plain
         ok "läuft in Pterodactyl (Egg „GhostNode Discord-Bot“, Zuweisung $BOT_UPSTREAM) → https://$BOT_HOST"
+        want web && ok "Im Panel als Variable „Schlüssel GhostNode-Anmeldung“ (BOT_SSO_SECRET) eintragen – steht in $CRED"
         ok "Im Panel als Variable „Dashboard-Adresse“: https://$BOT_HOST – im Discord-Portal Redirect https://$BOT_HOST/callback"
         return 0
     fi
@@ -528,7 +532,7 @@ setup_bot() {
     else install -d -o "$APP_USER" -g "$APP_USER" "$dir"; git_as clone -q "$REPO_BOT" "$dir" || die "Bot konnte nicht geholt werden ($REPO_BOT)."; fi
     install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$dir/data"
     local DASHBOARD_URL="https://$BOT_HOST" NEXUS_BASE="https://$DOMAIN" HYPERATE_RELAY="https://$HR_HOST" BOT_DATA="$dir/data" PORT=$BOT_PORT HOST=127.0.0.1
-    save_kv "$CONF_DIR/bot.env" DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET DASHBOARD_URL NEXUS_BASE HYPERATE_RELAY BOT_DATA PORT HOST
+    save_kv "$CONF_DIR/bot.env" DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET DASHBOARD_URL NEXUS_BASE HYPERATE_RELAY BOT_DATA PORT HOST BOT_SSO_SECRET
     chmod 600 "$CONF_DIR/bot.env"
     need_port "$BOT_PORT" node
     write_unit ghostnode-bot "GhostNode Discord-Bot (VRC Nexus)" "$dir" bot.js "$CONF_DIR/bot.env"
@@ -791,11 +795,63 @@ rm -rf "\$W"
 find "\$D" -name 'ghostnode-*.tar' -mtime +14 -delete
 EOF
     chmod 700 /usr/local/sbin/ghostnode-backup
+    # Cron-Dienst: jeder Lauf wird protokolliert (/var/log/ghostnode-cron.log, letzter Stand in /var/lib/ghostnode/cron-*.status)
+    cat > /usr/local/sbin/ghostnode-run <<'EOF2'
+#!/bin/sh
+# ghostnode-run NAME BEFEHL… – führt einen geplanten Job aus und protokolliert Dauer, Ergebnis und bei Fehlern die letzten Zeilen
+n=$1; shift; S=/var/lib/ghostnode; L=/var/log/ghostnode-cron.log; mkdir -p "$S"
+t0=$(date +%s); out=$("$@" 2>&1); rc=$?
+echo "$(date '+%F %T') $n rc=$rc $(( $(date +%s) - t0 ))s" >> "$L"
+[ "$rc" -ne 0 ] && printf '%s\n' "$out" | tail -5 | sed 's/^/    /' >> "$L"
+echo "$(date +%s) $rc" > "$S/cron-$n.status"
+exit "$rc"
+EOF2
+    chmod 755 /usr/local/sbin/ghostnode-run
+    # Wächter: alle 5 min – startet Dienste neu, die zweimal hintereinander nicht antworten (liest setup.conf beim Lauf)
+    cat > /usr/local/sbin/ghostnode-watchdog <<'EOF2'
+#!/bin/bash
+# erzeugt von ghostnode-root.sh – prüft nginx, Webseite, Datenbank, Bot, HypeRate, TURN; Neustart nach 2 Fehlschlägen in Folge
+S=/var/lib/ghostnode; mkdir -p "$S"; rc=0
+[ -r /etc/ghostnode/setup.conf ] && . /etc/ghostnode/setup.conf
+unit() { [ -f "/etc/systemd/system/$1.service" ] || [ -x "/etc/init.d/$1" ] || [ -f "/run/$1.pid" ]; }
+restart() {
+    for x in "$@"; do
+        if [ -d /run/systemd/system ]; then systemctl restart "$x"
+        elif [ -x "/etc/init.d/$x" ]; then service "$x" restart >/dev/null 2>&1
+        else echo "  (ohne systemd: $x bitte von Hand starten)"; fi   # nur Testumgebung
+    done
+}
+code() { local c; c=$(curl -s -o /dev/null -m 10 -w '%{http_code}' "$@" 2>/dev/null) || true; echo "${c:-000}"; }
+probe() {   # probe NAME 1|0 DIENSTE…
+    local n=$1 ok=$2 c; shift 2
+    if [ "$ok" = 1 ]; then rm -f "$S/wd-$n"; return; fi
+    c=$(( $(cat "$S/wd-$n" 2>/dev/null || echo 0) + 1 )); echo "$c" > "$S/wd-$n"
+    if [ "$c" -ge 2 ]; then echo "$n antwortet nicht – Neustart: $*"; restart "$@"; rm -f "$S/wd-$n"; rc=1; else echo "$n antwortet nicht (1. Mal)"; fi
+}
+yes_if() { "$@" >/dev/null 2>&1 && echo 1 || echo 0; }
+probe nginx "$(yes_if pgrep -x nginx)" nginx
+if [ "${ROLE:-}" = alles ]; then
+    c=$(code -H "Host: ${DOMAIN:-localhost}" http://127.0.0.1:18080/)
+    fpm=$(ls /etc/init.d 2>/dev/null | grep -m1 '^php.*-fpm$' || systemctl list-unit-files 'php*-fpm.service' 2>/dev/null | grep -om1 '^php[0-9.]*-fpm')
+    probe webseite "$([[ "$c" =~ ^[234] ]] && echo 1 || echo 0)" ${fpm:-} apache2
+    [ "${DB_ENGINE:-}" = mariadb ] && probe datenbank "$(yes_if mysqladmin ping)" mariadb
+fi
+if [ "${RUN_MODE:-systemd}" = systemd ]; then
+    unit ghostnode-hr  && probe hyperate "$([ "$(code http://127.0.0.1:18091/health)" != 000 ] && echo 1 || echo 0)" ghostnode-hr
+    unit ghostnode-bot && probe bot "$([ "$(code http://127.0.0.1:18092/health)" != 000 ] && echo 1 || echo 0)" ghostnode-bot
+fi
+command -v turnserver >/dev/null && probe turn "$(yes_if pgrep -x turnserver)" coturn
+exit $rc
+EOF2
+    chmod 700 /usr/local/sbin/ghostnode-watchdog
     {
-        echo "# erzeugt von ghostnode-root.sh"; echo "SHELL=/bin/sh"; echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
-        if want web; then echo "*/5 * * * * $APP_USER /usr/local/sbin/ghostnode-cron >/dev/null 2>&1"; fi
-        echo "17 3 * * * root /usr/local/sbin/ghostnode-backup >/dev/null 2>&1"
+        echo "# erzeugt von ghostnode-root.sh – Übersicht: $(readlink -f "$0") crons"; echo "SHELL=/bin/sh"; echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        if want web; then echo "*/5 * * * * root ghostnode-run aufgaben runuser -u $APP_USER -- /usr/local/sbin/ghostnode-cron"; fi
+        echo "*/5 * * * * root ghostnode-run waechter /usr/local/sbin/ghostnode-watchdog"
+        echo "17 3 * * * root ghostnode-run backup /usr/local/sbin/ghostnode-backup"
+        [ "${AUTO_UPDATE:-1}" = 1 ] && echo "41 4 * * * root ghostnode-run update bash $(readlink -f "$0") update --yes"
     } > /etc/cron.d/ghostnode
+    printf '/var/log/ghostnode-cron.log {\n    weekly\n    rotate 8\n    compress\n    missingok\n    notifempty\n}\n' > /etc/logrotate.d/ghostnode-cron
     chmod 644 /etc/cron.d/ghostnode
     svc enable cron
     # Webseite auf „echten Cron“ stellen (nur möglich, wenn die Datenbank schon erreichbar ist)
@@ -806,6 +862,20 @@ EOF
         warn "Aufgabenplaner der Seite noch nicht umgestellt – nach dem ersten Login: Admin → System → Aufgaben → Modus „Cron“."
     fi
     ok "Backup täglich 03:17 nach /var/backups/ghostnode (14 Tage)"
+    ok "Wächter alle 5 min (Neustart nach 2 Fehlschlägen)$([ "${AUTO_UPDATE:-1}" = 1 ] && echo ", Auto-Update von GitHub täglich 04:41")"
+    ok "Übersicht: $0 crons · Protokoll: /var/log/ghostnode-cron.log"
+}
+cmd_crons() {
+    step "Geplante Aufgaben"
+    local n st t rc
+    for n in aufgaben waechter backup update; do
+        grep -q "ghostnode-run $n " /etc/cron.d/ghostnode 2>/dev/null || continue
+        st=/var/lib/ghostnode/cron-$n.status
+        if [ -f "$st" ]; then read -r t rc < "$st"; [ "$rc" = 0 ] && ok "$n – zuletzt $(date -d "@$t" '+%d.%m. %H:%M') ✔" || fail "$n – zuletzt $(date -d "@$t" '+%d.%m. %H:%M') mit Fehler $rc"
+        else ok "$n – noch nicht gelaufen"; fi
+    done
+    echo; echo "  Zeitplan (/etc/cron.d/ghostnode):"; grep -v '^#\|^SHELL\|^PATH' /etc/cron.d/ghostnode | sed 's/^/    /'
+    echo; echo "  Letzte Einträge (/var/log/ghostnode-cron.log):"; tail -8 /var/log/ghostnode-cron.log 2>/dev/null | sed 's/^/    /' || true
 }
 
 setup_firewall() {
@@ -910,7 +980,7 @@ write_credentials() {
 lcurl() { local host=$1 path=$2; shift 2
     if [ -d /etc/letsencrypt/live/ghostnode ]; then curl -s -k --max-time 10 --resolve "$host:443:127.0.0.1" "$@" "https://$host$path"
     else curl -s --max-time 10 -H "Host: $host" "$@" "http://127.0.0.1$path"; fi; }
-http_code() { lcurl "$1" "$2" -o /dev/null -w '%{http_code}' 2>/dev/null || echo 000; }
+http_code() { local c; c=$(lcurl "$1" "$2" -o /dev/null -w '%{http_code}' 2>/dev/null) || true; echo "${c:-000}"; }
 check_all() {
     step "Prüfung"
     FAILS=0
@@ -937,7 +1007,7 @@ check_all() {
         [ "$(port_owner 80)" = nginx ] && ok "Port 80 gehört nginx" || fail "Port 80 gehört nicht nginx"
         if want web; then
             [ "$(port_owner "$BACKEND_PORT")" = apache2 ] && ok "Apache nur intern auf 127.0.0.1:$BACKEND_PORT" || fail "Apache lauscht nicht auf 127.0.0.1:$BACKEND_PORT"
-            c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: $DOMAIN" "http://127.0.0.1/status.php?api=1" 2>/dev/null || echo 000)
+            c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: $DOMAIN" "http://127.0.0.1/status.php?api=1" 2>/dev/null) || true; c=${c:-000}
             [ "$c" = 200 ] && ok "Webseite über nginx erreichbar" || fail "Webseite über nginx → $c"
         fi
     fi
@@ -1165,6 +1235,7 @@ case "$CMD" in
         check_all || true ;;
     check)  [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; check_all ;;
     migrate) cmd_migrate ;;
+    crons) cmd_crons ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
-    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate)" ;;
+    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons)" ;;
 esac
