@@ -54,7 +54,24 @@ function acc_base_url(): string {
     $dir = rtrim(str_replace('\\', '/', dirname($_SERVER['SCRIPT_NAME'] ?? '/')), '/');
     return ($https ? 'https' : 'http') . '://' . $host . $dir;
 }
-function acc_redirect_uri(): string { $f = setting('dlogin_redirect', ''); return preg_match('#^https://[\w.\-]+(:\d+)?/\S*$#', $f) ? $f : acc_base_url() . '/auth-discord.php'; }
+/**
+ * Rücksprung-Adresse für Discord – muss Zeichen für Zeichen im Developer Portal (OAuth2 → Redirects) stehen.
+ * Reihenfolge: Admin-Einstellung → GN_DISCORD_REDIRECT → Website-Adresse (site_url) → aus der Anfrage.
+ * Aus der Anfrage immer https und ohne „www.“ (hinter Plesk/nginx fehlt sonst oft das https → „Ungültiges OAuth2 redirect_uri“).
+ */
+function acc_redirect_uri(): string {
+    $ok = fn($u) => preg_match('#^https://[\w.\-]+(:\d+)?/\S*$#', (string)$u) === 1;
+    $f = trim((string)setting('dlogin_redirect', ''));
+    if ($ok($f)) return $f;
+    $env = trim((string)getenv('GN_DISCORD_REDIRECT'));
+    if ($ok($env)) return $env;
+    $site = rtrim(trim((string)setting('site_url', '')), '/');
+    if ($ok($site . '/')) return $site . '/auth-discord.php';
+    $base = acc_base_url();
+    $host = (string)parse_url($base, PHP_URL_HOST);
+    if ($host !== '' && !preg_match('/^(localhost|127\.|\[?::1)/', $host)) $base = preg_replace('#^http://#', 'https://', preg_replace('#^(https?://)www\.#', '$1', $base));
+    return $base . '/auth-discord.php';
+}
 
 /** Startet die Discord-Anmeldung: intent login | link | register */
 function acc_discord_start(string $intent, string $next = ''): string {

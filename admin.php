@@ -1906,6 +1906,8 @@ function bytes(int $b): string {
                 <input type="password" name="dlogin_secret" autocomplete="new-password" placeholder="<?php echo acc_discord_secret_source() ? '•••••• (leer = unverändert)' : 'aus dem Discord Developer Portal'; ?>" <?php echo acc_discord_secret_source() === 'env' ? 'disabled' : ''; ?>>
                 <?php if (acc_discord_secret_source() === 'admin'): ?><label class="check small"><input type="checkbox" name="dlogin_secret_clear" value="1"> gespeichertes Secret löschen</label><?php endif; ?>
                 <label class="field">Redirect-URL (im Developer Portal unter OAuth2 → Redirects eintragen)</label><input type="url" name="dlogin_redirect" value="<?php echo e(setting('dlogin_redirect', '')); ?>" placeholder="<?php echo e(acc_redirect_uri()); ?>">
+                <p class="small" style="margin:6px 0 0">Diese Adresse wird gerade an Discord geschickt – genau so (inkl. https, ohne Schrägstrich am Ende) im Developer Portal unter <b>OAuth2 → Redirects</b> eintragen:<br><code style="user-select:all"><?php echo e(acc_redirect_uri()); ?></code></p>
+                <p class="muted small">Meldet Discord „Ungültiges OAuth2 redirect_uri“, fehlt genau diese Zeile dort (oder sie weicht ab, z. B. http statt https oder mit www.).</p>
                 <p class="muted small">Besser: Client-ID und Secret als Umgebungsvariablen <code>GN_DISCORD_CLIENT_ID</code> / <code>GN_DISCORD_CLIENT_SECRET</code> setzen. Ein hier eingetragenes Secret wird verschlüsselt gespeichert und nie wieder angezeigt.</p>
                 <button class="btn btn-gold" style="margin-top: 10px;">Speichern</button>
             </form>
