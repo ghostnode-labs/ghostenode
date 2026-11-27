@@ -178,7 +178,10 @@ function me_hooks_save(int $uid, array $in): array {
         [$url] = me_hook_target((string)($in['url'] ?? ''));
         $ev = array_values(array_intersect(array_keys(ME_HOOK_EVENTS), (array)($in['events'] ?? [])));
         if (!$ev) throw new RuntimeException('Mindestens ein Ereignis wählen.');
-        $list[] = ['id' => bin2hex(random_bytes(4)), 'url' => $url, 'events' => $ev, 'fails' => 0, 'last' => 0];
+        $list[] = ['id' => bin2hex(random_bytes(4)), 'url' => $url, 'events' => $ev, 'fails' => 0, 'last' => 0, 'secret' => 'whsec_' . bin2hex(random_bytes(24))];   // 8.1: Signatur-Schlüssel je Webhook
+    } elseif (($in['do'] ?? '') === 'secret') {   // 8.1: Signatur-Schlüssel (neu) erzeugen
+        foreach ($list as &$h) if (($h['id'] ?? '') === (string)($in['id'] ?? '')) $h['secret'] = 'whsec_' . bin2hex(random_bytes(24));
+        unset($h);
     } elseif (($in['do'] ?? '') === 'del') {
         $list = array_values(array_filter($list, fn($h) => ($h['id'] ?? '') !== (string)($in['id'] ?? '')));
     }
@@ -186,12 +189,26 @@ function me_hooks_save(int $uid, array $in): array {
     return $list;
 }
 /** eine Nachricht senden (Discord-kompatibel: „content“) – fest auf die geprüfte IP, keine Weiterleitungen */
-function me_hook_send(string $url, string $text, array $extra = []): bool {
+/**
+ * 8.1: Webhook-Signatur – Kopfzeilen „X-GhostNode-Timestamp“ (Unix-Sekunden) und
+ * „X-GhostNode-Signature: sha256=<HMAC-SHA256(secret, timestamp + "." + body)>“. Empfänger prüfen: gleiche Rechnung, Zeit ±5 min.
+ */
+function me_hook_sign(string $secret, string $body, int $ts): array {
+    return ['X-GhostNode-Timestamp: ' . $ts, 'X-GhostNode-Signature: sha256=' . hash_hmac('sha256', $ts . '.' . $body, $secret)];
+}
+function me_hook_verify(string $secret, string $body, string $tsHeader, string $sigHeader, int $now = 0): bool {
+    $now = $now ?: time(); $ts = (int)$tsHeader;
+    if (abs($now - $ts) > 300 || strpos($sigHeader, 'sha256=') !== 0) return false;
+    return hash_equals(hash_hmac('sha256', $ts . '.' . $body, $secret), substr($sigHeader, 7));
+}
+function me_hook_send(string $url, string $text, array $extra = [], string $secret = ''): bool {
     try { [$u, $host, $ip, $port] = me_hook_target($url); } catch (Throwable $e) { return false; }
+    $body = json_encode(['content' => mb_substr($text, 0, 1900), 'username' => 'GhostNode'] + $extra, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    $hdr = ['Content-Type: application/json', 'User-Agent: GhostNode-Webhooks'];
+    if ($secret !== '') $hdr = array_merge($hdr, me_hook_sign($secret, $body, time()));
     $ch = curl_init($u);
     curl_setopt_array($ch, [CURLOPT_POST => true, CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 8, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_FOLLOWLOCATION => false,
-        CURLOPT_RESOLVE => [$host . ':' . $port . ':' . $ip], CURLOPT_HTTPHEADER => ['Content-Type: application/json', 'User-Agent: GhostNode-Webhooks'],
-        CURLOPT_POSTFIELDS => json_encode(['content' => mb_substr($text, 0, 1900), 'username' => 'GhostNode'] + $extra, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)]);
+        CURLOPT_RESOLVE => [$host . ':' . $port . ':' . $ip], CURLOPT_HTTPHEADER => $hdr, CURLOPT_POSTFIELDS => $body]);
     curl_exec($ch); $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
     return $code >= 200 && $code < 300;
 }
@@ -222,7 +239,7 @@ function me_hooks_run(): string {
         $d = json_decode((string)$r['data'], true) ?: []; $ch = false;
         foreach ((array)($d['hooks'] ?? []) as $i => $h) {
             if ((int)($h['fails'] ?? 0) >= 10) continue;   // nach 10 Fehlern pausiert
-            foreach ($h['events'] as $ev) foreach ($msgs[$ev] ?? [] as $m) { $ok = me_hook_send($h['url'], $m); $d['hooks'][$i]['fails'] = $ok ? 0 : (int)($h['fails'] ?? 0) + 1; $d['hooks'][$i]['last'] = time(); $ch = true; if ($ok) $n++; }
+            foreach ($h['events'] as $ev) foreach ($msgs[$ev] ?? [] as $m) { $ok = me_hook_send($h['url'], $m, [], (string)($h['secret'] ?? '')); $d['hooks'][$i]['fails'] = $ok ? 0 : (int)($h['fails'] ?? 0) + 1; $d['hooks'][$i]['last'] = time(); $ch = true; if ($ok) $n++; }
         }
         if ($ch) site_db()->prepare('UPDATE user_prefs SET data = ? WHERE user_id = ?')->execute([json_encode($d, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES), $r['user_id']]);
     }

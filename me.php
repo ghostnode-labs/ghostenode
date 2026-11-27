@@ -34,7 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             case 'hooktest': {
                 $h = array_values(array_filter((array)(me_get($uid)['d']['hooks'] ?? []), fn($x) => ($x['id'] ?? '') === (string)($_POST['id'] ?? '')))[0] ?? null;
                 if (!$h) throw new RuntimeException('Webhook nicht gefunden.');
-                $msg = me_hook_send($h['url'], '🔔 Test von GhostNode – dein Webhook funktioniert.') ? 'Test gesendet ✓' : '';
+                $msg = me_hook_send($h['url'], '🔔 Test von GhostNode – dein Webhook funktioniert.', [], (string)($h['secret'] ?? '')) ? 'Test gesendet ✓' : '';
                 if ($msg === '') throw new RuntimeException('Test fehlgeschlagen – Adresse prüfen.');
                 break;
             }
@@ -111,9 +111,11 @@ code{background:rgba(255,255,255,.06);padding:1px 6px}
 <p class="muted">Gezeigt werden nur Anzeigename, „Mitglied seit“, dein Text, Links und – wenn du willst – deine Rolle. Keine E-Mail, kein VRChat-Konto.</p></form>
 
 <?php elseif ($tab === 'hooks'): $hooks = (array)($d['hooks'] ?? []); ?>
-<div class="me-card"><h3>🪝 Webhooks</h3><p class="muted">Deine Adressen (z. B. ein Discord-Webhook) bekommen eine Nachricht bei neuen VRC-Nexus-Versionen und kurz vor Terminen. Nur https, keine internen Adressen; nach 10 Fehlern wird ein Webhook pausiert.</p>
+<div class="me-card"><h3>🪝 Webhooks</h3><p class="muted">Deine Adressen (z. B. ein Discord-Webhook) bekommen eine Nachricht bei neuen VRC-Nexus-Versionen und kurz vor Terminen. Nur https, keine internen Adressen; nach 10 Fehlern wird ein Webhook pausiert. 🔏 Jede Nachricht ist signiert: <code>X-GhostNode-Signature: sha256=HMAC(Schlüssel, Zeitstempel + "." + Inhalt)</code> und <code>X-GhostNode-Timestamp</code> – so kann dein Server prüfen, dass sie wirklich von GhostNode kommt (Discord ignoriert das einfach).</p>
 <?php foreach ($hooks as $h): ?><div class="me-row"><code style="flex:1;overflow:hidden;text-overflow:ellipsis"><?php echo e(preg_replace('#(/[^/]{6})[^/]*$#', '$1…', $h['url'])); ?></code>
 <span class="muted"><?php echo e(implode(', ', array_map(fn($x) => ME_HOOK_EVENTS[$x] ?? $x, $h['events']))); ?><?php echo (int)($h['fails'] ?? 0) >= 10 ? ' · ⏸ pausiert' : ''; ?></span>
+<details class="me-sec"><summary title="Signatur-Schlüssel">🔏</summary><?php if (!empty($h['secret'])): ?><code style="user-select:all"><?php echo e($h['secret']); ?></code><?php else: ?><span class="muted">noch keiner</span><?php endif; ?>
+<form method="POST" style="display:inline"><input type="hidden" name="tab" value="hooks"><input type="hidden" name="action" value="hooks"><input type="hidden" name="do" value="secret"><input type="hidden" name="id" value="<?php echo e($h['id']); ?>"><button class="btn btn-sm">↻ neu</button></form></details>
 <form method="POST"><input type="hidden" name="tab" value="hooks"><input type="hidden" name="id" value="<?php echo e($h['id']); ?>"><button class="btn" name="action" value="hooktest">🔔 Test</button></form>
 <form method="POST"><input type="hidden" name="tab" value="hooks"><input type="hidden" name="action" value="hooks"><input type="hidden" name="do" value="del"><input type="hidden" name="id" value="<?php echo e($h['id']); ?>"><button class="btn">✕</button></form></div><?php endforeach; ?>
 <form method="POST"><input type="hidden" name="tab" value="hooks"><input type="hidden" name="action" value="hooks"><input type="hidden" name="do" value="add">

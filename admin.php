@@ -662,6 +662,10 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (isset(TASK_INTERVALS[$ev])) set_setting("task_{$tid}_every", (string)$ev);
                 }
                 set_setting('backup_keep', (string)max(1, min(60, (int)($_POST['backup_keep'] ?? 7))));
+                // 8.1: Status-Webhook (Störungsmeldungen) – nur https; leer = aus
+                $sw = trim((string)($_POST['status_webhook'] ?? ''));
+                if ($sw === '' || preg_match('#^https://[^\s]{8,500}$#', $sw)) set_setting('status_webhook', $sw);
+                if (($_POST['status_webhook_secret'] ?? '') === 'new') set_setting('status_webhook_secret', 'whsec_' . bin2hex(random_bytes(24)));
                 set_setting('audit_keep_days', (string)max(30, min(3650, (int)($_POST['audit_keep_days'] ?? 365))));
                 audit('Aufgabenplaner gespeichert');
                 $msg = 'Aufgaben gespeichert.';
@@ -1867,6 +1871,8 @@ function bytes(int $b): string {
                     <?php endforeach; ?>
                 </table>
                 <div class="f2" style="margin-top: 10px;">
+                    <div style="grid-column:1/-1"><label class="field">🩺 Status-Webhook (Störungen melden, z. B. Discord) – <a href="status.php" target="_blank">Status-Seite</a></label><input type="url" name="status_webhook" placeholder="https://discord.com/api/webhooks/…" value="<?php echo e(setting('status_webhook', '')); ?>">
+                        <small class="muted">Signatur-Schlüssel: <?php echo setting('status_webhook_secret', '') !== '' ? '<code style="user-select:all">' . e(setting('status_webhook_secret', '')) . '</code>' : 'keiner'; ?> <label><input type="checkbox" name="status_webhook_secret" value="new"> neu erzeugen</label></small></div>
                     <div><label class="field">Automatische Backups behalten</label><input type="number" name="backup_keep" min="1" max="60" value="<?php echo (int)setting('backup_keep', '7'); ?>"></div>
                     <div><label class="field">Protokoll aufbewahren (Tage)</label><input type="number" name="audit_keep_days" min="30" max="3650" value="<?php echo (int)setting('audit_keep_days', '365'); ?>"></div>
                 </div>
