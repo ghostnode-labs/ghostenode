@@ -23,6 +23,7 @@
 #  Aufruf (als root):
 #    bash ghostnode-root.sh install            alles einrichten (fragt nach Domain, E-Mail und Schlüsseln)
 #    bash ghostnode-root.sh update             Webseite, Weiterleitung und Bot aktualisieren, Dienste neu starten
+#    bash ghostnode-root.sh bot                nur den Discord-Bot aktualisieren (Git oder neueste Release-ZIP), neu starten und prüfen
 #    bash ghostnode-root.sh certs              Zertifikate (erneut) holen – z. B. wenn DNS beim install noch nicht stand
 #    bash ghostnode-root.sh secrets            Schlüssel (Discord, HypeRate, SMTP …) ändern und übernehmen
 #    bash ghostnode-root.sh bungie             nur die Bungie-Werte für D2 Nexus (Anmeldung + Chat) eintragen
@@ -717,9 +718,16 @@ setup_bot() {
     fi
     local dir=/opt/ghostnode/discord-bot
     install -d -o "$APP_USER" -g "$APP_USER" /opt/ghostnode
-    if [ -d "$dir/.git" ]; then git_as -C "$dir" pull --ff-only -q || warn "git pull (Bot) fehlgeschlagen – alte Version bleibt."
-    elif [ -d "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then warn "$dir ist kein Git-Checkout – nicht aktualisiert."
+    local before=""; [ -f "$dir/package.json" ] && before=$(grep -o '"version": *"[^"]*"' "$dir/package.json" | cut -d'"' -f4)
+    if [ -d "$dir/.git" ]; then
+        # fetch + reset statt pull: klappt auch, wenn am Server etwas an den Programmdateien geändert wurde (data/ und .env sind nicht im Git)
+        if git_as -C "$dir" fetch -q origin main && git_as -C "$dir" reset -q --hard origin/main; then ok "Code: $(git_as -C "$dir" log -1 --format='%h %s' | cut -c1-90)"
+        else warn "Git-Update (Bot) fehlgeschlagen – versuche die Release-ZIP."; bot_zip_update "$dir" || warn "Bot nicht aktualisiert – alte Version bleibt."; fi
+    elif [ -d "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then
+        bot_zip_update "$dir" || warn "Bot nicht aktualisiert (kein Git-Checkout, ZIP nicht ladbar) – alte Version bleibt."
     else install -d -o "$APP_USER" -g "$APP_USER" "$dir"; git_as clone -q "$REPO_BOT" "$dir" || die "Bot konnte nicht geholt werden ($REPO_BOT)."; fi
+    local after; after=$(grep -o '"version": *"[^"]*"' "$dir/package.json" 2>/dev/null | cut -d'"' -f4)
+    [ -n "$before" ] && [ "$before" != "$after" ] && ok "Version $before → $after" || ok "Version ${after:-?}"
     install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$dir/data"
     local DASHBOARD_URL="https://$BOT_HOST" NEXUS_BASE="https://$DOMAIN" HYPERATE_RELAY="https://$HR_HOST" BOT_DATA="$dir/data" PORT=$BOT_PORT HOST=127.0.0.1
     save_kv "$CONF_DIR/bot.env" DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET DASHBOARD_URL NEXUS_BASE HYPERATE_RELAY BOT_DATA PORT HOST BOT_SSO_SECRET
@@ -731,6 +739,51 @@ setup_bot() {
     [ -n "${DISCORD_CLIENT_SECRET:-}" ] || warn "Kein OAuth2-Secret – Dashboard-Anmeldung aus. Im Discord-Portal Redirect https://$BOT_HOST/callback eintragen."
     svc enable ghostnode-bot; svc restart ghostnode-bot
     ok "läuft auf 127.0.0.1:$BOT_PORT → https://$BOT_HOST"
+    bot_check
+}
+
+self_update() {   # Auto-Updater: zuerst dieses Script selbst von GitHub holen, dann mit der neuen Fassung weitermachen
+    local self_repo; self_repo=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+    if [ -z "${GN_SELF_UPDATED:-}" ] && [ -d "$self_repo/.git" ]; then
+        step "Installer-Script aktualisieren"
+        git -C "$self_repo" fetch -q origin main && git -C "$self_repo" reset -q --hard origin/main && ok "$(git -C "$self_repo" log -1 --format='%h %s')" || warn "Script-Update fehlgeschlagen – weiter mit der vorhandenen Fassung."
+        GN_SELF_UPDATED=1 exec bash "$(readlink -f "$0")" "$1" "${ARGS[@]}"
+    fi
+}
+
+bot_zip_update() {   # bot_zip_update ORDNER – neueste Release-ZIP von GitHub einspielen (data/, .env und bot-state.json bleiben)
+    local dir=$1 api="https://api.github.com/repos/${REPO_BOT_GH:-ghostnode-labs/node_discord}/releases/latest" url tmp
+    url=$(curl -fsSL -m 20 -H 'Accept: application/vnd.github+json' "$api" 2>/dev/null | python3 -c 'import sys,json
+try:
+    a=[x["browser_download_url"] for x in json.load(sys.stdin).get("assets",[]) if x.get("name")=="ghostnode-discord-bot.zip"]
+    print(a[0] if a else "")
+except Exception: print("")') || true
+    [[ "$url" == https://github.com/* ]] || { warn "Release-ZIP des Bots nicht gefunden ($api)."; return 1; }
+    tmp=$(mktemp -d)
+    if ! curl -fsSL -m 120 -o "$tmp/bot.zip" "$url"; then warn "Download fehlgeschlagen: $url"; rm -rf "$tmp"; return 1; fi
+    install -d "$tmp/x"; mig_extract "$tmp/bot.zip" "$tmp/x"
+    local src="$tmp/x"; [ -f "$src/bot.js" ] || src=$(dirname "$(find "$tmp/x" -maxdepth 2 -name bot.js | head -1)")
+    if [ ! -f "$src/bot.js" ] || [ ! -f "$src/package.json" ]; then warn "ZIP enthält keinen Bot (bot.js fehlt)."; rm -rf "$tmp"; return 1; fi
+    # nur Programmdateien ersetzen – Daten und Schlüssel bleiben unangetastet
+    find "$src" -maxdepth 1 -type f \( -name '*.js' -o -name '*.html' -o -name '*.json' -o -name '*.md' -o -name '*.service' \) ! -name 'bot-state.json' -exec cp -f {} "$dir/" \;
+    chown -R "$APP_USER:$APP_USER" "$dir" 2>/dev/null || true
+    rm -rf "$tmp"
+    ok "Release-ZIP eingespielt ($(basename "$(dirname "$url")"))"
+}
+
+bot_check() {   # nach dem Neustart: läuft der Bot, ist er mit Discord verbunden, antwortet das Dashboard?
+    [ "$RUN_MODE" = systemd ] || return 0
+    local h="" i
+    for i in $(seq 1 20); do h=$(curl --noproxy '*' -sS -m 3 "http://127.0.0.1:$BOT_PORT/health" 2>/dev/null) && [ -n "$h" ] && break; h=""; sleep 1; done
+    # Hinweisseite (Bot startet ohne Token/App-ID): Antwort mit „error“ statt Version
+    local miss; miss=$(printf '%s' "$h" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("error","") if not d.get("version") else "")' 2>/dev/null || true)
+    if [ -n "$miss" ]; then fail "Bot startet nicht richtig: $miss → $0 secrets"; return 0; fi
+    if [ -z "$h" ]; then fail "Bot antwortet nicht auf /health – letzte Zeilen: journalctl -u ghostnode-bot -n 30"; journalctl -u ghostnode-bot -n 8 --no-pager -o cat 2>/dev/null | cut -c1-200 | sed 's/^/    /'; return 0; fi
+    local v okk; v=$(printf '%s' "$h" | python3 -c 'import sys,json; d=json.load(sys.stdin); print(d.get("version","?"))' 2>/dev/null || echo "?")
+    for i in $(seq 1 15); do okk=$(curl --noproxy '*' -fsS -m 3 "http://127.0.0.1:$BOT_PORT/health" 2>/dev/null | python3 -c 'import sys,json; print(1 if json.load(sys.stdin).get("ok") else 0)' 2>/dev/null || echo 0); [ "$okk" = 1 ] && break; sleep 1; done
+    [ "$okk" = 1 ] && ok "Bot $v ist mit Discord verbunden" || warn "Bot $v läuft, ist aber (noch) nicht mit Discord verbunden – Token prüfen ($0 secrets) oder kurz warten."
+    local c; c=$(curl --noproxy '*' -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:$BOT_PORT/api/me" 2>/dev/null || true)
+    [ "${c:-000}" = 401 ] && ok "Dashboard antwortet (Anmeldung nötig, wie erwartet)" || warn "Dashboard /api/me: HTTP ${c:-000}"
 }
 
 write_unit() {   # write_unit NAME BESCHREIBUNG VERZEICHNIS DATEI ENV
@@ -1697,19 +1750,19 @@ case "$CMD" in
         summary ;;
     update)
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
-        # Auto-Updater: zuerst dieses Script selbst von GitHub holen, dann mit der neuen Fassung weitermachen
-        self_repo=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
-        if [ -z "${GN_SELF_UPDATED:-}" ] && [ -d "$self_repo/.git" ]; then
-            step "Installer-Script aktualisieren"
-            git -C "$self_repo" fetch -q origin main && git -C "$self_repo" reset -q --hard origin/main && ok "$(git -C "$self_repo" log -1 --format='%h %s')" || warn "Script-Update fehlgeschlagen – weiter mit der vorhandenen Fassung."
-            GN_SELF_UPDATED=1 exec bash "$(readlink -f "$0")" update "${ARGS[@]}"
-        fi
+        self_update update
         if want web; then step "Webseite"; git_as -C "$WEB_DIR" pull --ff-only || die "git pull der Webseite fehlgeschlagen."; ok "aktuell: $(git_as -C "$WEB_DIR" log -1 --format='%h %s')"; svc reload apache2 || true; fi
         want web && [ "$RUN_MODE" = systemd ] && setup_live
         want hr  && setup_hr
         want bot && setup_bot
         want cron && setup_cron   # Wächter/Backup/Auto-Update mit dem neuesten Stand
         check_all ;;
+    bot)   # nur der Discord-Bot: Code holen (Git oder Release-ZIP), Einstellungen schreiben, neu starten, prüfen
+        [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
+        self_update bot
+        want bot || die "Der Bot ist auf diesem Server abgeschaltet (--skip=bot / Rolle)."
+        setup_bot
+        [ "${FAILS:-0}" -eq 0 ] && ok "Fertig. Dashboard: https://$BOT_HOST" || exit 1 ;;
     certs)
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
         [ -n "${LE_EMAIL:-}" ] || { YES=0; ask LE_EMAIL "E-Mail für Let's Encrypt" ""; save_kv "$CONF" "${CONF_VARS[@]}"; }
@@ -1765,5 +1818,5 @@ case "$CMD" in
         [[ " ${ARGS[*]} " == *" --force "* ]] && rm -f /var/lib/ghostnode/old-db-imported
         setup_olddb; want cron && setup_cron ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
-    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, bungie, check, backup, migrate, crons, olddb, login, usedb, bericht)" ;;
+    *) die "Unbekannter Befehl: $CMD (install, update, bot, certs, secrets, bungie, check, backup, migrate, crons, olddb, login, usedb, bericht)" ;;
 esac
