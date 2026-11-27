@@ -315,7 +315,7 @@ $rm_default = [
     'Einladungen mit Grenzen-Vorschau' => 'done',
     // 8.0.0
     'Automatische Fehlerdiagnose mit Bericht zum Mitschicken' => 'done',
-    'Gesundheit: Bewegungs- und Pausenstatistik aus Uhr und Spielzeit' => 'wip',
+    'Gesundheit: Bewegungs- und Pausenstatistik aus Uhr und Spielzeit' => 'done',
     // 8.0.1
     'Smart-Home: Licht reagiert auf Welt, Puls oder Panik' => 'done',
     'Energie-Modus für Laptops und Steam Deck' => 'done',
@@ -328,13 +328,16 @@ $rm_default = [
     'Sprachsteuerung lokal (Befehle per Stimme)' => 'done',
     'Barrierefreie Tastatur-Bedienung überall' => 'done',
     'Barrierefreiheit: Schriftgröße, Kontrast, Bildschirmleser' => 'done',
-    'Themes-Marktplatz und Barrierefreiheit (Schriftgröße, Kontrast, Bildschirmleser)' => 'wip',
+    'Themes-Marktplatz und Barrierefreiheit (Schriftgröße, Kontrast, Bildschirmleser)' => 'done',
     // 8.0.4
     'Linux- und macOS-Version des Clients' => 'done',
     'Cloud-freier Abgleich zwischen PC und Laptop im Heimnetz' => 'done',
     'Begleiter für Steam Deck und Standalone-Headsets' => 'wip',
+    // 8.0.5
+    'VR-Overlay 2.0 mit Handmenü' => 'done',
+    'Uhr-App 2.0 mit eigener Zifferblatt-Auswahl' => 'done',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0', '7.0.1', '7.1.0', '7.1.1', '7.2.0', '7.2.2', '7.3.0', '7.3.2', '8.0.0', '8.0.1', '8.0.2', '8.0.3', '8.0.4'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0', '7.0.1', '7.1.0', '7.1.1', '7.2.0', '7.2.2', '7.3.0', '7.3.2', '8.0.0', '8.0.1', '8.0.2', '8.0.3', '8.0.4', '8.0.5'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 
 // =====================================================================================================
