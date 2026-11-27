@@ -240,8 +240,13 @@ $rm_default = [
     'Chatbox-Studio: Vorschau wie in VRChat, Vorlagen, Platzhalter-Hilfe' => 'done',
     'Makro-Editor mit Bausteinen statt Text (Ziehen & Ablegen, Testlauf)' => 'done',
     'Stream Deck: Seiten je Welt automatisch umschalten, Drehregler für Parameter und Lautstärke' => 'wip',
+    // 6.5.0
+    'Nexus Watch: Zifferblatt-Anzeigen (Puls, Freunde online) und Schnellaktionen' => 'wip',
+    'Nexus Watch: Benachrichtigungen (Freund kommt online, Einladung) mit Antwort-Knöpfen' => 'done',
+    'Handy als Fernbedienung 2.0: Stream-Deck-Seiten auch auf dem Handy' => 'done',
+    'Offline-Modus für Android mit Abgleich beim nächsten Start' => 'done',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 
 // =====================================================================================================
