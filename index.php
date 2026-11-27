@@ -110,7 +110,7 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
         </div>
         <div class="ld-badges"><span>🪟 Windows</span><span>🤖 Android</span><span>🎛 Stream Deck</span><span>🌍 DE · EN · FR · JA</span><span>🔒 Daten bleiben bei dir</span></div>
     </div>
-    <div class="ld-hero-img"><img src="assets/img/landing/nexus-home.jpg" alt="VRC Nexus – Startseite der App" loading="eager"></div>
+    <div class="ld-hero-img"><?php echo img_pic('assets/img/landing/nexus-home.jpg', 'VRC Nexus – Startseite der App', 'eager', 'fetchpriority="high"'); ?></div>
 </header>
 
 <section class="ld-stats">
@@ -140,14 +140,14 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
     </div>
     <div class="ld-shots">
         <?php foreach ([['nexus-friends.jpg', 'Freunde & Community'], ['nexus-client.jpg', 'Spiel, OSC & Chatbox'], ['nexus-stats.jpg', 'Diagramme & Statistik'], ['nexus-tools.jpg', 'Werkzeuge'], ['nexus-groups.jpg', 'Gruppen'], ['nexus-osc.jpg', 'OSC-Verbindung']] as [$f, $cap]): ?>
-            <figure><a href="assets/img/landing/<?php echo $f; ?>" target="_blank" rel="noopener"><img src="assets/img/landing/<?php echo $f; ?>" alt="<?php echo e($cap); ?>" loading="lazy"></a><figcaption><?php echo e($cap); ?></figcaption></figure>
+            <figure><a href="assets/img/landing/<?php echo $f; ?>" target="_blank" rel="noopener"><?php echo img_pic('assets/img/landing/' . $f, $cap); ?></a><figcaption><?php echo e($cap); ?></figcaption></figure>
         <?php endforeach; ?>
     </div>
     <div class="ld-watch">
         <div class="ld-watch-head"><h3>⌚ Nexus Watch</h3><p>Die App für Wear-OS-Uhren (z. B. Galaxy Watch 4 und neuer, Pixel Watch): Puls direkt vom Uhr-Sensor an VRC Nexus – ohne HypeRate- oder Pulsoid-Konto –, Schlafmodus mit Wecker, sechs Themen, eigener Hintergrund aus der Galerie der Uhr und Updates von selbst. Verbindet sich im Heimnetz direkt mit der Windows-App, gekoppelt mit einem 6-stelligen Code.</p></div>
         <div class="ld-shots ld-shots-watch">
             <?php foreach ([['watch-menu.jpg', 'Hauptmenü, Puls & Schlafmodus'], ['watch-themes.jpg', 'Sechs Themen'], ['watch-pair.jpg', 'Koppeln & Einstellungen']] as [$f, $cap]): ?>
-                <figure><a href="assets/img/landing/<?php echo $f; ?>" target="_blank" rel="noopener"><img src="assets/img/landing/<?php echo $f; ?>" alt="<?php echo e($cap); ?>" loading="lazy"></a><figcaption><?php echo e($cap); ?></figcaption></figure>
+                <figure><a href="assets/img/landing/<?php echo $f; ?>" target="_blank" rel="noopener"><?php echo img_pic('assets/img/landing/' . $f, $cap); ?></a><figcaption><?php echo e($cap); ?></figcaption></figure>
             <?php endforeach; ?>
         </div>
     </div>

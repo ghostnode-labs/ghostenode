@@ -19,3 +19,23 @@ RedirectMatch 404 ^.*/(data|tools|clients)/.*$
 </IfModule>
 
 Options -Indexes
+
+# 8.1: Leistung – Browser-Zwischenspeicher für Bilder, Schriften, CSS und JS (Dateinamen ändern sich bei Updates nicht immer → 7 Tage, Bilder 30 Tage)
+<IfModule mod_expires.c>
+    ExpiresActive On
+    ExpiresByType image/webp "access plus 30 days"
+    ExpiresByType image/jpeg "access plus 30 days"
+    ExpiresByType image/png "access plus 30 days"
+    ExpiresByType image/svg+xml "access plus 30 days"
+    ExpiresByType font/woff2 "access plus 30 days"
+    ExpiresByType text/css "access plus 7 days"
+    ExpiresByType application/javascript "access plus 7 days"
+    ExpiresByType text/javascript "access plus 7 days"
+</IfModule>
+# Komprimierung für Text (HTML, CSS, JS, JSON, SVG)
+<IfModule mod_deflate.c>
+    AddOutputFilterByType DEFLATE text/html text/css text/plain application/javascript text/javascript application/json image/svg+xml
+</IfModule>
+<IfModule mod_mime.c>
+    AddType image/webp .webp
+</IfModule>

@@ -130,6 +130,18 @@ function german_datetime(int $ts, bool $with_time = true): string {
 }
 
 /** Favicon als Emoji (data-URI), damit jede Seite im Browser-Tab erkennbar ist. */
+/**
+ * 8.1: Bild mit WebP-Variante (liegt neben dem Original eine .webp-Datei, bekommen Browser die kleinere Datei; sonst das Original).
+ * $src relativ zur Webseite, z. B. „assets/img/landing/nexus-home.jpg“. Breite/Höhe (falls bekannt) verhindern Springen beim Laden.
+ */
+function img_pic(string $src, string $alt, string $loading = 'lazy', string $extra = ''): string {
+    $webp = preg_replace('/\.(jpe?g|png)$/i', '.webp', $src);
+    $dims = '';
+    $file = APP_ROOT . '/' . ltrim($src, '/');
+    if (is_file($file) && ($sz = @getimagesize($file))) $dims = ' width="' . (int)$sz[0] . '" height="' . (int)$sz[1] . '"';
+    $img = '<img src="' . e($src) . '" alt="' . e($alt) . '" loading="' . e($loading) . '" decoding="async"' . $dims . ($extra !== '' ? ' ' . $extra : '') . '>';
+    return $webp !== $src && is_file(APP_ROOT . '/' . ltrim($webp, '/')) ? '<picture><source srcset="' . e($webp) . '" type="image/webp">' . $img . '</picture>' : $img;
+}
 function emoji_favicon(string $emoji): string {
     // Sitzungs-Wächter: nur wenn ein Anmelde-Cookie da ist (Besucher bekommen nichts); meldet bei Ablauf automatisch ab
     $watch = isset($_COOKIE['GHOSTNODE']) ? '<script src="assets/js/session-watch.js" defer></script>' : '';

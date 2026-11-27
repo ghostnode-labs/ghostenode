@@ -22,7 +22,7 @@ body.ld { padding: 0; display: block; }
 .ld-discord:hover { background: #5865f2; color: #fff; box-shadow: 0 0 12px #5865f2; }
 .ld-badges { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
 .ld-badges span { font-size: .72rem; padding: 4px 10px; border: 1px solid var(--border-color); color: var(--text-muted); letter-spacing: .5px; }
-.ld-hero-img img { width: 100%; display: block; border: 1px solid var(--accent-cyan); box-shadow: 0 0 40px rgba(56, 213, 230, .18), 0 20px 60px rgba(0, 0, 0, .6); transform: perspective(1200px) rotateY(-6deg); transition: transform .4s; }
+.ld-hero-img img { width: 100%; height: auto; display: block; border: 1px solid var(--accent-cyan); box-shadow: 0 0 40px rgba(56, 213, 230, .18), 0 20px 60px rgba(0, 0, 0, .6); transform: perspective(1200px) rotateY(-6deg); transition: transform .4s; }
 .ld-hero-img img:hover { transform: none; }
 .ld-stats { max-width: 1200px; margin: 0 auto 30px; padding: 0 28px; display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px; }
 .ld-stats div { background: var(--panel-bg); border: 1px solid var(--border-color); padding: 16px; text-align: center; clip-path: var(--cut-sm); }
@@ -40,7 +40,7 @@ body.ld { padding: 0; display: block; }
 .ld-ic { font-size: 1.7rem; line-height: 1; }
 .ld-shots { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; margin-top: 26px; }
 .ld-shots figure { margin: 0; }
-.ld-shots img { width: 100%; display: block; border: 1px solid var(--border-color); transition: border-color .2s; }
+.ld-shots img { width: 100%; height: auto; display: block; border: 1px solid var(--border-color); transition: border-color .2s; }
 .ld-shots img:hover { border-color: var(--accent-gold); }
 .ld-shots figcaption { font-size: .74rem; color: var(--text-muted); margin-top: 6px; letter-spacing: 1px; text-transform: uppercase; }
 .ld-note { text-align: center; color: var(--text-muted); font-size: .82rem; margin: 18px 0; }
