@@ -10,6 +10,20 @@ require_once __DIR__ . '/inc/core/pages.php';
 require_once __DIR__ . '/inc/modules/federation.php';
 
 $r = (string)($_GET['r'] ?? '');
+if ($r === 'peer18') {   // 8.2: signierte 18+-Abfrage eines Partner-Servers (nur ja/nein)
+    header('Content-Type: application/json; charset=utf-8'); header('Cache-Control: no-store');
+    if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') { http_response_code(405); echo '{"error":"POST erwartet."}'; exit; }
+    require_once __DIR__ . '/inc/modules/nexuswarn.php';
+    if (nw_rate_over('fed18|' . client_ip(), 60)) { http_response_code(429); echo '{"error":"Zu viele Anfragen."}'; exit; }
+    try {
+        require_once __DIR__ . '/inc/modules/nexusacct.php';
+        [$out, $sig] = fed_peer18_answer((string)file_get_contents('php://input', false, null, 0, 4096), (string)($_SERVER['HTTP_X_GHOSTNODE_FED_SIG'] ?? ''),
+            function (string $uid): bool { $p = nx_account($uid); return $p && empty($p['banned']) && nx_nsfw_allowed($p); });
+        header('X-GhostNode-Fed-Sig: ' . $sig); echo $out;
+    } catch (RuntimeException $e) { http_response_code(403); echo json_encode(['error' => $e->getMessage()], JSON_UNESCAPED_UNICODE); }
+    catch (Throwable $e) { error_log('fed18: ' . $e->getMessage()); http_response_code(500); echo '{"error":"Serverfehler."}'; }
+    exit;
+}
 if ($r === 'info' || $r === 'export') {
     header('Content-Type: application/json; charset=utf-8');
     header('X-Content-Type-Options: nosniff');

@@ -46,6 +46,7 @@ if (isset($_GET['a'])) {
                 if (!nx_uid_ok($pid)) throw new NxError('Ungültige VRChat-User-ID.');
                 $p = nx_account($pid);
                 $ok = $p && empty($p['banned']) && nx_nsfw_allowed($p);
+                if (!$p) { require_once __DIR__ . '/inc/modules/federation.php'; $ok = fed_peer18($pid); }   // 8.2: unbekannt hier → signiert bei Partner-Servern nachfragen
                 $out(['uid' => $pid, 'nsfw' => (bool)$ok]);
             }
             case 'logout': nx_logout($acc, preg_replace('/[^0-9a-f]/', '', (string)($in['device'] ?? ''))); $out(['ok' => true]);

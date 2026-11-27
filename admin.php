@@ -690,6 +690,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($do === 'toggle') { set_setting('fed_on', fed_on() ? '0' : '1'); if (fed_on()) fed_keypair(); $msg = fed_on() ? 'Föderation eingeschaltet.' : 'Föderation ausgeschaltet.'; audit($msg); }
                 elseif ($do === 'add') { $pp = fed_peer_add((string)($_POST['url'] ?? '')); try { $n = fed_pull($pp['url']); $msg = 'Partner „' . $pp['name'] . '“ eingetragen, ' . $n . ' Einträge übernommen.'; } catch (Throwable $e) { $msg = 'Partner eingetragen, erster Abgleich fehlgeschlagen: ' . $e->getMessage(); } }
                 elseif ($do === 'remove') { fed_peer_remove((string)($_POST['url'] ?? '')); $msg = 'Partner entfernt.'; }
+                elseif ($do === 'remote') { set_setting('fed_remote', fed_remote_on() ? '0' : '1'); $msg = fed_remote_on() ? '18+-Prüfung für Fernsteuerung über Partner an.' : '18+-Prüfung über Partner aus.'; audit($msg); }
                 elseif ($do === 'pull') { try { $msg = 'Abgeglichen: ' . fed_pull((string)($_POST['url'] ?? '')) . ' Einträge.'; } catch (RuntimeException $e) { throw new InvalidArgumentException($e->getMessage()); } }
                 break;
             }
@@ -1932,6 +1933,7 @@ function bytes(int $b): string {
                 <div class="panel-title"><span>// 🛰 Föderation</span><span class="muted small"><?php echo $fon ? 'an' : 'aus'; ?> · <?php echo count($fpeers); ?> Partner · <a href="fed.php">Übersicht</a></span></div>
                 <p class="muted small">Tauscht öffentliche, gelistete Clubs (nie 18+) und Profile mit „Föderation erlaubt“ mit befreundeten GhostNode-Servern. Alles signiert (Ed25519); der Schlüssel eines Partners wird beim Eintragen angeheftet. Abgleich über die Aufgabe „Föderation“.</p>
                 <form method="POST" style="display:inline"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="fed_save"><input type="hidden" name="do" value="toggle"><button class="btn btn-sm <?php echo $fon ? 'btn-danger' : 'btn-gold'; ?>"><?php echo $fon ? 'Ausschalten' : 'Einschalten'; ?></button></form>
+                <?php if ($fon): ?><form method="POST" style="display:inline"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="fed_save"><input type="hidden" name="do" value="remote"><button class="btn btn-sm" title="Partner dürfen fragen, ob eine VRChat-ID hier eine gültige 18+-Freigabe hat (nur ja/nein), und dieser Server fragt Partner, wenn jemand Unbekanntes fernsteuern will.">🔞 Fernsteuerung über Partner: <?php echo fed_remote_on() ? 'an' : 'aus'; ?></button></form> <?php endif; ?>
                 <?php if ($fon): ?><small class="muted">Eigener Schlüssel: <code style="user-select:all"><?php echo e(fed_pubkey_b64()); ?></code></small><?php endif; ?>
                 <?php foreach ($fpeers as $fp): ?>
                     <div class="stor"><span><?php echo $fp['ok'] ? '🟢' : '🔴'; ?> <b><?php echo e($fp['name']); ?></b> <small class="muted"><?php echo e($fp['url']); ?></small></span>

@@ -196,3 +196,56 @@ function fed_items(string $kind = '', string $q = ''): array {
     }
     return $out;
 }
+
+// ---------------------------------------------------------------- 8.2: 18+-Prüfung für die Spielzeug-Fernsteuerung über Partner-Server
+/** Darf dieser Server Partner nach 18+-Freigaben fragen bzw. ihnen antworten? (Inhaber-Schalter, ab Werk aus) */
+function fed_remote_on(): bool { return fed_on() && setting('fed_remote', '0') === '1'; }
+/** HTTPS-POST (kurz, begrenzt) → [Status, Body, Signatur-Header]. In Tests ersetzbar. */
+function fed_http_post(string $url, string $body, array $headers): array {
+    $ch = curl_init($url);
+    $sig = '';
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => $body, CURLOPT_TIMEOUT => 8, CURLOPT_CONNECTTIMEOUT => 4,
+        CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_FOLLOWLOCATION => false, CURLOPT_USERAGENT => 'GhostNode-Federation/' . FED_VERSION, CURLOPT_HTTPHEADER => array_merge(['Content-Type: application/json'], $headers),
+        CURLOPT_HEADERFUNCTION => function ($c, $h) use (&$sig) { if (stripos($h, 'x-ghostnode-fed-sig:') === 0) $sig = trim(substr($h, 20)); return strlen($h); }]);
+    $res = curl_exec($ch);
+    $code = (int)curl_getinfo($ch, CURLINFO_RESPONSE_CODE);
+    curl_close($ch);
+    return [$code, is_string($res) ? substr($res, 0, 4096) : '', $sig];
+}
+/** Fragen: Hat diese VRChat-ID bei einem Partner-Server eine gültige 18+-Freigabe? → true/false (nie Details). */
+function fed_peer18(string $uid, ?callable $post = null): bool {
+    $post = $post ?? 'fed_http_post';
+    $uid = strtolower(trim($uid));
+    if (!fed_remote_on() || !preg_match('/^usr_[0-9a-f-]{36}$/', $uid)) return false;
+    static $cache = [];
+    if (isset($cache[$uid]) && $cache[$uid][1] > time() - 300) return $cache[$uid][0];
+    $ok = false;
+    foreach (fed_peers() as $p) {
+        $body = json_encode(['federation' => FED_VERSION, 'from' => rtrim(fed_base(), '/'), 'to' => $p['url'], 'uid' => $uid, 'ts' => time(), 'n' => bin2hex(random_bytes(8))], JSON_UNESCAPED_SLASHES);
+        try {
+            [$code, $res, $sig] = $post($p['url'] . '/fed.php?r=peer18', $body, ['X-GhostNode-Fed-Sig: ' . fed_sign($body)]);
+            if ($code !== 200 || !fed_verify((string)$res, (string)$sig, $p['key'])) continue;
+            $j = json_decode((string)$res, true);
+            if (!is_array($j) || ($j['uid'] ?? '') !== $uid || abs(time() - (int)($j['ts'] ?? 0)) > 120 || rtrim((string)($j['server'] ?? ''), '/') !== $p['url']) continue;
+            if (!empty($j['nsfw'])) { $ok = true; break; }
+        } catch (Throwable $e) { /* nächster Partner */ }
+    }
+    $cache[$uid] = [$ok, time()];
+    return $ok;
+}
+/** Antworten (fed.php?r=peer18): nur signierten Anfragen eingetragener Partner, nur ja/nein. → [Body, Signatur] */
+function fed_peer18_answer(string $body, string $sig, callable $lookup): array {
+    if (!fed_remote_on()) throw new RuntimeException('Auf diesem Server aus.');
+    $j = json_decode($body, true);
+    if (!is_array($j) || (int)($j['federation'] ?? 0) !== FED_VERSION) throw new RuntimeException('Unbekanntes Format.');
+    $from = rtrim((string)($j['from'] ?? ''), '/');
+    $peer = null; foreach (fed_peers() as $p) if ($p['url'] === $from) $peer = $p;
+    if (!$peer) throw new RuntimeException('Kein eingetragener Partner.');
+    if (!fed_verify($body, $sig, $peer['key'])) throw new RuntimeException('Signatur ungültig.');
+    if (abs(time() - (int)($j['ts'] ?? 0)) > 120) throw new RuntimeException('Anfrage zu alt.');
+    if (rtrim((string)($j['to'] ?? ''), '/') !== rtrim(fed_base(), '/')) throw new RuntimeException('Anfrage für einen anderen Server.');
+    $uid = strtolower((string)($j['uid'] ?? ''));
+    if (!preg_match('/^usr_[0-9a-f-]{36}$/', $uid)) throw new RuntimeException('Ungültige ID.');
+    $out = json_encode(['federation' => FED_VERSION, 'server' => rtrim(fed_base(), '/'), 'uid' => $uid, 'nsfw' => (bool)$lookup($uid), 'ts' => time()], JSON_UNESCAPED_SLASHES);
+    return [$out, fed_sign($out)];
+}
