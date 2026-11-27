@@ -17,13 +17,14 @@
  *   turn     {token}                          → {ice:[…]} (3.7 Sprachanrufe: eigener STUN/TURN-Server, kurzlebige Zugangsdaten nach coturn „use-auth-secret“)
  * Nachrichten liegen höchstens 30 Tage und werden nach dem Abholen gelöscht; Bilder höchstens 30 Tage.
  */
+require_once __DIR__ . '/inc/core/jsonguard.php'; json_guard();
 require_once __DIR__ . '/inc/core/pages.php';
 require_once __DIR__ . '/inc/modules/nexusacct.php';
 
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 header('Content-Type: application/json; charset=utf-8');
-$out = function (array $o, int $code = 200) { http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; };
+$out = function (array $o, int $code = 200) { json_guard_clean(); http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; };
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') $out(['error' => 'Nur POST.'], 405);
 $a = (string)($_GET['a'] ?? '');
 if (nw_rate_over('ch|' . client_ip(), 240)) $out(['error' => 'Zu viele Anfragen – kurz warten.'], 429);

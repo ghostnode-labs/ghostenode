@@ -12,6 +12,7 @@
  * den Briefkasten-Schlüssel gesetzt hat. Nachrichten verfallen nach 90 s. Keine Sitzung, keine Cookies, keine Datenbank.
  * <title>Nexus Toy-Relay</title>
  */
+require_once __DIR__ . '/inc/core/jsonguard.php'; json_guard();
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
@@ -23,7 +24,7 @@ const TR_MAX_LEN = 6000;
 const TR_GUARD = "<?php http_response_code(404); exit; ?>\n";
 const TR_RATE = 300;          // Anfragen pro IP und Minute (Abholen 1×/s + Regler)
 
-function tr_out(array $o, int $code = 200): void { http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; }
+function tr_out(array $o, int $code = 200): void { json_guard_clean(); http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; }
 function tr_dir(): string {
     $d = __DIR__ . '/data/toyrelay';
     if (!is_dir($d)) { @mkdir($d, 0700, true); @file_put_contents($d . '/.htaccess', "Require all denied\nDeny from all\n"); }

@@ -15,6 +15,7 @@
  *   POST nexusacct.php?a=logout   {"token","device"?}
  * Webseite: GET nexusacct.php → Verwaltung (Recht „admin.access“): Dienst-Konto, Konten, Sperren.
  */
+require_once __DIR__ . '/inc/core/jsonguard.php'; if (isset($_GET['a'])) json_guard();
 require_once __DIR__ . '/inc/core/pages.php';
 require_once __DIR__ . '/inc/modules/nexusacct.php';
 
@@ -22,7 +23,7 @@ if (isset($_GET['a'])) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     header('X-Content-Type-Options: nosniff');
-    $out = function (array $o, int $code = 200) { http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; };
+    $out = function (array $o, int $code = 200) { json_guard_clean(); http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; };
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') $out(['error' => 'Nur POST.'], 405);
     $a = (string)$_GET['a'];
     // Bremse pro IP; Code/Prüfen strenger (fragt VRChat ab)

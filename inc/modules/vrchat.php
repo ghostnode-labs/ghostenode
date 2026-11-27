@@ -1055,15 +1055,15 @@ function vrc_export(int $uid, string $what): void {
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");
     if ($what === 'feed') {
-        fputcsv($out, ['Zeit', 'Ereignis', 'Name', 'VRChat-ID', 'Vorher', 'Nachher'], ';');
+        fputcsv($out, ['Zeit', 'Ereignis', 'Name', 'VRChat-ID', 'Vorher', 'Nachher'], ';', '"', '\\');
         $st = vrc_db()->prepare('SELECT * FROM feed WHERE user_id = ? ORDER BY id DESC LIMIT 20000');
         $st->execute([$uid]);
-        foreach ($st as $r) fputcsv($out, [date('d.m.Y H:i', (int)$r['ts']), $r['type'], $r['display_name'], $r['vrc_id'], $r['old'], $r['new']], ';');
+        foreach ($st as $r) fputcsv($out, [date('d.m.Y H:i', (int)$r['ts']), $r['type'], $r['display_name'], $r['vrc_id'], $r['old'], $r['new']], ';', '"', '\\');
     } else {
-        fputcsv($out, ['Name', 'VRChat-ID', 'Status', 'Statustext', 'Ort', 'Plattform', 'Vertrauen', 'Favorit', 'Notiz', 'Letzter Login'], ';');
+        fputcsv($out, ['Name', 'VRChat-ID', 'Status', 'Statustext', 'Ort', 'Plattform', 'Vertrauen', 'Favorit', 'Notiz', 'Letzter Login'], ';', '"', '\\');
         foreach (vrc_friend_list($uid) as $f) {
             fputcsv($out, [$f['name'], $f['id'], $f['state'], $f['status_desc'], $f['loc']['kind'] === 'world' ? ($f['loc']['world_name'] ?? '') . ' (' . $f['loc']['access'] . ')' : $f['loc']['label'],
-                           $f['platform'], $f['trust'][0], $f['favorite'] ? 'ja' : '', $f['note'], $f['last_login']], ';');
+                           $f['platform'], $f['trust'][0], $f['favorite'] ? 'ja' : '', $f['note'], $f['last_login']], ';', '"', '\\');
         }
     }
     fclose($out);

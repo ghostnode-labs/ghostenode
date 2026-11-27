@@ -110,7 +110,7 @@ function tpl_table_export(array $c, array $page): void {
     header('Content-Disposition: attachment; filename="' . $name . '"');
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");   // BOM, damit Excel die Umlaute richtig erkennt
-    fputcsv($out, array_column($c['cols'], 'name'), ';');
+    fputcsv($out, array_column($c['cols'], 'name'), ';', '"', '\\');
     foreach ($c['rows'] as $r) {
         $line = [];
         foreach ($c['cols'] as $col) {
@@ -124,7 +124,7 @@ function tpl_table_export(array $c, array $page): void {
                 default: $line[] = (string)$v;
             }
         }
-        fputcsv($out, $line, ';');
+        fputcsv($out, $line, ';', '"', '\\');
     }
     fclose($out);
 }

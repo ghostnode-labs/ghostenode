@@ -6,13 +6,14 @@
  *   POST nexuslic.php?a=check   {"token","version"} → {"valid":bool,"reason":"…"}
  *   POST nexuslic.php?a=sync    {"key","entries"}   → {"count":n,"revoked":[…]}   (nur Besitzerin, mit eigenem kurzlebigen Schlüssel)
  */
+require_once __DIR__ . '/inc/core/jsonguard.php'; json_guard();
 require_once __DIR__ . '/inc/core/pages.php';
 require_once __DIR__ . '/inc/modules/nexuslic.php';
 
 header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
-$out = function (array $o, int $code = 200) { http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; };
+$out = function (array $o, int $code = 200) { json_guard_clean(); http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; };
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') $out(['error' => 'Nur POST.'], 405);
 $a = (string)($_GET['a'] ?? '');
 if (nw_rate_over('lic|' . client_ip(), $a === 'sync' ? 20 : 120)) $out(['error' => 'Zu viele Anfragen – kurz warten.'], 429);

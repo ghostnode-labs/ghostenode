@@ -10,12 +10,13 @@
  *   5.3: feed {q, tag, mode:"following"|"saved"} · save {id,on} · follow {id,on} · follows · trends {rating} · inbox {seen}
  * NSFW wird bei jeder Anfrage serverseitig geprüft (Verified 18+ + NSFW an) – auch für Bilder und Antworten.
  */
+require_once __DIR__ . '/inc/core/jsonguard.php'; json_guard();
 require_once __DIR__ . '/inc/core/pages.php';
 require_once __DIR__ . '/inc/modules/nexuscomm.php';
 
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
-$out = function (array $o, int $code = 200) { header('Content-Type: application/json; charset=utf-8'); http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; };
+$out = function (array $o, int $code = 200) { json_guard_clean(); header('Content-Type: application/json; charset=utf-8'); http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; };
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') $out(['error' => 'Nur POST.'], 405);
 $a = (string)($_GET['a'] ?? '');
 if (nw_rate_over('c|' . client_ip(), $a === 'media' ? 600 : 120)) $out(['error' => 'Zu viele Anfragen – kurz warten.'], 429);

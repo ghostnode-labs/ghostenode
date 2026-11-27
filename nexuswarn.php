@@ -11,6 +11,7 @@
  *   POST nexuswarn.php?a=admin_*   {"token", …}                                      (Besitzerin oder Moderator)
  * Webseite: GET nexuswarn.php → Verwaltung für angemeldete Webseiten-Admins (Recht „admin.access“).
  */
+require_once __DIR__ . '/inc/core/jsonguard.php'; if (isset($_GET['a'])) json_guard();
 require_once __DIR__ . '/inc/core/pages.php';
 require_once __DIR__ . '/inc/modules/vrchat.php';
 require_once __DIR__ . '/inc/modules/nexuswarn.php';
@@ -20,7 +21,7 @@ if (isset($_GET['a'])) {
     header('Content-Type: application/json; charset=utf-8');
     header('Cache-Control: no-store');
     header('X-Content-Type-Options: nosniff');
-    $out = function (array $o, int $code = 200) { http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; };
+    $out = function (array $o, int $code = 200) { json_guard_clean(); http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; };
     if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') $out(['error' => 'Nur POST.'], 405);
     // Bremse pro IP (60 Anfragen/Minute)
     if (nw_rate_over(client_ip(), 60)) $out(['error' => 'Zu viele Anfragen – kurz warten.'], 429);

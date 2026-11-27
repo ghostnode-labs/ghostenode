@@ -50,11 +50,11 @@ if (isset($_GET['export'])) {
     $f = fopen('php://output', 'w');
     fwrite($f, "\xEF\xBB\xBF");
     $people = array_column($con['people'], 'name', 'id');
-    fputcsv($f, ['Datum', 'Bezeichnung', 'Kategorie', 'Status', 'Betrag', 'Währung', 'Betrag EUR', 'Fällig', 'Zahlart', 'Bezahlt von', 'Geteilt mit', 'Notiz'], ';');
+    fputcsv($f, ['Datum', 'Bezeichnung', 'Kategorie', 'Status', 'Betrag', 'Währung', 'Betrag EUR', 'Fällig', 'Zahlart', 'Bezahlt von', 'Geteilt mit', 'Notiz'], ';', '"', '\\');
     foreach ($con['expenses'] as $e) {
         fputcsv($f, [$e['date'] ? date('d.m.Y', strtotime($e['date'])) : '', $e['title'], CON_CATS[$e['category']][1], CON_EXP_STATUS[$e['status']][1], number_format((float)$e['amount'], 2, ',', ''),
                      $e['currency'], number_format(con_eur($con, $e), 2, ',', ''), $e['due'] ? date('d.m.Y', strtotime($e['due'])) : '', CON_METHODS[$e['method']] ?? '',
-                     $people[$e['payer']] ?? 'Ich', implode(', ', array_map(function ($id) use ($people) { return $people[$id] ?? $id; }, con_split($con, $e))), format_plain($e['docs'])], ';');
+                     $people[$e['payer']] ?? 'Ich', implode(', ', array_map(function ($id) use ($people) { return $people[$id] ?? $id; }, con_split($con, $e))), format_plain($e['docs'])], ';', '"', '\\');
     }
     fclose($f);
     exit;

@@ -910,10 +910,10 @@ if ($mode === 'panel') {
         header('Content-Disposition: attachment; filename="protokoll_' . date('Y-m-d') . '.csv"');
         $out = fopen('php://output', 'w');
         fwrite($out, "\xEF\xBB\xBF");
-        fputcsv($out, ['Zeit', 'Benutzer', 'Aktion', 'Details', 'Stufe', 'IP'], ';');
+        fputcsv($out, ['Zeit', 'Benutzer', 'Aktion', 'Details', 'Stufe', 'IP'], ';', '"', '\\');
         $st = $db->prepare('SELECT ts, username, action, detail, level, ip FROM audit_log' . $sqlw . ' ORDER BY id DESC');
         $st->execute($args);
-        foreach ($st as $r) fputcsv($out, array_values($r), ';');
+        foreach ($st as $r) fputcsv($out, array_values($r), ';', '"', '\\');
         fclose($out);
         exit;
     }

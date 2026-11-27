@@ -2,7 +2,12 @@
 # =====================================================================================================
 #  GhostNode Root-Server – Einrichtung, Updates und Prüfung (Debian 12 / Ubuntu 22.04 / 24.04)
 #
-#  Richtet alles ein, was GhostNode und VRC Nexus auf einem eigenen Server brauchen:
+#  Rollen: „dienste“ (Standard) – Webseite bleibt auf Plesk (mit MySQL, FTP, Mail, Cron); hier laufen HypeRate-Weiterleitung,
+#          Discord-Bot, TURN für Anrufe und Mumble.   „alles“ – zusätzlich die Webseite auf diesem Server.
+#  Mit Pterodactyl laufen Weiterleitung und Bot als Eggs (siehe node_discord/pterodactyl und vrc_nexus/apps/hyperate-relay),
+#  Mumble über das mitgelieferte Egg „Mumble Server“ – das Script macht dann nginx + HTTPS davor, TURN, Firewall und Prüfung.
+#
+#  Bausteine:
 #    web   Webseite (Apache + PHP-FPM, eigener Benutzer „ghostnode“, Git-Checkout → Updates per git pull)
 #    db    MariaDB (oder SQLite), Datenbank + Benutzer mit Zufallspasswort
 #    tls   Let's-Encrypt-Zertifikate für alle Namen, automatische Verlängerung
@@ -11,7 +16,8 @@
 #    turn  TURN/STUN-Server (coturn) für Sprach-/Videoanrufe im Nexus-Chat (turn.<domain>)
 #    ftp   FTPS-Eingang für VRChat-Poster (nur der Poster-Eingangsordner, kein Zugriff auf die Seite)
 #    mail  Mailversand über einen SMTP-Anbieter (Status-Meldungen per E-Mail)
-#    cron  Aufgabenplaner der Webseite alle 5 Minuten + tägliches Server-Backup
+#    voice Mumble-Sprachserver (voice.<domain>, ohne Pterodactyl als Dienst, mit Pterodactyl über dessen Egg)
+#    cron  Aufgabenplaner der Webseite alle 5 Minuten (nur Rolle „alles“) + tägliches Server-Backup
 #    fw    Firewall (ufw), fail2ban, automatische Sicherheitsupdates
 #
 #  Aufruf (als root):
@@ -24,8 +30,12 @@
 #  Optionen:
 #    --yes            keine Rückfragen (Werte aus /etc/ghostnode/setup.conf bzw. Umgebung)
 #    --no-tls         keine Zertifikate holen (Test / DNS noch nicht umgestellt)
-#    --only=a,b       nur diese Teile (web,db,tls,hr,bot,turn,ftp,mail,cron,fw)
+#    --only=a,b       nur diese Teile (web,db,tls,hr,bot,turn,voice,ftp,mail,cron,fw)
 #    --skip=a,b       diese Teile auslassen
+#
+#  Neben Pterodactyl (Panel + Wings) oder einem anderen nginx: wird automatisch erkannt. Dann bleibt nginx vorne auf 80/443
+#  (Panel unverändert), Apache läuft nur intern auf 127.0.0.1:18080, die Firewall wird nie zurückgesetzt, Wings-Ports bleiben
+#  offen, PHP bleibt auf der Version des Panels, eine vorhandene MySQL wird mitbenutzt statt ersetzt.
 #
 #  Geheimnisse (Bot-Token, Client-Secrets, HypeRate-Key, SMTP-Passwort) werden nur auf dem Server abgefragt und
 #  in /etc/ghostnode/secrets.env (chmod 600) gespeichert – nie im Repository. Erzeugte Zugangsdaten (Datenbank,
@@ -43,8 +53,9 @@ REPO_WEB=${REPO_WEB:-https://github.com/ghostnode-labs/ghostenode.git}
 REPO_NEXUS=${REPO_NEXUS:-https://github.com/ghostnode-labs/vrc_nexus.git}
 REPO_BOT=${REPO_BOT:-https://github.com/ghostnode-labs/node_discord.git}
 APP_USER=ghostnode
-HR_PORT=8091
-BOT_PORT=8092
+HR_PORT=18091          # nur 127.0.0.1 – hohe Ports, damit sie nicht mit Spielserver-Ports (Pterodactyl) kollidieren
+BOT_PORT=18092
+BACKEND_PORT=18080     # Apache hinter nginx (nur im nginx-Modus)
 FTP_PASV_MIN=40000
 FTP_PASV_MAX=40050
 TURN_MIN=49160
@@ -116,29 +127,44 @@ save_kv() {   # save_kv DATEI VAR... – Format VAR='wert', lesbar für bash und
 }
 SECRET_VARS=(HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET
              GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM STATUS_WEBHOOK
-             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS)
-CONF_VARS=(DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST FTP_USER TZ_NAME)
+             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS)
+CONF_VARS=(ROLE RUN_MODE DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST VOICE_HOST HR_UPSTREAM BOT_UPSTREAM FTP_USER TZ_NAME)
 
 ask_config() {
     step "Einstellungen"
+    ask ROLE      "Rolle: dienste (Webseite bleibt auf Plesk) oder alles (auch die Webseite hier)" "dienste"
     ask DOMAIN    "Haupt-Domain der Webseite" "ghostnode-labs.dev"
     ask LE_EMAIL  "E-Mail für Let's Encrypt (Ablauf-Warnungen)" ""
-    ask WEB_DIR   "Verzeichnis der Webseite" "/var/www/ghostnode"
-    ask DB_ENGINE "Datenbank: mariadb oder sqlite" "mariadb"
-    ask HR_HOST   "Adresse der HypeRate-Weiterleitung" "hr.$DOMAIN"
-    ask BOT_HOST  "Adresse des Discord-Bot-Dashboards" "discord.$DOMAIN"
-    ask TURN_HOST "Adresse des TURN-Servers (Anrufe)" "turn.$DOMAIN"
+    if [ "$ROLE" = alles ]; then
+        ask WEB_DIR   "Verzeichnis der Webseite" "/var/www/ghostnode"
+        ask DB_ENGINE "Datenbank: mariadb oder sqlite" "mariadb"
+    fi
+    ask HR_HOST    "Adresse der HypeRate-Weiterleitung" "hr.$DOMAIN"
+    ask BOT_HOST   "Adresse des Discord-Bot-Dashboards" "discord.$DOMAIN"
+    ask TURN_HOST  "Adresse des TURN-Servers (Anrufe)" "turn.$DOMAIN"
+    ask VOICE_HOST "Adresse des Mumble-Servers" "voice.$DOMAIN"
+    ask RUN_MODE   "Weiterleitung & Bot: egg (läuft in Pterodactyl) oder systemd (eigener Dienst)" "$([ "$PTERO" = 1 ] && echo egg || echo systemd)"
+    if [ "$RUN_MODE" = egg ]; then
+        ask HR_UPSTREAM  "Zuweisung des HypeRate-Servers im Panel (IP:Port, am besten 127.0.0.1:…)" "127.0.0.1:$HR_PORT"
+        ask BOT_UPSTREAM "Zuweisung des Bot-Servers im Panel (IP:Port)" "127.0.0.1:$BOT_PORT"
+    fi
     ask TZ_NAME   "Zeitzone" "Europe/Berlin"
+    WEB_DIR=${WEB_DIR:-/var/www/ghostnode}; DB_ENGINE=${DB_ENGINE:-mariadb}
     DB_NAME=${DB_NAME:-ghostnode}; DB_USER=${DB_USER:-ghostnode}; FTP_USER=${FTP_USER:-poster}
+    case "$ROLE" in dienste|alles) ;; *) die "Rolle muss dienste oder alles sein." ;; esac
+    case "$RUN_MODE" in egg|systemd) ;; *) die "Betriebsart muss egg oder systemd sein." ;; esac
     case "$DB_ENGINE" in mariadb|sqlite) ;; *) die "Datenbank muss mariadb oder sqlite sein." ;; esac
+    if [ "$RUN_MODE" = egg ]; then for u in "$HR_UPSTREAM" "$BOT_UPSTREAM"; do [[ "$u" =~ ^[0-9.]+:[0-9]{2,5}$ ]] || die "Zuweisung ungültig: $u (Form 127.0.0.1:18091)"; done; fi
+    apply_role
     [[ "$DOMAIN" =~ ^[a-z0-9.-]+\.[a-z]{2,}$ ]] || die "Domain ungültig: $DOMAIN"
     save_kv "$CONF" "${CONF_VARS[@]}"; chmod 640 "$CONF"
     ok "gespeichert in $CONF"
 }
 ask_secrets() {
     step "Schlüssel (leer lassen = Funktion bleibt aus, später mit „$0 secrets“ nachtragen)"
-    want hr  && ask HYPERATE_API_KEY     "HypeRate-API-Key" "" s
-    if want bot; then
+    [ "$RUN_MODE" = egg ] && ok "Weiterleitung & Bot laufen in Pterodactyl – ihre Schlüssel trägst du dort in den Egg-Variablen ein."
+    if want hr && [ "$RUN_MODE" = systemd ]; then ask HYPERATE_API_KEY "HypeRate-API-Key" "" s; fi
+    if want bot && [ "$RUN_MODE" = systemd ]; then
         ask DISCORD_TOKEN         "Discord-Bot-Token" "" s
         ask DISCORD_APP_ID        "Discord-Application-ID" ""
         ask DISCORD_GUILD_ID      "Discord-Server-ID (optional)" ""
@@ -159,7 +185,8 @@ ask_secrets() {
             ask SMTP_FROM "Absender-Adresse" "noreply@$DOMAIN"
         fi
     fi
-    DB_PASS=${DB_PASS:-$(rand 32)}; TURN_SECRET=${TURN_SECRET:-$(rand 48)}; FTP_PASS=${FTP_PASS:-$(rand 20)}
+    if want voice && [ "$PTERO" = 0 ]; then ask MUMBLE_PASS "Mumble-Serverpasswort (leer = offen für alle)" "" s; fi
+    DB_PASS=${DB_PASS:-$(rand 32)}; TURN_SECRET=${TURN_SECRET:-$(rand 48)}; FTP_PASS=${FTP_PASS:-$(rand 20)}; MUMBLE_SUPW=${MUMBLE_SUPW:-$(rand 24)}
     save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
     ok "gespeichert in $SECRETS (nur root lesbar)"
 }
@@ -210,6 +237,41 @@ dns_ok() {   # zeigt der Name auf diesen Server?
 }
 git_as() { runuser -u "$APP_USER" -- git "$@"; }
 
+# ---------------------------------------------------------------- Umgebung erkennen (Pterodactyl, nginx, MySQL)
+FRONT=apache; PTERO=0; WINGS_API=""; WINGS_SFTP=""
+detect_env() {
+    { [ -d /var/www/pterodactyl ] || [ -f /etc/pterodactyl/config.yml ] || [ -x /usr/local/bin/wings ]; } && PTERO=1
+    if [ -f /etc/pterodactyl/config.yml ]; then
+        WINGS_API=$(awk '/^api:/{a=1;next} a&&/^[^ ]/{a=0} a&&/^  port:/{print $2; exit}' /etc/pterodactyl/config.yml)
+        WINGS_SFTP=$(awk '/bind_port:/{print $2; exit}' /etc/pterodactyl/config.yml)
+    fi
+    [ "$PTERO" = 1 ] && { WINGS_API=${WINGS_API:-8080}; WINGS_SFTP=${WINGS_SFTP:-2022}; }
+    # nginx belegt schon 80/443 (z. B. Pterodactyl-Panel) – oder wir haben schon im nginx-Modus eingerichtet → nginx bleibt vorne
+    if ss -ltnpH 2>/dev/null | awk '$4 ~ /:(80|443)$/' | grep '"nginx"' >/dev/null || [ -f /etc/nginx/sites-available/ghostnode.conf ]; then FRONT=nginx; fi
+    return 0
+}
+# Rolle „dienste“: Webseite bleibt auf Plesk → Teile der Webseite auslassen, nginx vorne
+apply_role() {
+    ROLE=${ROLE:-alles}; RUN_MODE=${RUN_MODE:-systemd}; VOICE_HOST=${VOICE_HOST:-voice.${DOMAIN:-example.org}}
+    if [ "$ROLE" = dienste ]; then SKIP="${SKIP:+$SKIP,}web,db,ftp,mail"; FRONT=nginx; fi
+    return 0
+}
+port_owner() { { ss -ltnupH "sport = :$1" 2>/dev/null | grep -o 'users:(("[^"]*"' | head -1 | cut -d'"' -f2; } || true; }
+need_port() {   # need_port PORT ERLAUBTE_PROZESSE... → abbrechen, wenn ein fremdes Programm den Port belegt
+    local p=$1 who; shift; who=$(port_owner "$p")
+    [ -z "$who" ] && return 0
+    for a in "$@"; do [ "$who" = "$a" ] && return 0; done
+    die "Port $p ist schon von „$who“ belegt (Spielserver? anderes Programm?). Bitte freigeben oder den Teil mit --skip=… auslassen."
+}
+# Pakete installieren, ohne dass sich der Dienst sofort startet (Apache neben nginx würde sonst um Port 80 kämpfen)
+install_quiet() {
+    local made=0
+    [ -e /usr/sbin/policy-rc.d ] || { printf '#!/bin/sh\nexit 101\n' > /usr/sbin/policy-rc.d; chmod 755 /usr/sbin/policy-rc.d; made=1; }
+    apt-get install -y -qq "$@" >/dev/null; local rc=$?
+    [ "$made" = 1 ] && rm -f /usr/sbin/policy-rc.d
+    return $rc
+}
+
 # ---------------------------------------------------------------- Teile
 base_packages() {
     step "System & Pakete"
@@ -232,8 +294,13 @@ install_node() {
 }
 
 setup_web() {
-    step "Webseite (Apache + PHP-FPM)"
-    apt-get install -y -qq apache2 php-fpm php-cli php-sqlite3 php-mysql php-curl php-mbstring php-zip php-gd php-xml php-intl >/dev/null
+    step "Webseite (Apache + PHP-FPM$([ "$FRONT" = nginx ] && echo ' hinter nginx'))"
+    # Vorhandenes PHP (z. B. vom Pterodactyl-Panel) behalten: gleiche Version nachinstallieren, nichts umstellen
+    local PV0="" pk; command -v php >/dev/null && PV0=$(php_ver)
+    if [ -n "$PV0" ]; then pk="php$PV0-fpm php$PV0-cli php$PV0-sqlite3 php$PV0-mysql php$PV0-curl php$PV0-mbstring php$PV0-zip php$PV0-gd php$PV0-xml php$PV0-intl"
+    else pk="php-fpm php-cli php-sqlite3 php-mysql php-curl php-mbstring php-zip php-gd php-xml php-intl"; fi
+    # shellcheck disable=SC2086
+    if [ "$FRONT" = nginx ]; then install_quiet apache2 $pk; else apt-get install -y -qq apache2 $pk >/dev/null; fi
     local PV; PV=$(php_ver)
     local mods; mods=$(php -m)
     for m in sodium pdo_sqlite pdo_mysql curl mbstring zip gd openssl; do grep -qix "$m" <<<"$mods" || die "PHP-Erweiterung $m fehlt."; done
@@ -274,7 +341,8 @@ setup_web() {
         echo 'env[PATH] = /usr/local/bin:/usr/bin:/bin'
     } > "$POOL"
     chmod 640 "$POOL"
-    [ -f "/etc/php/$PV/fpm/pool.d/www.conf" ] && mv "/etc/php/$PV/fpm/pool.d/www.conf" "/etc/php/$PV/fpm/pool.d/www.conf.aus"
+    # Standard-Pool „www“ bleibt (das Pterodactyl-Panel nutzt ihn); ältere Script-Versionen hatten ihn abgeschaltet → zurückholen
+    if [ -f "/etc/php/$PV/fpm/pool.d/www.conf.aus" ] && [ ! -f "/etc/php/$PV/fpm/pool.d/www.conf" ]; then mv "/etc/php/$PV/fpm/pool.d/www.conf.aus" "/etc/php/$PV/fpm/pool.d/www.conf"; fi
     # gleiche Variablen für Cron (Kommandozeile)
     save_kv "$CONF_DIR/web.env" GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET
     chown root:"$APP_USER" "$CONF_DIR/web.env" "$CONF_DIR"; chmod 640 "$CONF_DIR/web.env"; chmod 750 "$CONF_DIR"
@@ -294,14 +362,27 @@ Header always set Referrer-Policy "strict-origin-when-cross-origin"
 EOF
     a2enconf -q ghostnode-security >/dev/null
 
+    local vh='*:80' extra='    Protocols h2 http/1.1'
+    if [ "$FRONT" = nginx ]; then
+        need_port "$BACKEND_PORT" apache2
+        # Apache nur intern; nginx (vorne) reicht die echte Absender-IP und https weiter
+        [ -f /etc/apache2/ports.conf.orig ] || cp /etc/apache2/ports.conf /etc/apache2/ports.conf.orig
+        printf '# erzeugt von ghostnode-root.sh – Apache läuft hinter nginx\nListen 127.0.0.1:%s\n' "$BACKEND_PORT" > /etc/apache2/ports.conf
+        a2enmod -q remoteip >/dev/null
+        vh="127.0.0.1:$BACKEND_PORT"
+        extra=$(printf '    RemoteIPHeader X-Forwarded-For\n    RemoteIPInternalProxy 127.0.0.1\n    SetEnvIf X-Forwarded-Proto "^https$" HTTPS=on')
+        for f in /etc/apache2/sites-available/ghostnode-hr.conf /etc/apache2/sites-available/ghostnode-bot.conf /etc/apache2/sites-available/ghostnode-turn.conf; do
+            [ -f "$f" ] && { a2dissite -q "$(basename "$f" .conf)" >/dev/null 2>&1 || true; rm -f "$f"; }
+        done
+    fi
     cat > /etc/apache2/sites-available/ghostnode.conf <<EOF
 # erzeugt von ghostnode-root.sh
-<VirtualHost *:80>
+<VirtualHost $vh>
     ServerName $DOMAIN
     ServerAlias www.$DOMAIN
     DocumentRoot $WEB_DIR
     DirectoryIndex index.php index.html
-    Protocols h2 http/1.1
+$extra
     <Directory $WEB_DIR>
         Options -Indexes +FollowSymLinks
         AllowOverride All
@@ -322,8 +403,46 @@ EOF
 EOF
     a2ensite -q ghostnode >/dev/null; a2dissite -q 000-default >/dev/null 2>&1 || true
     apache2ctl configtest >/dev/null 2>&1 || die "Apache-Konfiguration fehlerhaft: $(apache2ctl configtest 2>&1 | tail -3)"
-    svc enable apache2; svc reload apache2 2>/dev/null || svc restart apache2
-    ok "Apache: $DOMAIN → $WEB_DIR"
+    if [ "$FRONT" = nginx ]; then svc enable apache2; svc restart apache2; nginx_site ghostnode "$DOMAIN www.$DOMAIN" "$BACKEND_PORT" web
+    else svc enable apache2; svc reload apache2 2>/dev/null || svc restart apache2; fi
+    ok "Apache: $DOMAIN → $WEB_DIR$([ "$FRONT" = nginx ] && echo " (über nginx → 127.0.0.1:$BACKEND_PORT)")"
+}
+
+# nginx vorne (Pterodactyl-Modus): ein Server-Block je Name, Ziel = interner Port
+nginx_site() {   # nginx_site NAME "HOSTS" PORT web|sse|plain|redirect
+    local name=$1 hosts=$2 port=$3 kind=$4 f=/etc/nginx/sites-available/$1.conf up
+    up=$port; [[ "$up" == *:* ]] || up="127.0.0.1:$up"
+    command -v nginx >/dev/null || { apt-get install -y -qq nginx >/dev/null; rm -f /etc/nginx/sites-enabled/default; }
+    {
+        echo "# erzeugt von ghostnode-root.sh – GhostNode neben anderen nginx-Seiten (z. B. Pterodactyl-Panel)"
+        echo "server {"
+        echo "    listen 80;"; [ -s /proc/net/if_inet6 ] && echo "    listen [::]:80;"
+        echo "    server_name $hosts;"
+        if [ "$kind" = redirect ]; then echo "    return 302 https://$DOMAIN\$request_uri;"; echo "}"
+        else
+            echo "    access_log /var/log/nginx/$name.access.log;"; echo "    error_log /var/log/nginx/$name.error.log;"
+            echo "    client_max_body_size 70m;"
+            echo "    location / {"
+            echo "        proxy_pass http://$up;"
+            echo "        proxy_http_version 1.1;"
+            echo "        proxy_set_header Host \$host;"
+            echo "        proxy_set_header X-Real-IP \$remote_addr;"
+            echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
+            echo "        proxy_set_header X-Forwarded-Proto \$scheme;"
+            echo "        proxy_set_header Connection \"\";"
+            if [ "$kind" = sse ]; then echo "        proxy_buffering off;"; echo "        proxy_cache off;"; echo "        proxy_read_timeout 3600s;"; echo "        gzip off;"
+            else echo "        proxy_read_timeout 120s;"; fi
+            echo "    }"; echo "}"
+        fi
+    } > "$f"
+    ln -sf "$f" "/etc/nginx/sites-enabled/$name.conf"
+    if ! nginx -t >/dev/null 2>&1; then
+        # sofort zurücknehmen – nginx (und damit z. B. das Pterodactyl-Panel) läuft mit der alten Konfiguration weiter
+        local why; why=$(nginx -t 2>&1 | tail -2 || true)
+        rm -f "/etc/nginx/sites-enabled/$name.conf" "$f"
+        die "nginx-Konfiguration fehlerhaft ($name) – zurückgenommen, nichts verändert: $why"
+    fi
+    svc reload nginx 2>/dev/null || svc restart nginx
 }
 
 setup_db() {
@@ -333,8 +452,11 @@ setup_db() {
         [ -f "$cfg" ] || ok "SQLite – nichts einzurichten (Datei liegt in data/)"
         return
     fi
-    apt-get install -y -qq mariadb-server >/dev/null
-    svc enable mariadb
+    local dbsvc=mariadb
+    if dpkg -l 'mysql-server*' 2>/dev/null | grep -q '^ii'; then
+        dbsvc=mysql; ok "vorhandene MySQL wird mitbenutzt (z. B. vom Pterodactyl-Panel) – nur eigene Datenbank + Benutzer"
+    else apt-get install -y -qq mariadb-server >/dev/null; fi
+    svc enable "$dbsvc"
     for i in $(seq 1 30); do mysqladmin ping >/dev/null 2>&1 && break; sleep 1; done
     mysql --protocol=socket -uroot <<EOF
 CREATE DATABASE IF NOT EXISTS \`$DB_NAME\` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
@@ -356,6 +478,11 @@ EOF
 
 setup_hr() {
     step "HypeRate-Weiterleitung ($HR_HOST)"
+    if [ "$RUN_MODE" = egg ]; then
+        nginx_site ghostnode-hr "$HR_HOST" "$HR_UPSTREAM" sse
+        ok "läuft in Pterodactyl (Egg „GhostNode HypeRate-Weiterleitung“, Zuweisung $HR_UPSTREAM) → https://$HR_HOST"
+        return 0
+    fi
     local dir=/opt/ghostnode/hyperate-relay src=/opt/ghostnode/src/vrc_nexus
     install -d -o "$APP_USER" -g "$APP_USER" /opt/ghostnode /opt/ghostnode/src "$dir"
     if [ -d "$src/.git" ]; then git_as -C "$src" pull --ff-only -q || warn "git pull (vrc_nexus) fehlgeschlagen – alte Version bleibt."
@@ -365,7 +492,8 @@ setup_hr() {
         git_as -C "$src" sparse-checkout set apps/hyperate-relay
     fi
     install -o "$APP_USER" -g "$APP_USER" -m 0644 "$src/apps/hyperate-relay/app.js" "$src/apps/hyperate-relay/package.json" "$dir/"
-    save_kv "$CONF_DIR/hr.env" HYPERATE_API_KEY; echo "PORT=$HR_PORT" >> "$CONF_DIR/hr.env"; chmod 600 "$CONF_DIR/hr.env"
+    save_kv "$CONF_DIR/hr.env" HYPERATE_API_KEY; printf 'PORT=%s\nHOST=127.0.0.1\n' "$HR_PORT" >> "$CONF_DIR/hr.env"; chmod 600 "$CONF_DIR/hr.env"
+    need_port "$HR_PORT" node
     write_unit ghostnode-hr "GhostNode HypeRate-Weiterleitung" "$dir" app.js "$CONF_DIR/hr.env"
     proxy_vhost ghostnode-hr "$HR_HOST" "$HR_PORT" sse
     [ -n "${HYPERATE_API_KEY:-}" ] || warn "Kein HypeRate-Key – die Weiterleitung läuft, verbindet sich aber nicht (später: $0 secrets)."
@@ -375,15 +503,22 @@ setup_hr() {
 
 setup_bot() {
     step "Discord-Bot ($BOT_HOST)"
+    if [ "$RUN_MODE" = egg ]; then
+        nginx_site ghostnode-bot "$BOT_HOST" "$BOT_UPSTREAM" plain
+        ok "läuft in Pterodactyl (Egg „GhostNode Discord-Bot“, Zuweisung $BOT_UPSTREAM) → https://$BOT_HOST"
+        ok "Im Panel als Variable „Dashboard-Adresse“: https://$BOT_HOST – im Discord-Portal Redirect https://$BOT_HOST/callback"
+        return 0
+    fi
     local dir=/opt/ghostnode/discord-bot
     install -d -o "$APP_USER" -g "$APP_USER" /opt/ghostnode
     if [ -d "$dir/.git" ]; then git_as -C "$dir" pull --ff-only -q || warn "git pull (Bot) fehlgeschlagen – alte Version bleibt."
     elif [ -d "$dir" ] && [ -n "$(ls -A "$dir" 2>/dev/null)" ]; then warn "$dir ist kein Git-Checkout – nicht aktualisiert."
     else install -d -o "$APP_USER" -g "$APP_USER" "$dir"; git_as clone -q "$REPO_BOT" "$dir" || die "Bot konnte nicht geholt werden ($REPO_BOT)."; fi
     install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$dir/data"
-    local DASHBOARD_URL="https://$BOT_HOST" NEXUS_BASE="https://$DOMAIN" HYPERATE_RELAY="https://$HR_HOST" BOT_DATA="$dir/data" PORT=$BOT_PORT
-    save_kv "$CONF_DIR/bot.env" DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET DASHBOARD_URL NEXUS_BASE HYPERATE_RELAY BOT_DATA PORT
+    local DASHBOARD_URL="https://$BOT_HOST" NEXUS_BASE="https://$DOMAIN" HYPERATE_RELAY="https://$HR_HOST" BOT_DATA="$dir/data" PORT=$BOT_PORT HOST=127.0.0.1
+    save_kv "$CONF_DIR/bot.env" DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET DASHBOARD_URL NEXUS_BASE HYPERATE_RELAY BOT_DATA PORT HOST
     chmod 600 "$CONF_DIR/bot.env"
+    need_port "$BOT_PORT" node
     write_unit ghostnode-bot "GhostNode Discord-Bot (VRC Nexus)" "$dir" bot.js "$CONF_DIR/bot.env"
     proxy_vhost ghostnode-bot "$BOT_HOST" "$BOT_PORT"
     [ -n "${DISCORD_TOKEN:-}" ] || warn "Kein Bot-Token – der Bot zeigt nur eine Hinweisseite (später: $0 secrets)."
@@ -427,6 +562,7 @@ EOF
 
 proxy_vhost() {   # proxy_vhost NAME HOST PORT [sse]
     local name=$1 host=$2 port=$3 sse=${4:-}
+    if [ "$FRONT" = nginx ]; then nginx_site "$name" "$host" "$port" "${sse:-plain}"; return 0; fi
     cat > "/etc/apache2/sites-available/$name.conf" <<EOF
 # erzeugt von ghostnode-root.sh
 <VirtualHost *:80>
@@ -449,6 +585,7 @@ EOF
 
 setup_turn() {
     step "TURN/STUN für Anrufe ($TURN_HOST)"
+    need_port 3478 turnserver; need_port 5349 turnserver
     apt-get install -y -qq coturn >/dev/null
     install -d -m 0750 -o root -g turnserver /etc/coturn/certs 2>/dev/null || install -d -m 0750 /etc/coturn/certs
     local tls=""; [ -s /etc/coturn/certs/fullchain.pem ] && tls=1
@@ -457,6 +594,7 @@ setup_turn() {
 listening-port=3478
 $( [ -n "$tls" ] && printf 'tls-listening-port=5349\ncert=/etc/coturn/certs/fullchain.pem\npkey=/etc/coturn/certs/privkey.pem\nno-tlsv1\nno-tlsv1_1\n' )
 fingerprint
+no-rfc5780
 use-auth-secret
 static-auth-secret=$TURN_SECRET
 realm=$DOMAIN
@@ -487,15 +625,55 @@ EOF
     # Webseite: TURN-Adressen + Geheimnis (data/keys/turn.json, nur für PHP lesbar)
     local urls="\"stun:$TURN_HOST:3478\",\"turn:$TURN_HOST:3478?transport=udp\",\"turn:$TURN_HOST:3478?transport=tcp\""
     [ -n "$tls" ] && urls="$urls,\"turns:$TURN_HOST:5349?transport=tcp\""
-    printf '{"urls":[%s],"secret":"%s"}\n' "$urls" "$TURN_SECRET" > "$WEB_DIR/data/keys/turn.json"
-    chown "$APP_USER:$APP_USER" "$WEB_DIR/data/keys/turn.json"; chmod 600 "$WEB_DIR/data/keys/turn.json"
+    if want web; then
+        printf '{"urls":[%s],"secret":"%s"}\n' "$urls" "$TURN_SECRET" > "$WEB_DIR/data/keys/turn.json"
+        chown "$APP_USER:$APP_USER" "$WEB_DIR/data/keys/turn.json"; chmod 600 "$WEB_DIR/data/keys/turn.json"
+    else
+        # Webseite liegt auf Plesk: Datei zum Hochladen nach data/keys/turn.json der Plesk-Seite
+        printf '{"urls":[%s],"secret":"%s"}\n' "$urls" "$TURN_SECRET" > "$CONF_DIR/turn-fuer-plesk.json"; chmod 600 "$CONF_DIR/turn-fuer-plesk.json"
+    fi
     svc enable coturn; svc restart coturn
-    ok "coturn: 3478 (UDP/TCP)$([ -n "$tls" ] && echo ', 5349 (TLS)'), Relais-Ports $TURN_MIN–$TURN_MAX; Webseite kennt den Server (data/keys/turn.json)"
+    ok "coturn: 3478 (UDP/TCP)$([ -n "$tls" ] && echo ', 5349 (TLS)'), Relais-Ports $TURN_MIN–$TURN_MAX"
+    if want web; then ok "Webseite kennt den Server (data/keys/turn.json)"
+    else warn "Plesk: $CONF_DIR/turn-fuer-plesk.json als data/keys/turn.json in die Webseite hochladen (Dateimanager, Rechte 600) – dann gehen Anrufe über diesen Server."; fi
     [ -n "$tls" ] || warn "TURN ohne TLS – nach „$0 certs“ wird 5349 (TLS) automatisch ergänzt."
+}
+
+setup_voice() {
+    step "Mumble-Sprachserver ($VOICE_HOST)"
+    if [ "$PTERO" = 1 ]; then
+        ok "Pterodactyl erkannt → im Panel einen Server mit dem mitgelieferten Egg „Mumble Server“ (Nest „Voice Servers“) anlegen,"
+        ok "Zuweisung <Server-IP>:64738, DNS $VOICE_HOST auf diese IP. Mumble verbindet direkt (ohne nginx); Docker-Ports gehen an ufw vorbei."
+        return 0
+    fi
+    need_port 64738 mumble-server murmurd
+    apt-get install -y -qq mumble-server >/dev/null
+    local ini=/etc/mumble-server.ini bin
+    bin=$(command -v mumble-server || command -v murmurd || echo /usr/sbin/murmurd)
+    [ -f "$ini.orig" ] || cp "$ini" "$ini.orig"
+    setini() { if grep -qE "^;?$1=" "$ini"; then sed -i "s|^;\?$1=.*|$1=$2|" "$ini"; else echo "$1=$2" >> "$ini"; fi; }
+    setini port 64738
+    setini users 100
+    setini bandwidth 72000
+    setini serverpassword "${MUMBLE_PASS:-}"
+    setini registerName "GhostNode"
+    setini welcometext "\"<b>Willkommen bei GhostNode</b> – sei nett zueinander 💙\""
+    setini allowhtml true
+    if [ -s /etc/ghostnode/tls/fullchain.pem ]; then
+        setini sslCert /etc/ghostnode/tls/fullchain.pem; setini sslKey /etc/ghostnode/tls/privkey.pem
+        chgrp mumble-server /etc/ghostnode/tls /etc/ghostnode/tls/*.pem 2>/dev/null || true; chmod 750 /etc/ghostnode/tls
+    fi
+    svc enable mumble-server; svc restart mumble-server
+    sleep 2
+    # SuperUser-Passwort setzen (Verwaltung im Mumble-Client: als „SuperUser“ anmelden)
+    runuser -u mumble-server -- "$bin" -ini "$ini" -supw "$MUMBLE_SUPW" >/dev/null 2>&1 || "$bin" -ini "$ini" -supw "$MUMBLE_SUPW" >/dev/null 2>&1 || warn "SuperUser-Passwort ließ sich nicht setzen – später: $bin -ini $ini -supw <Passwort>"
+    svc restart mumble-server
+    ok "Mumble auf Port 64738 (TCP/UDP)$([ -n "${MUMBLE_PASS:-}" ] && echo ', mit Serverpasswort')$([ -s /etc/ghostnode/tls/fullchain.pem ] && echo ', Zertifikat von Lets Encrypt'); SuperUser-Passwort in $CRED"
 }
 
 setup_ftp() {
     step "FTPS-Eingang für Poster"
+    need_port 21 vsftpd
     apt-get install -y -qq vsftpd libpam-pwdfile >/dev/null
     local inbox="$WEB_DIR/data/uploads/posters/inbox"
     install -d -o "$APP_USER" -g "$APP_USER" -m 0755 "$WEB_DIR/data/uploads" "$WEB_DIR/data/uploads/posters" "$inbox"
@@ -574,39 +752,43 @@ EOF
 
 setup_cron() {
     step "Aufgaben & Backups"
-    cat > /usr/local/sbin/ghostnode-cron <<EOF
+    if want web; then cat > /usr/local/sbin/ghostnode-cron <<EOF
 #!/bin/sh
 # Aufgabenplaner der Webseite (Feeds, Kalender, Status, Webhooks, Föderation, Backups der Seite …)
 set -a; [ -r $CONF_DIR/web.env ] && . $CONF_DIR/web.env; set +a
 exec /usr/bin/php $WEB_DIR/cron.php
 EOF
+    chmod 755 /usr/local/sbin/ghostnode-cron; fi
     cat > /usr/local/sbin/ghostnode-backup <<EOF
 #!/bin/bash
-# Server-Backup: Datenbank, data/, uploads/, Bot-Daten, Einstellungen – 14 Tage aufbewahrt
+# Server-Backup: (Webseite: Datenbank, data/, uploads/), Bot-Daten, Mumble, Einstellungen – 14 Tage aufbewahrt
+# Pterodactyl-Server (Eggs) sichert das Panel selbst (Server → Backups).
 set -euo pipefail
 umask 077
 D=/var/backups/ghostnode; T=\$(date +%Y-%m-%d_%H%M); W=\$(mktemp -d)
 mkdir -p "\$D"
-if [ "$DB_ENGINE" = mariadb ]; then mysqldump --single-transaction --routines "$DB_NAME" | gzip > "\$W/datenbank.sql.gz"; fi
-tar -czf "\$W/webseite-data.tar.gz" -C "$WEB_DIR" data \$( [ -d "$WEB_DIR/uploads" ] && echo uploads )
+if [ "$(want web && echo 1)" = 1 ]; then
+    if [ "$DB_ENGINE" = mariadb ]; then mysqldump --single-transaction --routines "$DB_NAME" | gzip > "\$W/datenbank.sql.gz"; fi
+    tar -czf "\$W/webseite-data.tar.gz" -C "$WEB_DIR" data \$( [ -d "$WEB_DIR/uploads" ] && echo uploads )
+fi
+[ -d /var/lib/mumble-server ] && tar -czf "\$W/mumble.tar.gz" -C /var/lib mumble-server
 [ -d /opt/ghostnode/discord-bot/data ] && tar -czf "\$W/bot-data.tar.gz" -C /opt/ghostnode/discord-bot data
 tar -czf "\$W/einstellungen.tar.gz" -C / etc/ghostnode
 tar -cf "\$D/ghostnode-\$T.tar" -C "\$W" .
 rm -rf "\$W"
 find "\$D" -name 'ghostnode-*.tar' -mtime +14 -delete
 EOF
-    chmod 755 /usr/local/sbin/ghostnode-cron; chmod 700 /usr/local/sbin/ghostnode-backup
-    cat > /etc/cron.d/ghostnode <<EOF
-# erzeugt von ghostnode-root.sh
-SHELL=/bin/sh
-PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-*/5 * * * * $APP_USER /usr/local/sbin/ghostnode-cron >/dev/null 2>&1
-17 3 * * * root /usr/local/sbin/ghostnode-backup >/dev/null 2>&1
-EOF
+    chmod 700 /usr/local/sbin/ghostnode-backup
+    {
+        echo "# erzeugt von ghostnode-root.sh"; echo "SHELL=/bin/sh"; echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        if want web; then echo "*/5 * * * * $APP_USER /usr/local/sbin/ghostnode-cron >/dev/null 2>&1"; fi
+        echo "17 3 * * * root /usr/local/sbin/ghostnode-backup >/dev/null 2>&1"
+    } > /etc/cron.d/ghostnode
     chmod 644 /etc/cron.d/ghostnode
     svc enable cron
     # Webseite auf „echten Cron“ stellen (nur möglich, wenn die Datenbank schon erreichbar ist)
-    if runuser -u "$APP_USER" -- php -r 'chdir($argv[1]); $_SERVER["REMOTE_ADDR"]="127.0.0.1"; require "inc/core/pages.php"; set_setting("tasks_mode","cron"); echo "ok";' "$WEB_DIR" 2>/dev/null | grep ok >/dev/null; then
+    if ! want web; then ok "Webseiten-Aufgaben laufen auf Plesk (dort: Geplante Aufgaben → php cron.php alle 5 min)"
+    elif runuser -u "$APP_USER" -- php -r 'chdir($argv[1]); $_SERVER["REMOTE_ADDR"]="127.0.0.1"; require "inc/core/pages.php"; set_setting("tasks_mode","cron"); echo "ok";' "$WEB_DIR" 2>/dev/null | grep ok >/dev/null; then
         ok "Aufgaben alle 5 min per Cron, Webseite steht auf „echter Cron“"
     else
         warn "Aufgabenplaner der Seite noch nicht umgestellt – nach dem ersten Login: Admin → System → Aufgaben → Modus „Cron“."
@@ -618,43 +800,63 @@ setup_firewall() {
     step "Firewall & Schutz"
     apt-get install -y -qq ufw fail2ban unattended-upgrades >/dev/null
     local ssh_port=""; command -v sshd >/dev/null && ssh_port=$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}' || true); ssh_port=${ssh_port:-22}
-    local u=1
+    local u=1 was=0
+    ufw status 2>/dev/null | grep -q '^Status: active' && was=1
+    # Nie zurücksetzen – vorhandene Regeln (Pterodactyl, Spielserver, eigene) bleiben, es kommen nur Regeln dazu
     {
-        ufw --force reset && ufw default deny incoming && ufw default allow outgoing \
-        && ufw allow "$ssh_port/tcp" comment 'SSH' && ufw allow 80/tcp comment 'HTTP' && ufw allow 443/tcp comment 'HTTPS'
+        ufw allow "$ssh_port/tcp" comment 'SSH' && ufw allow 80/tcp comment 'HTTP' && ufw allow 443/tcp comment 'HTTPS'
     } >/dev/null 2>&1 || u=0
+    if [ "$PTERO" = 1 ]; then
+        { ufw allow "$WINGS_API/tcp" comment 'Pterodactyl Wings' && ufw allow "$WINGS_SFTP/tcp" comment 'Pterodactyl SFTP'; } >/dev/null 2>&1 || u=0
+        ok "Pterodactyl erkannt: Wings $WINGS_API und SFTP $WINGS_SFTP bleiben offen (Spielserver-Ports laufen über Docker an ufw vorbei)"
+    fi
     if want turn; then { ufw allow 3478 comment 'TURN' && ufw allow 5349/tcp comment 'TURN TLS' && ufw allow "$TURN_MIN:$TURN_MAX/udp" comment 'TURN Relais'; } >/dev/null 2>&1 || u=0; fi
+    if want voice && [ "$PTERO" = 0 ]; then { ufw allow 64738 comment 'Mumble'; } >/dev/null 2>&1 || u=0; fi
     if want ftp; then { ufw allow 21/tcp comment 'FTPS' && ufw allow "$FTP_PASV_MIN:$FTP_PASV_MAX/tcp" comment 'FTPS passiv'; } >/dev/null 2>&1 || u=0; fi
-    [ "$u" = 1 ] && ufw --force enable >/dev/null 2>&1 || warn "ufw ließ sich nicht einschalten (Container ohne Firewall-Rechte?) – auf dem echten Server: ufw status"
+    if [ "$was" = 0 ] && [ "$u" = 1 ]; then
+        # ufw war aus: nur einschalten, wenn kein unbekannter Dienst öffentlich lauscht (sonst würde er plötzlich blockiert)
+        local known=" $ssh_port 80 443 21 3478 5349 64738 ${WINGS_API:-} ${WINGS_SFTP:-} " other p
+        other=$(ss -ltnH 2>/dev/null | awk '{print $4}' | grep -vE '^(127\.|\[::1\]|\[::ffff:127\.)' | sed 's/.*://' | sort -un | while read -r p; do [[ "$known" == *" $p "* ]] || [ "$(port_owner "$p")" = docker-proxy ] || echo "$p"; done | paste -sd ' ' -)
+        if [ -n "$other" ]; then u=0; warn "ufw bleibt aus: weitere öffentliche Ports ($other) würden sonst blockiert. Prüfen, mit „ufw allow …“ freigeben, dann „ufw enable“."; fi
+    fi
+    if [ "$u" = 1 ] && [ "$was" = 0 ]; then ufw default deny incoming >/dev/null; ufw default allow outgoing >/dev/null; ufw --force enable >/dev/null 2>&1 || warn "ufw ließ sich nicht einschalten (Container?) – auf dem Server: ufw status"; fi
     cat > /etc/fail2ban/jail.d/ghostnode.conf <<EOF
 [sshd]
 enabled = true
 [apache-auth]
-enabled = true
+enabled = $(want web && echo true || echo false)
+[nginx-http-auth]
+enabled = $([ "$FRONT" = nginx ] && echo true || echo false)
 [vsftpd]
 enabled = $(want ftp && echo true || echo false)
 EOF
     svc enable fail2ban; svc restart fail2ban
     dpkg-reconfigure -f noninteractive unattended-upgrades >/dev/null 2>&1 || true
-    ok "ufw (SSH $ssh_port, 80, 443$(want turn && echo ', TURN')$(want ftp && echo ', FTPS')), fail2ban, automatische Sicherheitsupdates"
+    if ufw status 2>/dev/null | grep -q '^Status: active'; then ok "ufw aktiv (SSH $ssh_port, 80, 443$(want turn && echo ', TURN')$(want voice && [ "$PTERO" = 0 ] && echo ', Mumble')$(want ftp && echo ', FTPS')$([ "$PTERO" = 1 ] && echo ', Wings'))"
+    else warn "ufw ist aus – Regeln sind vorbereitet, einschalten mit: ufw enable"; fi
+    ok "fail2ban, automatische Sicherheitsupdates"
 }
 
 setup_tls() {
     step "Zertifikate (Let's Encrypt)"
     [ "$NO_TLS" = 1 ] && { warn "--no-tls: keine Zertifikate. Später: $0 certs"; return; }
     [ -n "${LE_EMAIL:-}" ] || { warn "Keine E-Mail für Let's Encrypt angegeben – später: $0 certs"; return; }
-    apt-get install -y -qq certbot python3-certbot-apache >/dev/null
+    if [ "$FRONT" = nginx ]; then apt-get install -y -qq certbot python3-certbot-nginx >/dev/null; else apt-get install -y -qq certbot python3-certbot-apache >/dev/null; fi
     local names=() n
-    for n in "$DOMAIN" "www.$DOMAIN" "$HR_HOST" "$BOT_HOST" "$TURN_HOST"; do
+    local all=("$HR_HOST" "$BOT_HOST" "$TURN_HOST" "$VOICE_HOST"); if want web; then all=("$DOMAIN" "www.$DOMAIN" "${all[@]}"); fi
+    for n in "${all[@]}"; do
         if dns_ok "$n"; then names+=(-d "$n"); else warn "$n zeigt (noch) nicht auf diesen Server – ausgelassen."; fi
     done
     [ ${#names[@]} -gt 0 ] || { warn "Kein Name zeigt auf diesen Server – DNS prüfen, dann $0 certs"; return; }
     # turn.<domain> braucht einen (leeren) Webserver-Eintrag für die Prüfung
-    if [[ " ${names[*]} " == *" $TURN_HOST "* ]]; then
-        printf '<VirtualHost *:80>\n    ServerName %s\n    Redirect 302 / https://%s/\n</VirtualHost>\n' "$TURN_HOST" "$DOMAIN" > /etc/apache2/sites-available/ghostnode-turn.conf
-        a2ensite -q ghostnode-turn >/dev/null; svc reload apache2
+    if [[ " ${names[*]} " == *" $TURN_HOST "* ]] || [[ " ${names[*]} " == *" $VOICE_HOST "* ]]; then
+        if [ "$FRONT" = nginx ]; then nginx_site ghostnode-turn "$TURN_HOST $VOICE_HOST" 0 redirect
+        else
+            printf '<VirtualHost *:80>\n    ServerName %s\n    Redirect 302 / https://%s/\n</VirtualHost>\n' "$TURN_HOST" "$DOMAIN" > /etc/apache2/sites-available/ghostnode-turn.conf
+            a2ensite -q ghostnode-turn >/dev/null; svc reload apache2
+        fi
     fi
-    certbot --apache --non-interactive --agree-tos -m "$LE_EMAIL" --redirect --expand --cert-name ghostnode "${names[@]}" >/dev/null
+    certbot "--$FRONT" --non-interactive --agree-tos -m "$LE_EMAIL" --redirect --expand --cert-name ghostnode "${names[@]}" >/dev/null
     # Kopie für coturn und vsftpd (eigene Benutzer) – wird bei jeder Verlängerung erneuert
     cat > /etc/letsencrypt/renewal-hooks/deploy/ghostnode.sh <<'EOF'
 #!/bin/sh
@@ -664,7 +866,9 @@ install -d -m 0750 /etc/ghostnode/tls /etc/coturn/certs
 install -m 0640 "$L/fullchain.pem" "$L/privkey.pem" /etc/ghostnode/tls/
 install -m 0640 "$L/fullchain.pem" "$L/privkey.pem" /etc/coturn/certs/
 chgrp -R turnserver /etc/coturn/certs 2>/dev/null || true
-for s in coturn vsftpd apache2; do (systemctl try-restart "$s" || service "$s" restart) >/dev/null 2>&1 || true; done
+chgrp mumble-server /etc/ghostnode/tls /etc/ghostnode/tls/*.pem 2>/dev/null && chmod 750 /etc/ghostnode/tls
+for s in coturn vsftpd mumble-server; do (systemctl try-restart "$s" || service "$s" restart) >/dev/null 2>&1 || true; done
+for s in apache2 nginx; do (systemctl try-reload-or-restart "$s" || service "$s" reload) >/dev/null 2>&1 || true; done
 EOF
     chmod 755 /etc/letsencrypt/renewal-hooks/deploy/ghostnode.sh
     /etc/letsencrypt/renewal-hooks/deploy/ghostnode.sh
@@ -672,6 +876,7 @@ EOF
     # TURN/FTPS jetzt mit TLS neu schreiben
     if want turn; then setup_turn; fi
     if want ftp; then setup_ftp; fi
+    if want voice && [ "$PTERO" = 0 ]; then setup_voice; fi
     return 0
 }
 
@@ -680,7 +885,8 @@ write_credentials() {
         echo "# GhostNode – erzeugte Zugänge ($(date '+%d.%m.%Y %H:%M')). Nur für root. Nicht weitergeben."
         [ "$DB_ENGINE" = mariadb ] && echo "Datenbank:   MariaDB, Name $DB_NAME, Benutzer $DB_USER, Passwort $DB_PASS (nur localhost)"
         want ftp && echo "Poster-FTPS: Server $DOMAIN, Port 21, explizites TLS, Benutzer $FTP_USER, Passwort $FTP_PASS"
-        want turn && echo "TURN:        $TURN_HOST, Geheimnis steht in $SECRETS (wird nie direkt an Nutzer gegeben)"
+        want turn && echo "TURN:        $TURN_HOST, Geheimnis steht in $SECRETS (wird nie direkt an Nutzer gegeben)$(want web || echo "; für Plesk: $CONF_DIR/turn-fuer-plesk.json → data/keys/turn.json")"
+        if want voice && [ "$PTERO" = 0 ]; then echo "Mumble:      $VOICE_HOST:64738, SuperUser-Passwort $MUMBLE_SUPW$([ -n "${MUMBLE_PASS:-}" ] && echo ", Serverpasswort $MUMBLE_PASS")"; fi
         echo "Schlüssel:   $SECRETS (ändern mit: $0 secrets)"
         echo "Backups:     /var/backups/ghostnode"
     } > "$CRED"
@@ -713,24 +919,48 @@ check_all() {
             && ok "Datenbank erreichbar ($DB_ENGINE)" || fail "Datenbank nicht erreichbar"
         [ -w "$WEB_DIR/data" ] && [ "$(stat -c %U "$WEB_DIR/data")" = "$APP_USER" ] && ok "data/ gehört $APP_USER" || fail "data/ falsche Rechte"
     fi
+    if [ "$FRONT" = nginx ]; then
+        nginx -t >/dev/null 2>&1 && ok "nginx-Konfiguration gültig (vorne auf 80/443)" || fail "nginx-Konfiguration fehlerhaft"
+        is_active nginx && ok "nginx läuft" || fail "nginx läuft nicht"
+        [ "$(port_owner 80)" = nginx ] && ok "Port 80 gehört nginx" || fail "Port 80 gehört nicht nginx"
+        if want web; then
+            [ "$(port_owner "$BACKEND_PORT")" = apache2 ] && ok "Apache nur intern auf 127.0.0.1:$BACKEND_PORT" || fail "Apache lauscht nicht auf 127.0.0.1:$BACKEND_PORT"
+            c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: $DOMAIN" "http://127.0.0.1/status.php?api=1" 2>/dev/null || echo 000)
+            [ "$c" = 200 ] && ok "Webseite über nginx erreichbar" || fail "Webseite über nginx → $c"
+        fi
+    fi
+    if [ "$PTERO" = 1 ]; then
+        if command -v wings >/dev/null || [ -x /usr/local/bin/wings ]; then is_active wings && ok "Pterodactyl Wings läuft weiter" || fail "Pterodactyl Wings läuft nicht"; fi
+        [ -d /var/www/pterodactyl ] && { [ -f "/etc/php/$PV/fpm/pool.d/www.conf" ] && ok "PHP-Pool des Panels (www) unverändert aktiv" || fail "PHP-Pool „www“ fehlt – Panel braucht ihn"; }
+    fi
     if want hr; then
-        is_active ghostnode-hr && ok "HypeRate-Weiterleitung läuft" || fail "HypeRate-Weiterleitung läuft nicht"
+        if [ "$RUN_MODE" = systemd ]; then is_active ghostnode-hr && ok "HypeRate-Weiterleitung läuft" || fail "HypeRate-Weiterleitung läuft nicht"; fi
         c=$(lcurl "$HR_HOST" /health 2>/dev/null || true)
-        [[ "$c" == *'"ok"'* ]] && ok "https://$HR_HOST/health antwortet: $c" || fail "Weiterleitung /health: ${c:-keine Antwort}"
+        [[ "$c" == *'"ok"'* ]] && ok "https://$HR_HOST/health antwortet: $c" || fail "Weiterleitung /health: ${c:-keine Antwort}$([ "$RUN_MODE" = egg ] && echo " – läuft der Server im Panel auf $HR_UPSTREAM?")"
+        if [ "$RUN_MODE" = systemd ]; then [ "$(ss -ltnH "sport = :$HR_PORT" | awk '{print $4}' | grep -c '^127\.0\.0\.1:' || true)" -ge 1 ] && ok "Weiterleitung nur intern (127.0.0.1:$HR_PORT)" || fail "Weiterleitung lauscht öffentlich auf $HR_PORT"; fi
     fi
     if want bot; then
-        is_active ghostnode-bot && ok "Discord-Bot läuft" || fail "Discord-Bot läuft nicht"
-        c=$(http_code "$BOT_HOST" "/health"); [[ "$c" =~ ^(200|503)$ ]] && ok "Bot /health → $c$([ "$c" = 503 ] && echo ' (ohne Token: Hinweisseite)')" || fail "Bot /health → $c"
+        if [ "$RUN_MODE" = systemd ]; then is_active ghostnode-bot && ok "Discord-Bot läuft" || fail "Discord-Bot läuft nicht"; fi
+        c=$(http_code "$BOT_HOST" "/health"); [[ "$c" =~ ^(200|503)$ ]] && ok "Bot /health → $c$([ "$c" = 503 ] && echo ' (ohne Token: Hinweisseite)')" || fail "Bot /health → $c$([ "$RUN_MODE" = egg ] && echo " – läuft der Server im Panel auf $BOT_UPSTREAM?")"
+        if [ "$RUN_MODE" = systemd ]; then [ "$(ss -ltnH "sport = :$BOT_PORT" | awk '{print $4}' | grep -c '^127\.0\.0\.1:' || true)" -ge 1 ] && ok "Bot nur intern (127.0.0.1:$BOT_PORT)" || fail "Bot lauscht öffentlich auf $BOT_PORT"; fi
     fi
     if want turn; then
         is_active coturn && ok "coturn läuft" || fail "coturn läuft nicht"
-        [ -s "$WEB_DIR/data/keys/turn.json" ] && ok "Webseite kennt den TURN-Server" || fail "data/keys/turn.json fehlt"
+        if want web; then [ -s "$WEB_DIR/data/keys/turn.json" ] && ok "Webseite kennt den TURN-Server" || fail "data/keys/turn.json fehlt"
+        else [ -s "$CONF_DIR/turn-fuer-plesk.json" ] && ok "TURN-Zugang für Plesk liegt bereit ($CONF_DIR/turn-fuer-plesk.json)" || fail "turn-fuer-plesk.json fehlt"; fi
+        [ -z "$(ss -ltnuH 2>/dev/null | awk '{print $5}' | grep -E ':(3479|5350)$' || true)" ] && ok "TURN ohne Zusatz-Ports (nur 3478/5349)" || fail "coturn öffnet Zusatz-Ports 3479/5350"
+    fi
+    if want voice && [ "$PTERO" = 0 ]; then
+        is_active mumble-server && ok "Mumble läuft" || fail "Mumble läuft nicht"
+        [ -n "$(port_owner 64738)" ] && ok "Mumble lauscht auf 64738" || fail "Mumble lauscht nicht auf 64738"
     fi
     if want ftp; then
         is_active vsftpd && ok "FTPS (vsftpd) läuft" || fail "vsftpd läuft nicht"
     fi
     if want cron; then
         [ -f /etc/cron.d/ghostnode ] && ok "Cron eingerichtet" || fail "Cron fehlt"
+    fi
+    if want cron && want web; then
         local out; out=$(cd /tmp && runuser -u "$APP_USER" -- /usr/local/sbin/ghostnode-cron 2>&1 || true)
         if grep -q '✖' <<<"$out"; then warn "Aufgabe(n) mit Fehler: $(grep '✖' <<<"$out" | awk '{print $2": "substr($0, index($0,$4))}' | paste -sd ';' -)"
         else ok "Aufgabenplaner läuft durch ($(head -1 <<<"$out"))"; fi
@@ -747,30 +977,37 @@ check_all() {
 summary() {
     echo
     echo "${c_b}════════ GhostNode ist eingerichtet ════════${c_0}"
-    echo "  Webseite:        https://$DOMAIN  → zuerst https://$DOMAIN/admin.php öffnen und das Besitzer-Konto anlegen"
+    if want web; then echo "  Webseite:        https://$DOMAIN  → zuerst https://$DOMAIN/admin.php öffnen und das Besitzer-Konto anlegen"
+    else echo "  Webseite:        bleibt auf Plesk (https://$DOMAIN)"; fi
     want hr  && echo "  HypeRate:        https://$HR_HOST/health"
     want bot && echo "  Bot-Dashboard:   https://$BOT_HOST  (Discord-Portal: Redirect https://$BOT_HOST/callback)"
-    want turn && echo "  Anrufe (TURN):   $TURN_HOST:3478 / 5349"
+    want turn && echo "  Anrufe (TURN):   $TURN_HOST:3478 / 5349$(want web || echo "  → Plesk: $CONF_DIR/turn-fuer-plesk.json als data/keys/turn.json hochladen")"
+    want voice && echo "  Mumble:          $VOICE_HOST:64738$([ "$PTERO" = 1 ] && echo '  → im Panel mit dem Egg „Mumble Server“ anlegen')"
     want ftp && echo "  Poster-FTPS:     $DOMAIN:21 (Zugang in $CRED)"
+    [ "$FRONT" = nginx ] && echo "  Webserver:       nginx vorne (80/443)$([ "$PTERO" = 1 ] && echo ', Pterodactyl unverändert')$(want web && echo "; Apache intern auf 127.0.0.1:$BACKEND_PORT")"
+    [ "$RUN_MODE" = egg ] && echo "  Pterodactyl:     Eggs importieren (Admin → Nests → Import Egg): node_discord/pterodactyl/egg-ghostnode-discord-bot.json, vrc_nexus/apps/hyperate-relay/egg-ghostnode-hyperate-relay.json"
     echo "  Zugänge:         $CRED"
     echo "  Aktualisieren:   bash $0 update     ·  Prüfen: bash $0 check  ·  Backup: bash $0 backup"
-    echo "  DNS (A-Einträge auf $(public_ip)): $DOMAIN, www.$DOMAIN, $HR_HOST, $BOT_HOST, $TURN_HOST"
+    echo "  DNS (A-Einträge auf $(public_ip)): $(want web && echo "$DOMAIN, www.$DOMAIN, ")$HR_HOST, $BOT_HOST, $TURN_HOST, $VOICE_HOST"
     if [ ${#WARNINGS[@]} -gt 0 ]; then echo; echo "${c_warn}Hinweise:${c_0}"; for w in "${WARNINGS[@]}"; do echo "  ⚠ $w"; done; fi
 }
 
 # ---------------------------------------------------------------- Befehle
 load_conf
+detect_env
+if [ -f "$CONF" ]; then apply_role; fi
 case "$CMD" in
     install)
         ask_config; ask_secrets
         base_packages
-        { want hr || want bot; } && install_node
+        if { want hr || want bot; } && [ "$RUN_MODE" = systemd ]; then install_node; fi
         want mail && setup_mail
         want web  && setup_web
         want db   && setup_db
         want hr   && setup_hr
         want bot  && setup_bot
         want turn && setup_turn
+        want voice && setup_voice
         want ftp  && setup_ftp
         want cron && setup_cron
         want tls  && setup_tls

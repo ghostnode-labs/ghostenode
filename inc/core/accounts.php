@@ -66,7 +66,7 @@ function acc_discord_start(string $intent, string $next = ''): string {
 }
 
 /** HTTP-Anfrage an Discord (für Tests über GN_DISCORD_API umlenkbar) */
-function acc_discord_http(string $method, string $path, array $form = null, string $bearer = ''): array {
+function acc_discord_http(string $method, string $path, ?array $form = null, string $bearer = ''): array {
     $base = rtrim((string)(getenv('GN_DISCORD_API') ?: ACC_DISCORD_API), '/');
     $ch = curl_init($base . $path);
     $h = ['Accept: application/json', 'User-Agent: GhostNode-Login (ghostnode-labs.dev, 1.0)'];

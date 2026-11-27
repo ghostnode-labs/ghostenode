@@ -335,10 +335,10 @@ function nc_export_csv(int $uid): void {
     header('Content-Disposition: attachment; filename="vrchat-spiellog_' . date('Y-m-d') . '.csv"');
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");
-    fputcsv($out, ['Zeit', 'Art', 'Welt', 'Welt-ID', 'Instanz', 'Spieler', 'Spieler-ID', 'Details'], ';');
+    fputcsv($out, ['Zeit', 'Art', 'Welt', 'Welt-ID', 'Instanz', 'Spieler', 'Spieler-ID', 'Details'], ';', '"', '\\');
     $st = vrc_db()->prepare('SELECT * FROM game_log WHERE user_id = ? ORDER BY ts, id');
     $st->execute([$uid]);
-    foreach ($st as $r) fputcsv($out, [date('d.m.Y H:i:s', (int)$r['ts']), NC_KINDS[$r['kind']][1] ?? $r['kind'], $r['world_name'], $r['world_id'], $r['instance'], $r['player_name'], $r['player_id'], $r['detail']], ';');
+    foreach ($st as $r) fputcsv($out, [date('d.m.Y H:i:s', (int)$r['ts']), NC_KINDS[$r['kind']][1] ?? $r['kind'], $r['world_name'], $r['world_id'], $r['instance'], $r['player_name'], $r['player_id'], $r['detail']], ';', '"', '\\');
     fclose($out);
 }
 

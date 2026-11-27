@@ -305,7 +305,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $existing[($e['import_key'] ?? '')] = true;
                 }
 
-                while (($row = fgetcsv($handle, 0, $delimiter)) !== false) {
+                while (($row = fgetcsv($handle, 0, $delimiter, '"', '\\')) !== false) {
                     if (count($row) < 6) continue;
 
                     // Revolut-Format: Type, Product, Started Date, Completed Date, Description, Amount, Fee, Currency, State, Balance
@@ -717,11 +717,11 @@ if (($_GET['export'] ?? '') === 'csv') {
     header('Content-Disposition: attachment; filename="budget_' . preg_replace('/[^a-zA-Z0-9_-]/', '_', $export['month_name']) . '.csv"');
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");
-    fputcsv($out, ['Datum', 'Bereich', 'Bezeichnung', 'Kategorie', 'Betrag', 'Status', 'Notizen'], ';');
+    fputcsv($out, ['Datum', 'Bereich', 'Bezeichnung', 'Kategorie', 'Betrag', 'Status', 'Notizen'], ';', '"', '\\');
     foreach ($export['entries'] as $en) {
         $sec = $en['section'] ?? 'other';
         $signed = ($sec === 'income' ? 1 : -1) * (float)$en['amount'];
-        fputcsv($out, [$en['date'] ?? '', $sec_names[$sec] ?? $sec, $en['title'], $en['category'] ?? '', number_format($signed, 2, ',', ''), $en['status'] ?? '', $en['docs'] ?? ''], ';');
+        fputcsv($out, [$en['date'] ?? '', $sec_names[$sec] ?? $sec, $en['title'], $en['category'] ?? '', number_format($signed, 2, ',', ''), $en['status'] ?? '', $en['docs'] ?? ''], ';', '"', '\\');
     }
     fclose($out);
     exit;
