@@ -34,11 +34,27 @@ function tpl_upload_image(array $f): string {
     $file = date('Ymd') . '_' . bin2hex(random_bytes(8)) . '.' . $ext;
     if (!is_uploaded_file($f['tmp_name']) || !move_uploaded_file($f['tmp_name'], tpl_upload_dir() . '/' . $file)) throw new InvalidArgumentException('„' . $name . '“ konnte nicht gespeichert werden.');
     @chmod(TPL_UPLOAD_DIR . '/' . $file, 0644);
+    if ($ext === 'jpg' || $ext === 'png') tpl_make_webp(TPL_UPLOAD_DIR . '/' . $file);   // 8.1: kleinere WebP-Variante daneben
     return 'uploads/' . $file;
 }
 
+/** 8.1: WebP-Variante neben JPG/PNG legen (nur wenn sie wirklich kleiner ist; GD mit WebP nötig) */
+function tpl_make_webp(string $path): bool {
+    if (!function_exists('imagewebp') || !is_file($path)) return false;
+    $info = @getimagesize($path);
+    if (!$info || $info[0] * $info[1] > 40000000) return false;   // sehr große Bilder lassen (Speicher)
+    $im = $info[2] === IMAGETYPE_JPEG ? @imagecreatefromjpeg($path) : ($info[2] === IMAGETYPE_PNG ? @imagecreatefrompng($path) : false);
+    if (!$im) return false;
+    if ($info[2] === IMAGETYPE_PNG) { imagepalettetotruecolor($im); imagealphablending($im, true); imagesavealpha($im, true); }
+    $out = preg_replace('/\.(jpe?g|png)$/i', '.webp', $path);
+    $ok = @imagewebp($im, $out, 82);
+    imagedestroy($im);
+    if ($ok && filesize($out) >= filesize($path)) { @unlink($out); return false; }
+    if ($ok) @chmod($out, 0644);
+    return (bool)$ok;
+}
 function tpl_gallery_delete_file(string $src): void {
-    if (preg_match('#^uploads/(\d{8}_[0-9a-f]{16}\.(jpg|png|gif|webp))$#', $src, $m)) @unlink(TPL_UPLOAD_DIR . '/' . $m[1]);
+    if (preg_match('#^uploads/(\d{8}_[0-9a-f]{16})\.(jpg|png|gif|webp)$#', $src, $m)) { @unlink(TPL_UPLOAD_DIR . '/' . $m[1] . '.' . $m[2]); if ($m[2] !== 'webp') @unlink(TPL_UPLOAD_DIR . '/' . $m[1] . '.webp'); }
 }
 
 function tpl_gallery_post(array &$c, string $act, array $page): array {
@@ -105,7 +121,9 @@ function tpl_gallery_render(array $c, array $page, bool $can_edit): void {
         <?php foreach ($imgs as $k => $im): ?>
             <figure class="gal-item" id="p-<?php echo e($im['id']); ?>" data-search="<?php echo tpl_search_text($im['title'], $im['caption']); ?>">
                 <button type="button" class="gal-open" data-lightbox="<?php echo $k; ?>" aria-label="Großansicht: <?php echo e($im['title'] ?: 'Bild'); ?>">
-                    <img src="<?php echo e($im['src']); ?>" alt="<?php echo e($im['title']); ?>" loading="lazy" referrerpolicy="no-referrer">
+                    <?php $wp = preg_match('#^uploads/\d{8}_[0-9a-f]{16}\.(jpg|png)$#', $im['src']) ? preg_replace('/\.(jpg|png)$/', '.webp', $im['src']) : ''; if ($wp !== '' && is_file(APP_ROOT . '/' . $wp)): ?><picture><source srcset="<?php echo e($wp); ?>" type="image/webp"><?php endif; ?>
+                    <img src="<?php echo e($im['src']); ?>" alt="<?php echo e($im['title']); ?>" loading="lazy" decoding="async" referrerpolicy="no-referrer">
+                    <?php if ($wp !== '' && is_file(APP_ROOT . '/' . $wp)): ?></picture><?php endif; ?>
                 </button>
                 <?php if ($im['title'] !== '' || $im['caption'] !== ''): ?>
                     <figcaption><?php echo e($im['title']); ?></figcaption>
