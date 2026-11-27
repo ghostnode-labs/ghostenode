@@ -164,3 +164,65 @@ Bitte Original und Übersetzung ausfüllen.	Please fill in the original and the 
 Genau diesen Vorschlag gibt es schon.	This exact suggestion already exists.	Cette proposition existe déjà.	まったく同じ提案がすでにあります。
 // 8.1 Barrierefreiheit
 Zum Inhalt springen	Skip to content	Aller au contenu	コンテンツへスキップ
+GhostNode · Software & Programmierung	GhostNode · Software & programming	GhostNode · Logiciels & programmation	GhostNode · ソフトウェアとプログラミング
+Technik	Tech	Technique	技術
+SOFTWARE // PROGRAMMIERUNG // OPEN RELEASES	SOFTWARE // PROGRAMMING // OPEN RELEASES	LOGICIELS // PROGRAMMATION // VERSIONS PUBLIQUES	ソフトウェア // プログラミング // 公開リリース
+Wir programmieren eigene Software – Desktop- und Handy-Apps, Discord-Bots, Echtzeit-Server, Web-Plattformen und Server-Automatisierung. Alles selbst geschrieben, getestet und mit Auto-Updates.	We build our own software – desktop and mobile apps, Discord bots, real-time servers, web platforms and server automation. All written in-house, tested and with auto-updates.	Nous développons nos propres logiciels – applications de bureau et mobiles, bots Discord, serveurs temps réel, plateformes web et automatisation de serveurs. Tout est écrit par nous, testé et mis à jour automatiquement.	デスクトップ／スマホアプリ、Discordボット、リアルタイムサーバー、Webプラットフォーム、サーバー自動化まで、自社でソフトウェアを開発しています。すべて自作・テスト済みで自動更新に対応。
+🧩 Projekte ansehen	🧩 View projects	🧩 Voir les projets	🧩 プロジェクトを見る
+eigene Projekte	own projects	projets maison	自社プロジェクト
+Sprachen & Plattformen	languages & platforms	langages & plateformes	言語とプラットフォーム
+Werkzeuge auf dieser Seite	tools on this site	outils sur ce site	このサイトのツール
+Community-Konten	community accounts	comptes communauté	コミュニティアカウント
+fremde Laufzeit-Pakete*	third-party runtime packages*	paquets tiers à l’exécution*	外部ランタイムパッケージ*
+PROJEKTE	PROJECTS	PROJETS	プロジェクト
+🧩 Was wir programmiert haben	🧩 What we have built	🧩 Ce que nous avons développé	🧩 開発したもの
+Jedes Projekt mit eigenem Repository, automatischen Tests und Releases auf GitHub.	Every project has its own repository, automated tests and releases on GitHub.	Chaque projet a son dépôt, des tests automatiques et des versions sur GitHub.	各プロジェクトに専用リポジトリ、自動テスト、GitHubリリースがあります。
+Download →	Download →	Télécharger →	ダウンロード →
+Downloads →	Downloads →	Téléchargements →	ダウンロード →
+Changelog →	Changelog →	Journal des versions →	更新履歴 →
+Im Web →	On the web →	Sur le web →	Web版 →
+Dashboard →	Dashboard →	Tableau de bord →	ダッシュボード →
+All-in-one-Begleiter für VRChat: Freunde, Verlauf, OSC/OSCQuery, Chatbox, SteamVR-Overlay, Stream Deck, Community mit Ende-zu-Ende-Verschlüsselung.	All-in-one companion for VRChat: friends, history, OSC/OSCQuery, chatbox, SteamVR overlay, Stream Deck, community with end-to-end encryption.	Compagnon tout-en-un pour VRChat : amis, historique, OSC/OSCQuery, chatbox, overlay SteamVR, Stream Deck, communauté chiffrée de bout en bout.	VRChat向けオールインワン：フレンド、履歴、OSC/OSCQuery、チャットボックス、SteamVRオーバーレイ、Stream Deck、エンドツーエンド暗号化コミュニティ。
+Destiny-2-Begleiter: Inventar & Tresor, Loadouts, Rüstungs-Optimierer, Raids, Triumphe, Händler und Hüter-Karte – über die offizielle Bungie-API.	Destiny 2 companion: inventory & vault, loadouts, armor optimizer, raids, triumphs, vendors and guardian card – via the official Bungie API.	Compagnon Destiny 2 : inventaire & coffre, équipements, optimiseur d’armure, raids, triomphes, marchands et carte de gardien – via l’API officielle de Bungie.	Destiny 2用アプリ：インベントリと保管庫、ロードアウト、アーマー最適化、レイド、栄光、ベンダー、ガーディアンカード（Bungie公式API）。
+Nexus für Android & Wear OS	Nexus for Android & Wear OS	Nexus pour Android & Wear OS	Android & Wear OS版Nexus
+Handy-App und Uhr-App: Puls vom Handgelenk, Schlafmodus, Fernsteuerung des PCs im WLAN, Updates von selbst.	Phone and watch app: heart rate from your wrist, sleep mode, remote control of your PC over Wi-Fi, self-updating.	Appli mobile et montre : pouls au poignet, mode sommeil, contrôle du PC en Wi-Fi, mises à jour automatiques.	スマホ＆ウォッチアプリ：手首から心拍、スリープモード、Wi-FiでPC操作、自動更新。
+Discord-Bot ohne Pakete: Begrüßung, Rollen, Level, AutoMod, eigene Befehle und Web-Dashboard mit Anmeldung über das GhostNode-Konto.	Discord bot without packages: welcome messages, roles, levels, AutoMod, custom commands and a web dashboard with GhostNode sign-in.	Bot Discord sans dépendances : accueil, rôles, niveaux, AutoMod, commandes perso et tableau de bord web avec compte GhostNode.	パッケージ不要のDiscordボット：ウェルカム、ロール、レベル、AutoMod、カスタムコマンド、GhostNodeログイン付きWebダッシュボード。
+Nexus Live & HypeRate-Relay	Nexus Live & HypeRate relay	Nexus Live & relais HypeRate	Nexus Live & HypeRateリレー
+Echtzeit-Server für Fernsteuerung, Puls und Benachrichtigungen – eigener WebSocket-Server nach RFC 6455, als systemd-Dienst.	Real-time server for remote control, heart rate and notifications – our own RFC 6455 WebSocket server, running as a systemd service.	Serveur temps réel pour contrôle à distance, pouls et notifications – notre propre serveur WebSocket RFC 6455, en service systemd.	遠隔操作・心拍・通知のリアルタイムサーバー。RFC 6455準拠の自作WebSocketサーバーをsystemdで運用。
+Web-Plattform & Dashboard	Web platform & dashboard	Plateforme web & tableau de bord	Webプラットフォーム & ダッシュボード
+Diese Seite: Konten mit Rollen und 2FA, Admin-Zentrale, Web-Nexus, Plugin-Marktplatz, VRChat-Poster, API, Kalender, Budget und mehr.	This site: accounts with roles and 2FA, admin center, web Nexus, plugin marketplace, VRChat posters, API, calendar, budget and more.	Ce site : comptes avec rôles et 2FA, centre d’admin, Nexus web, marketplace de plugins, affiches VRChat, API, calendrier, budget et plus.	このサイト：ロールと2FA付きアカウント、管理センター、Web版Nexus、プラグインマーケット、VRChatポスター、API、カレンダー、家計簿など。
+Root-Server-Installer	Root server installer	Installateur de serveur root	ルートサーバーインストーラー
+Ein Befehl für den ganzen Server: nginx als Reverse Proxy, MariaDB, Zertifikate, Dienste, Cron, Wächter, Backups, Auto-Update und Server-Verwaltung im Admin.	One command for the whole server: nginx reverse proxy, MariaDB, certificates, services, cron, watchdog, backups, auto-update and server management in the admin.	Une commande pour tout le serveur : nginx en reverse proxy, MariaDB, certificats, services, cron, surveillance, sauvegardes, mise à jour auto et gestion dans l’admin.	1コマンドでサーバー全体を構築：nginxリバースプロキシ、MariaDB、証明書、サービス、cron、監視、バックアップ、自動更新、管理画面からのサーバー管理。
+Stream Deck, Twitch & Unity	Stream Deck, Twitch & Unity	Stream Deck, Twitch & Unity	Stream Deck・Twitch・Unity
+Stream-Deck-Plugin, Twitch-Panel-Erweiterung und Unity-Editor-Werkzeuge für VRChat-Creator – alles an VRC Nexus angebunden.	Stream Deck plugin, Twitch panel extension and Unity editor tools for VRChat creators – all connected to VRC Nexus.	Plugin Stream Deck, extension de panneau Twitch et outils d’éditeur Unity pour créateurs VRChat – tous reliés à VRC Nexus.	Stream Deckプラグイン、Twitchパネル拡張、VRChatクリエイター向けUnityエディターツール。すべてVRC Nexusと連携。
+Ein virtuelles Haustier für Android: füttern, spielen, putzen, 13 Entwicklungsformen und ein Widget – ohne Konto und ohne Internet.	A virtual pet for Android: feed, play, clean, 13 evolution forms and a widget – no account, no internet.	Un animal virtuel pour Android : nourrir, jouer, laver, 13 formes d’évolution et un widget – sans compte ni Internet.	Android用バーチャルペット：ごはん・遊び・お手入れ、13の進化形態とウィジェット。アカウント・ネット不要。
+VRC Nexus – Desktop-App	VRC Nexus – desktop app	VRC Nexus – application de bureau	VRC Nexus – デスクトップアプリ
+VRC Nexus – OSC & Chatbox	VRC Nexus – OSC & chatbox	VRC Nexus – OSC & chatbox	VRC Nexus – OSC & チャットボックス
+VRC Nexus – Statistik	VRC Nexus – statistics	VRC Nexus – statistiques	VRC Nexus – 統計
+TECHNIK	TECH	TECHNIQUE	技術
+⚙ Wie wir programmieren	⚙ How we build software	⚙ Notre façon de programmer	⚙ 開発の方針
+Ein paar Regeln, an die sich jedes Projekt hält.	A few rules every project follows.	Quelques règles que chaque projet respecte.	すべてのプロジェクトが守るルール。
+Ohne fremde Pakete	No third-party packages	Sans paquets tiers	外部パッケージなし
+Apps, Bot und Server laufen mit den Bordmitteln von Node.js, PHP und Android. Weniger Abhängigkeiten, weniger Sicherheitslücken, schnellere Updates.	Apps, bot and servers run on the built-in tools of Node.js, PHP and Android. Fewer dependencies, fewer security holes, faster updates.	Applis, bot et serveurs utilisent uniquement les outils intégrés de Node.js, PHP et Android. Moins de dépendances, moins de failles, des mises à jour plus rapides.	アプリ、ボット、サーバーはNode.js・PHP・Androidの標準機能だけで動作。依存が少なく、脆弱性も少なく、更新も速い。
+Tests bei jedem Push	Tests on every push	Tests à chaque push	プッシュごとにテスト
+Automatische Tests mit Attrappen statt echter Konten – erst wenn alles grün ist, entsteht ein Release.	Automated tests with mocks instead of real accounts – a release is only built when everything is green.	Tests automatiques avec des simulations plutôt que de vrais comptes – une version n’est publiée que si tout est vert.	本物のアカウントではなくモックで自動テスト。すべて成功したときだけリリースされます。
+Releases & Auto-Update	Releases & auto-update	Versions & mise à jour auto	リリースと自動更新
+Jeder Push baut Windows-, Linux- und Android-Dateien und veröffentlicht sie; die Apps aktualisieren sich selbst.	Every push builds and publishes Windows, Linux and Android files; the apps update themselves.	Chaque push construit et publie les fichiers Windows, Linux et Android ; les applis se mettent à jour seules.	プッシュごとにWindows・Linux・Android版をビルドして公開。アプリは自動で更新されます。
+Keine Geheimnisse im Code	No secrets in code	Aucun secret dans le code	コードに秘密情報なし
+Schlüssel und Passwörter nur verschlüsselt auf dem Gerät oder als Server-Geheimnis – nie im Repository.	Keys and passwords only encrypted on the device or as server secrets – never in the repository.	Clés et mots de passe uniquement chiffrés sur l’appareil ou en secret serveur – jamais dans le dépôt.	キーやパスワードは端末上で暗号化、またはサーバーのシークレットとして保存。リポジトリには入れません。
+Sicherheit zuerst	Security first	La sécurité d’abord	セキュリティ優先
+Strenge Content-Security-Policy, Freigabelisten statt freier Befehle, verschlüsselte Ablage, Prüfung jeder Eingabe.	Strict Content Security Policy, allow-lists instead of free commands, encrypted storage, validation of every input.	Content Security Policy stricte, listes d’autorisation plutôt que commandes libres, stockage chiffré, vérification de chaque saisie.	厳格なCSP、自由なコマンドではなく許可リスト、暗号化保存、すべての入力を検証。
+Server per Skript	Servers by script	Serveur par script	スクリプトでサーバー構築
+Ein Befehl richtet den ganzen Linux-Server ein: nginx, Datenbank, Dienste, Zertifikate, Backups, Wächter und Auto-Update.	One command sets up the whole Linux server: nginx, database, services, certificates, backups, watchdog and auto-update.	Une commande installe tout le serveur Linux : nginx, base de données, services, certificats, sauvegardes, surveillance et mise à jour auto.	1コマンドでLinuxサーバー全体をセットアップ：nginx、データベース、サービス、証明書、バックアップ、監視、自動更新。
+Mehrsprachig	Multilingual	Multilingue	多言語対応
+Oberflächen in Deutsch, Englisch, Französisch und Japanisch – Übersetzungen zentral gepflegt.	Interfaces in German, English, French and Japanese – translations maintained centrally.	Interfaces en allemand, anglais, français et japonais – traductions gérées de façon centralisée.	ドイツ語・英語・フランス語・日本語のUI。翻訳は一元管理。
+Barrierearm	Accessible	Accessible	アクセシビリティ
+Tastaturbedienung, Kontraste, Screenreader-Texte und Hinweise beim Überfahren.	Keyboard control, contrast, screen reader texts and hover hints.	Navigation au clavier, contrastes, textes pour lecteurs d’écran et infobulles.	キーボード操作、コントラスト、スクリーンリーダー用テキスト、ホバーヒント。
+Die Apps sprechen direkt mit den offiziellen Diensten – ohne Umweg über unsere Server.	The apps talk directly to the official services – without going through our servers.	Les applis communiquent directement avec les services officiels – sans passer par nos serveurs.	アプリは公式サービスと直接通信し、当社サーバーを経由しません。
+* zur Laufzeit; zum Bauen der Desktop-Apps nutzen wir Electron und electron-builder, für Android Gradle.	* at runtime; to build the desktop apps we use Electron and electron-builder, Gradle for Android.	* à l’exécution ; pour construire les applis de bureau nous utilisons Electron et electron-builder, Gradle pour Android.	* 実行時の話です。デスクトップアプリのビルドにはElectronとelectron-builder、AndroidにはGradleを使用。
+📰 Letzte Versionen	📰 Latest versions	📰 Dernières versions	📰 最新バージョン
+AUF DIESER SEITE	ON THIS SITE	SUR CE SITE	このサイトで
+🧰 Werkzeuge & Seiten	🧰 Tools & pages	🧰 Outils & pages	🧰 ツールとページ
+Vieles öffentlich, manches nur mit Konto.	Much is public, some things need an account.	Beaucoup est public, certaines choses nécessitent un compte.	多くは公開、一部はアカウントが必要です。
+Quelltext-Projekte, Downloads, Fehler melden	Projects, downloads, bug reports	Projets, téléchargements, signaler un bug	プロジェクト、ダウンロード、不具合報告
+Für Entwickler: Web- und Client-API mit Doku	For developers: web and client API with docs	Pour les développeurs : API web et client avec doc	開発者向け：WebおよびクライアントAPIとドキュメント

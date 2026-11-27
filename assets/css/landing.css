@@ -81,3 +81,18 @@ body.ld { padding: 0; display: block; }
 .ld-shots-watch figure:first-child { grid-column: 1 / -1; }
 .ld-shots-watch img { background: #05070a; }
 @media (max-width: 760px) { .ld-shots-watch { grid-template-columns: 1fr; } }
+
+/* Landing: Software & Programmierung */
+.ld-code{display:flex;align-items:center}
+.ld-code pre{margin:0;width:100%;box-sizing:border-box;background:rgba(5,8,14,.85);border:1px solid var(--border-color);padding:20px 22px;font:500 .92rem/1.6 ui-monospace,"Cascadia Code",Consolas,monospace;color:#dce6f2;overflow:auto;clip-path:var(--cut-md);box-shadow:0 10px 40px rgba(0,0,0,.35)}
+.ld-code .c{color:#6b7a90}.ld-code .k{color:var(--accent-cyan)}.ld-code .s{color:var(--accent-gold)}.ld-code .n{color:#f0a3ff}
+.ld-prj{display:flex;flex-direction:column}
+.ld-prj p{flex:1}
+.ld-prj .ld-tag{font-size:.7rem;vertical-align:middle;margin-left:6px}
+.ld-tech{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
+.ld-tech span{font-size:.72rem;padding:2px 8px;border:1px solid var(--border-color);color:var(--accent-cyan);background:rgba(56,213,230,.06)}
+.ld-plinks{display:flex;gap:14px;margin-top:10px;font-size:.85rem}
+.ld-plinks a{color:var(--accent-gold);text-decoration:none}.ld-plinks a:hover{text-decoration:underline}
+.ld-projects,#technik .ld-feat{grid-template-columns:repeat(3,minmax(0,1fr))}
+@media(max-width:980px){.ld-projects,#technik .ld-feat{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.ld-projects,#technik .ld-feat{grid-template-columns:1fr}}
