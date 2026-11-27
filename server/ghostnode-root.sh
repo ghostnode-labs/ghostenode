@@ -25,6 +25,7 @@
 #    bash ghostnode-root.sh update             Webseite, Weiterleitung und Bot aktualisieren, Dienste neu starten
 #    bash ghostnode-root.sh certs              Zertifikate (erneut) holen – z. B. wenn DNS beim install noch nicht stand
 #    bash ghostnode-root.sh secrets            Schlüssel (Discord, HypeRate, SMTP …) ändern und übernehmen
+#    bash ghostnode-root.sh bungie             nur die Bungie-Werte für D2 Nexus (Anmeldung + Chat) eintragen
 #    bash ghostnode-root.sh check              alles prüfen (Dienste, Seiten, PHP-Erweiterungen, Zertifikate)
 #    bash ghostnode-root.sh backup             Server-Backup jetzt (Datenbank, data/, Bot-Daten, Einstellungen)
 #    bash ghostnode-root.sh login …            Notfall-Zugang zur Webseite: liste | entsperren | passwort BENUTZER | 2fa-aus BENUTZER | aktivieren BENUTZER
@@ -1713,6 +1714,25 @@ case "$CMD" in
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
         [ -n "${LE_EMAIL:-}" ] || { YES=0; ask LE_EMAIL "E-Mail für Let's Encrypt" ""; save_kv "$CONF" "${CONF_VARS[@]}"; }
         NO_TLS=0; setup_tls; check_all || true ;;
+    bungie)
+        # nur die drei Bungie-Werte für D2 Nexus (Anmeldung, Chat, Webseite) – Eingabe unsichtbar
+        [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
+        [ -t 0 ] || die "Bitte direkt im Terminal ausführen (Eingabe nötig)."
+        echo "Bungie-App für D2 Nexus (bungie.net/en/Application) – Enter = Wert behalten"
+        for v in GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET; do
+            case $v in GN_BUNGIE_KEY) lbl="API-Key";; GN_BUNGIE_CLIENT_ID) lbl="OAuth client_id";; *) lbl="OAuth client_secret";; esac
+            [ -n "${!v:-}" ] && st="gesetzt" || st="leer"
+            if [ "$v" = GN_BUNGIE_CLIENT_ID ]; then read -r -p "  $lbl ($st): " nv; else read -r -s -p "  $lbl ($st, unsichtbar): " nv; echo; fi
+            nv=$(printf '%s' "$nv" | tr -d '[:space:]')
+            [ -n "$nv" ] && printf -v "$v" '%s' "$nv"
+        done
+        [[ "${GN_BUNGIE_KEY:-}" =~ ^[A-Fa-f0-9]{32}$ ]] || warn "Der API-Key hat normalerweise 32 Zeichen (0-9, a-f) – bitte prüfen."
+        [[ "${GN_BUNGIE_CLIENT_ID:-}" =~ ^[0-9]+$ ]] || warn "Die client_id ist eine Zahl – bitte prüfen."
+        [ "${#GN_BUNGIE_CLIENT_SECRET}" -ge 16 ] || warn "Das client_secret ist zu kurz – bitte prüfen."
+        save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
+        want web && setup_web
+        c=$(curl --noproxy '*' -sk --resolve "$DOMAIN:443:127.0.0.1" -o /dev/null -w '%{http_code}' -X POST -H 'X-D2-Client: 0' -d '{}' "https://$DOMAIN/d2auth.php" || true)
+        case "${c:-000}" in 403) ok "D2-Nexus-Anmeldung ist eingerichtet – in der App jetzt „Mit Bungie anmelden“.";; 503) warn "Es fehlt noch ein Wert – $0 bungie erneut ausführen.";; *) warn "Prüfung ergab HTTP ${c:-000} – Webseite erreichbar?";; esac ;;
     secrets)
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
         for v in HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM; do
@@ -1744,5 +1764,5 @@ case "$CMD" in
         [[ " ${ARGS[*]} " == *" --force "* ]] && rm -f /var/lib/ghostnode/old-db-imported
         setup_olddb; want cron && setup_cron ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
-    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons, olddb, login, usedb, bericht)" ;;
+    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, bungie, check, backup, migrate, crons, olddb, login, usedb, bericht)" ;;
 esac
