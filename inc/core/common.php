@@ -130,6 +130,12 @@ function german_datetime(int $ts, bool $with_time = true): string {
 }
 
 /** Favicon als Emoji (data-URI), damit jede Seite im Browser-Tab erkennbar ist. */
+/** 8.1: Mehrsprachig – Wörterbuch + Übersetzer einbinden (einmal pro Seite) */
+function site_i18n_tags(): string {
+    static $done = false; if ($done) return ''; $done = true;
+    $v = @filemtime(APP_ROOT . '/assets/js/site-dict.js') ?: 1;
+    return '<script src="assets/js/site-dict.js?v=' . $v . '" defer></script><script src="assets/js/site-i18n.js?v=' . (@filemtime(APP_ROOT . '/assets/js/site-i18n.js') ?: 1) . '" defer></script>';
+}
 /**
  * 8.1: Bild mit WebP-Variante (liegt neben dem Original eine .webp-Datei, bekommen Browser die kleinere Datei; sonst das Original).
  * $src relativ zur Webseite, z. B. „assets/img/landing/nexus-home.jpg“. Breite/Höhe (falls bekannt) verhindern Springen beim Laden.

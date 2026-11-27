@@ -1,0 +1,123 @@
+// Wörterbuch der Webseite (8.1) – Deutsch<TAB>Englisch<TAB>Französisch<TAB>Japanisch. Bauen: php tools/i18n-build.php
+GhostNode · VRC Nexus & VRChat-Werkzeuge	GhostNode · VRC Nexus & VRChat tools	GhostNode · VRC Nexus et outils VRChat	GhostNode · VRC Nexus と VRChat ツール
+Projekte	Projects	Projets	プロジェクト
+Neuigkeiten	News	Actualités	ニュース
+Dashboard	Dashboard	Tableau de bord	ダッシュボード
+Anmelden	Sign in	Se connecter	ログイン
+Abmelden	Sign out	Se déconnecter	ログアウト
+Heimat von	Home of	Maison de	本拠地：
+– der All-in-one-Begleit-App für VRChat – und einer Sammlung von Werkzeugen rund um VRChat, Furry-Community und Creator.	– the all-in-one companion app for VRChat – and a collection of tools around VRChat, the furry community and creators.	– l'application compagnon tout-en-un pour VRChat – et une collection d'outils autour de VRChat, de la communauté furry et des créateurs.	― VRChat 向けオールインワンのコンパニオンアプリ ― と、VRChat・ファーリーコミュニティ・クリエイター向けツール集。
+Zentrale Schnittstelle & Datenknoten	Central interface & data node	Interface centrale et nœud de données	中央インターフェース＆データノード
+VRC Nexus herunterladen	Download VRC Nexus	Télécharger VRC Nexus	VRC Nexus をダウンロード
+Zum Dashboard	To the dashboard	Vers le tableau de bord	ダッシュボードへ
+Daten bleiben bei dir	Your data stays with you	Tes données restent chez toi	データは手元に残ります
+VRC Nexus – Startseite der App	VRC Nexus – the app's home screen	VRC Nexus – écran d'accueil de l'app	VRC Nexus – アプリのホーム画面
+aktuelle Nexus-Version	current Nexus version	version actuelle de Nexus	最新の Nexus バージョン
+Seiten & Werkzeuge	Pages & tools	Pages et outils	ページとツール
+Nexus-Community-Konten	Nexus community accounts	Comptes de la communauté Nexus	Nexus コミュニティのアカウント
+Sprachen	Languages	Langues	言語
+PROJEKT	PROJECT	PROJET	プロジェクト
+Deine Zentrale für VRChat – Freunde, Welten, Avatare, Gruppen, OSC, Chatbox, Overlay und vieles mehr in einer App. Kostenlos, ohne Konto bei uns: alles bleibt auf deinem Gerät.	Your hub for VRChat – friends, worlds, avatars, groups, OSC, chatbox, overlay and much more in one app. Free, no account with us: everything stays on your device.	Ton centre pour VRChat – amis, mondes, avatars, groupes, OSC, chatbox, overlay et bien plus dans une seule app. Gratuit, sans compte chez nous : tout reste sur ton appareil.	VRChat のための拠点 ― フレンド、ワールド、アバター、グループ、OSC、チャットボックス、オーバーレイなどを1つのアプリに。無料で当サイトのアカウント不要：すべて端末内に保存されます。
+Freunde & Orte	Friends & locations	Amis et lieux	フレンドと居場所
+Status, Welt, Notizen, Favoriten, „online seit“, Beitreten und Einladen mit einem Klick.	Status, world, notes, favorites, "online since", join and invite with one click.	Statut, monde, notes, favoris, « en ligne depuis », rejoindre et inviter en un clic.	ステータス、ワールド、メモ、お気に入り、「オンライン開始時刻」、ワンクリックで参加・招待。
+Verlauf & Statistik	History & statistics	Historique et statistiques	履歴と統計
+Online/Offline, Weltwechsel, Spielzeit, Zeitachse, Heatmaps und Rückblick.	Online/offline, world changes, play time, timeline, heatmaps and recap.	En ligne/hors ligne, changements de monde, temps de jeu, chronologie, cartes de chaleur et récapitulatif.	オンライン/オフライン、ワールド移動、プレイ時間、タイムライン、ヒートマップ、振り返り。
+Spiel-Log & OSC	Game log & OSC	Journal du jeu et OSC	ゲームログと OSC
+Liest die VRChat-Logs und spricht per OSC/OSCQuery mit VRChat – parallel zu anderen OSC-Tools.	Reads the VRChat logs and talks to VRChat via OSC/OSCQuery – alongside other OSC tools.	Lit les journaux de VRChat et communique avec VRChat via OSC/OSCQuery – en parallèle d'autres outils OSC.	VRChat のログを読み取り、OSC/OSCQuery で VRChat と通信 ― 他の OSC ツールと併用できます。
+Chatbox-Module	Chatbox modules	Modules de chatbox	チャットボックスモジュール
+Status, Musik, Uhrzeit, Puls, Rotator – mit Desktop- und VR-Modus.	Status, music, time, heart rate, rotator – with desktop and VR mode.	Statut, musique, heure, pouls, rotation – en mode bureau et VR.	ステータス、音楽、時刻、心拍、ローテーター ― デスクトップと VR モード対応。
+Sprache & Untertitel	Speech & subtitles	Voix et sous-titres	音声と字幕
+Sprache → Chatbox (offline), Vorlesen, Live-Untertitel und Übersetzer.	Speech → chatbox (offline), read aloud, live subtitles and translator.	Voix → chatbox (hors ligne), lecture à voix haute, sous-titres en direct et traducteur.	音声 → チャットボックス（オフライン）、読み上げ、ライブ字幕、翻訳。
+SteamVR-Overlay & HUD	SteamVR overlay & HUD	Overlay SteamVR et HUD	SteamVR オーバーレイと HUD
+Infos, Untertitel und Bedienung direkt in VR – passend zum gewählten Theme.	Info, subtitles and controls right in VR – matching your chosen theme.	Infos, sous-titres et commandes directement en VR – assortis au thème choisi.	情報・字幕・操作を VR 内で ― 選んだテーマに合わせて。
+Nexus Community	Nexus Community	Communauté Nexus	Nexus コミュニティ
+Profile, Feed, Ende-zu-Ende-verschlüsselter Chat und Sprachanrufe.	Profiles, feed, end-to-end encrypted chat and voice calls.	Profils, fil, chat chiffré de bout en bout et appels vocaux.	プロフィール、フィード、エンドツーエンド暗号化チャットと音声通話。
+Stream Deck & Stream-Bot	Stream Deck & stream bot	Stream Deck et bot de stream	Stream Deck と配信ボット
+Tasten für Avatar, Instanz und Freunde; Bot für Twitch und YouTube.	Keys for avatar, instance and friends; bot for Twitch and YouTube.	Touches pour avatar, instance et amis ; bot pour Twitch et YouTube.	アバター・インスタンス・フレンド用キー、Twitch と YouTube 向けボット。
+Nexus Watch & Handy	Nexus Watch & phone	Nexus Watch et téléphone	Nexus Watch とスマホ
+Wear-OS-Uhr: Puls vom Handgelenk, Schlafmodus, Themen. Das Handy steuert den PC direkt im WLAN.	Wear OS watch: heart rate from your wrist, sleep mode, themes. The phone controls the PC directly over Wi-Fi.	Montre Wear OS : pouls au poignet, mode sommeil, thèmes. Le téléphone pilote le PC directement via le Wi-Fi.	Wear OS ウォッチ：手首から心拍、スリープモード、テーマ。スマホは Wi-Fi で PC を直接操作。
+Freunde & Community	Friends & community	Amis et communauté	フレンドとコミュニティ
+Spiel, OSC & Chatbox	Game, OSC & chatbox	Jeu, OSC et chatbox	ゲーム、OSC、チャットボックス
+Diagramme & Statistik	Charts & statistics	Graphiques et statistiques	グラフと統計
+Werkzeuge	Tools	Outils	ツール
+Gruppen	Groups	Groupes	グループ
+OSC-Verbindung	OSC connection	Connexion OSC	OSC 接続
+Hauptmenü, Puls & Schlafmodus	Main menu, heart rate & sleep mode	Menu principal, pouls et mode sommeil	メインメニュー、心拍、スリープモード
+Sechs Themen	Six themes	Six thèmes	6 つのテーマ
+Koppeln & Einstellungen	Pairing & settings	Association et réglages	ペアリングと設定
+Neueste Version	Latest version	Dernière version	最新バージョン
+Alle Funktionen & Changelog	All features & changelog	Toutes les fonctions et changelog	全機能と変更履歴
+Nexus im Browser	Nexus in the browser	Nexus dans le navigateur	ブラウザで Nexus
+PROJEKTE & WERKZEUGE	PROJECTS & TOOLS	PROJETS ET OUTILS	プロジェクトとツール
+Was es hier noch gibt	What else is here	Ce qu'il y a encore ici	ほかにあるもの
+Werkzeuge und Sammlungen auf dieser Seite – vieles öffentlich, manches nur mit Konto.	Tools and collections on this site – much of it public, some only with an account.	Outils et collections sur ce site – beaucoup en accès libre, certains seulement avec un compte.	このサイトのツールとコレクション ― 多くは公開、一部はアカウントが必要です。
+VRChat-Poster	VRChat posters	Affiches VRChat	VRChat ポスター
+Feste Bild-Adressen für VRChat-Welten: Bild tauschen per Upload, Bildlink oder FTP – Rotation, Zeitplan, Rechte	Fixed image URLs for VRChat worlds: swap the image via upload, image link or FTP – rotation, schedule, permissions	Adresses d'images fixes pour les mondes VRChat : changer l'image par envoi, lien ou FTP – rotation, planning, droits	VRChat ワールド用の固定画像 URL：アップロード・画像リンク・FTP で差し替え ― ローテーション、スケジュール、権限
+Kalender	Calendar	Calendrier	カレンダー
+Termine, Kalender-Abos, Feiertage & Erinnerungen	Events, calendar subscriptions, holidays & reminders	Rendez-vous, abonnements de calendrier, jours fériés et rappels	予定、カレンダー購読、祝日、リマインダー
+Live-Feed	Live feed	Fil en direct	ライブフィード
+Countdowns	Countdowns	Comptes à rebours	カウントダウン
+Linksammlung	Link collection	Collection de liens	リンク集
+NEUIGKEITEN	NEWS	ACTUALITÉS	ニュース
+Letzte Nexus-Versionen	Latest Nexus versions	Dernières versions de Nexus	最近の Nexus バージョン
+neu	new	nouveau	新着
+COMMUNITY	COMMUNITY	COMMUNAUTÉ	コミュニティ
+Mach mit	Join in	Participe	参加しよう
+Hilfe, Ideen, Updates und Community	Help, ideas, updates and community	Aide, idées, mises à jour et communauté	ヘルプ、アイデア、アップデート、コミュニティ
+Die Entwicklung unterstützen	Support development	Soutenir le développement	開発を支援する
+Downloads, Changelog, Fehler melden	Downloads, changelog, report bugs	Téléchargements, changelog, signaler des bugs	ダウンロード、変更履歴、不具合報告
+Was als Nächstes kommt	What's coming next	Ce qui arrive ensuite	今後の予定
+ZUM DASHBOARD	TO THE DASHBOARD	VERS LE TABLEAU DE BORD	ダッシュボードへ
+Changelog	Changelog	Changelog	変更履歴
+Status	Status	Statut	ステータス
+Alle Dienste laufen.	All services are running.	Tous les services fonctionnent.	すべてのサービスが稼働中です。
+Datenbank	Database	Base de données	データベース
+Website	Website	Site web	ウェブサイト
+Nexus-Schnittstelle (App ↔ Website)	Nexus interface (app ↔ website)	Interface Nexus (app ↔ site)	Nexus インターフェース（アプリ ↔ サイト）
+HypeRate-Weiterleitung	HypeRate relay	Relais HypeRate	HypeRate 中継
+Discord-Bot & Dashboard	Discord bot & dashboard	Bot Discord et tableau de bord	Discord ボットとダッシュボード
+läuft	running	en service	稼働中
+vor 24 h	24 h ago	il y a 24 h	24 時間前
+jetzt	now	maintenant	現在
+Störungen	Incidents	Incidents	障害
+Keine Störungen aufgezeichnet.	No incidents recorded.	Aucun incident enregistré.	障害の記録はありません。
+läuft noch	ongoing	en cours	継続中
+Themes-Marktplatz	Themes marketplace	Place de marché des thèmes	テーママーケット
+Theme einreichen	Submit a theme	Proposer un thème	テーマを投稿
+Meine Themes	My themes	Mes thèmes	マイテーマ
+Einreichen	Submit	Envoyer	投稿
+Löschen	Delete	Supprimer	削除
+Prüfung	Review	Vérification	審査
+Freigeben	Approve	Approuver	承認
+Ablehnen	Reject	Refuser	却下
+Entwickler-Portal	Developer portal	Portail développeurs	開発者ポータル
+Bausteine	Building blocks	Briques	構成要素
+Schnellstart	Quick start	Démarrage rapide	クイックスタート
+Meins	Mine	Les miens	自分のもの
+Doku	Docs	Docs	ドキュメント
+Beispiele	Examples	Exemples	例
+Marktplatz	Marketplace	Place de marché	マーケット
+Verwalten	Manage	Gérer	管理
+Plugin-Marktplatz	Plugin marketplace	Place de marché des plugins	プラグインマーケット
+Plugins suchen …	Search plugins …	Rechercher des plugins …	プラグインを検索…
+Alle Kategorien	All categories	Toutes les catégories	すべてのカテゴリー
+Plugin einreichen	Submit a plugin	Proposer un plugin	プラグインを投稿
+Meine Plugins	My plugins	Mes plugins	マイプラグイン
+Sprache	Language	Langue	言語
+Automatisch	Automatic	Automatique	自動
+Die App für Wear-OS-Uhren (z. B. Galaxy Watch 4 und neuer, Pixel Watch): Puls direkt vom Uhr-Sensor an VRC Nexus – ohne HypeRate- oder Pulsoid-Konto –, Schlafmodus mit Wecker, sechs Themen, eigener Hintergrund aus der Galerie der Uhr und Updates von selbst. Verbindet sich im Heimnetz direkt mit der Windows-App, gekoppelt mit einem 6-stelligen Code.	The app for Wear OS watches (e.g. Galaxy Watch 4 and newer, Pixel Watch): heart rate straight from the watch sensor to VRC Nexus – no HypeRate or Pulsoid account needed –, sleep mode with alarm, six themes, your own background from the watch gallery and automatic updates. Connects directly to the Windows app on your home network, paired with a 6-digit code.	L'app pour montres Wear OS (p. ex. Galaxy Watch 4 et plus récentes, Pixel Watch) : le pouls directement du capteur de la montre vers VRC Nexus – sans compte HypeRate ni Pulsoid –, mode sommeil avec réveil, six thèmes, ton propre fond depuis la galerie de la montre et mises à jour automatiques. Se connecte directement à l'app Windows sur le réseau local, associée avec un code à 6 chiffres.	Wear OS ウォッチ用アプリ（Galaxy Watch 4 以降、Pixel Watch など）：ウォッチのセンサーから心拍を VRC Nexus へ直接送信 ― HypeRate や Pulsoid のアカウント不要 ―、アラーム付きスリープモード、6 つのテーマ、ウォッチのギャラリーから背景、自動アップデート。6 桁のコードでペアリングし、ホームネットワーク内で Windows アプリと直接接続します。
+Screenshots mit Testdaten; Uhr-Ansichten nachgestellt (gleiche Oberfläche wie in der App). 🔒 Dein VRChat-Passwort wird nie gespeichert – nur das verschlüsselte Sitzungs-Cookie, alles lokal.	Screenshots with test data; watch views recreated (same interface as in the app). 🔒 Your VRChat password is never stored – only the encrypted session cookie, all local.	Captures avec des données de test ; vues de la montre reconstituées (même interface que dans l'app). 🔒 Ton mot de passe VRChat n'est jamais enregistré – seulement le cookie de session chiffré, tout en local.	スクリーンショットはテストデータです。ウォッチの画面は再現したものです（アプリと同じ UI）。🔒 VRChat のパスワードは保存されません ― 暗号化されたセッション Cookie のみ、すべてローカルです。
+Nexus im Browser 🔒	Nexus in the browser 🔒	Nexus dans le navigateur 🔒	ブラウザで Nexus 🔒
+Tamagotchi, Fursona mit eigenen Bildern, Karten-Editor, Minispiele, Con-Bingo, Quiz, Soundboard & mehr	Tamagotchi, fursona with your own images, card editor, mini games, con bingo, quiz, soundboard & more	Tamagotchi, fursona avec tes propres images, éditeur de cartes, mini-jeux, bingo de con, quiz, soundboard et plus	たまごっち、自作画像のファーソナ、カードエディター、ミニゲーム、コンビンゴ、クイズ、サウンドボードなど
+Assets, Prefabs, Shader & Tutorials für VRChat-Creator	Assets, prefabs, shaders & tutorials for VRChat creators	Assets, prefabs, shaders et tutoriels pour créateurs VRChat	VRChat クリエイター向けのアセット、プレハブ、シェーダー、チュートリアル
+Cons, Stammtische, Shops & Kunst aus der Community	Cons, meetups, shops & art from the community	Conventions, rencontres, boutiques et art de la communauté	コンベンション、オフ会、ショップ、コミュニティのアート
+RSS-Reader: Neuigkeiten aus Tech, Gaming & Furry-Fandom – eigene Quellen, gemerkt & gelesen	RSS reader: news from tech, gaming & the furry fandom – your own sources, saved & read	Lecteur RSS : actualités tech, gaming et fandom furry – tes propres sources, mémorisées et lues	RSS リーダー：テック、ゲーム、ファーリーファンダムのニュース ― 自分のソース、保存・既読管理
+Countdowns bis Cons, Urlaub & Geburtstagen	Countdowns to cons, holidays & birthdays	Comptes à rebours jusqu'aux conventions, vacances et anniversaires	コンベンション、休暇、誕生日までのカウントダウン
+Tools, News & Ressourcen für Linux, Code, Gaming und mehr	Tools, news & resources for Linux, code, gaming and more	Outils, actualités et ressources pour Linux, code, gaming et plus	Linux、コード、ゲームなどのツール・ニュース・リソース
+Destiny 2: Builds, Datenbanken, God-Rolls & Guides	Destiny 2: builds, databases, god rolls & guides	Destiny 2 : builds, bases de données, god rolls et guides	Destiny 2：ビルド、データベース、ゴッドロール、ガイド
+Alle # Seiten im Dashboard	All # pages in the dashboard	Les # pages du tableau de bord	ダッシュボードの全 # ページ
+# Dienst gestört	# service disrupted	# service perturbé	# 件のサービスに障害
+# Dienste gestört	# services disrupted	# services perturbés	# 件のサービスに障害
+gestört	disrupted	perturbé	障害
+Letzte Messung	Last check	Dernière mesure	最終チェック
+Seite lädt alle # Minuten neu	Page reloads every # minutes	La page se recharge toutes les # minutes	ページは # 分ごとに再読み込みされます

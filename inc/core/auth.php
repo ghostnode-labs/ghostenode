@@ -426,6 +426,7 @@ function nsfw_visible(array $link, string $category = ''): bool {
 
 /** Kleine Leiste "Angemeldet als … / Login" für die Seiten */
 function auth_corner(): void {
+    echo site_i18n_tags();
     $u = current_user();
     require_once __DIR__ . '/tasks.php';
     tasks_pseudo_cron();   // fällige Hintergrund-Aufgaben nach dem Ausliefern

@@ -204,5 +204,6 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
     <span>◈ <?php echo e($title); ?> · <?php echo date('Y'); ?></span>
     <span><a href="dashboard.php">Dashboard</a> · <a href="admin.php<?php echo $user ? '' : '?next=dashboard.php'; ?>"><?php echo $user ? 'Admin & Konto' : 'Anmelden'; ?></a> · <a href="<?php echo e(LANDING_LINKS['github']); ?>" target="_blank" rel="noopener">GitHub</a></span>
 </footer>
+<?php echo site_i18n_tags(); ?>
 </body>
 </html>

@@ -67,5 +67,6 @@ $dur = function (int $s): string { if ($s < 3600) return max(1, (int)round($s / 
         <p class="st-note" style="margin-top:20px">Letzte Messung: <?= $sum['checked'] ? date('d.m.Y H:i', $sum['checked']) : '–' ?> · Seite lädt alle 2 Minuten neu · JSON: <a href="status.php?api=1">status.php?api=1</a></p>
     <?php endif; ?>
 </div>
+<?php echo site_i18n_tags(); ?>
 </body>
 </html>
