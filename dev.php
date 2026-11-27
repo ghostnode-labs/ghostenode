@@ -10,6 +10,7 @@ require_once __DIR__ . '/inc/core/pages.php';
 require_once __DIR__ . '/inc/modules/webapi.php';
 require_once __DIR__ . '/inc/modules/market.php';
 require_once __DIR__ . '/inc/modules/themes_market.php';
+require_once __DIR__ . '/inc/modules/oauth.php';
 auth_require_setup();
 $u = current_user();
 $keys = []; $plugins = []; $themes = [];
@@ -18,6 +19,15 @@ if ($u) {
     foreach (mk_load() as $p) if ((int)($p['owner'] ?? 0) === (int)$u['id']) $plugins[] = $p;
     foreach (tm_load() as $t) if ((int)($t['owner'] ?? 0) === (int)$u['id']) $themes[] = $t;
 }
+$apps = []; $newApp = null; $oaMsg = ''; $oaErr = '';
+if ($u && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
+    guard_post();
+    try {
+        if (($_POST['action'] ?? '') === 'oa_create') $newApp = oa_app_create((int)$u['id'], (string)($_POST['name'] ?? ''), (string)($_POST['redirects'] ?? ''), !empty($_POST['confidential']), (string)($_POST['homepage'] ?? ''));
+        if (($_POST['action'] ?? '') === 'oa_delete') { oa_app_delete((int)$u['id'], (int)($_POST['id'] ?? 0)); $oaMsg = 'App gelöscht – alle ihre Zugriffe sind widerrufen.'; }
+    } catch (InvalidArgumentException $e) { $oaErr = $e->getMessage(); }
+}
+if ($u) { try { $apps = oa_apps((int)$u['id']); } catch (Throwable $e) { $apps = []; } }
 $pub = count(array_filter(mk_load(), fn($p) => mk_latest($p) !== null));
 $pubT = count(array_filter(tm_load(), fn($t) => ($t['status'] ?? '') === 'approved'));
 $ST = ['pending' => '⏳ wartet', 'approved' => '✅ frei', 'rejected' => '⛔ abgelehnt'];
@@ -61,6 +71,7 @@ pre.dv{background:rgba(0,0,0,.35);border:1px solid var(--border-color);padding:1
         <?= $card('🧩', 'Plugin-SDK', 'Plugins als <code>.nxp</code>: eigene Oberfläche aus Bausteinen, Rechte-Modell, abgeschotteter Prozess, verschlüsselter Speicher. Beispiel-Plugin liegt der App bei.', [['PLUGINS.md', $REPO . '/docs/PLUGINS.md', true], ['Marktplatz', 'market.php'], ['Einreichen', 'market.php#mkSubmit']]) ?>
         <?= $card('🎨', 'Themes', 'Farbschemata für App und Handy – nur 13 Hex-Farben, Kontrast-Prüfung. In der App bauen, als JSON teilen, hier einreichen.', [['Marktplatz', 'themes.php', true], ['Einreichen', 'themes.php#tmSubmit']]) ?>
         <?= $card('🔏', 'Webhooks', 'Neue Versionen, Termine und Störungen an deine Adresse – jede Nachricht mit <code>X-GhostNode-Signature</code> (HMAC-SHA256) und Zeitstempel.', [['Signatur prüfen', 'api.php#hooksig', true], ['Meine Webhooks', 'me.php?tab=hooks']]) ?>
+        <?= $card('🔗', 'Mit GhostNode anmelden', 'OAuth 2.0 (Autorisierungscode + PKCE) für eigene Apps, Bots und Webseiten: Leute melden sich mit ihrem GhostNode-Konto an und geben nur die Rechte frei, die du brauchst.', [['Doku', 'api.php#oauth', true], ['Meine Apps', '#oauth']]) ?>
         <?= $card('🩺', 'Status-JSON', 'Zustand aller Dienste maschinenlesbar – für eigene Monitore, Bots oder Statusleisten.', [['status.php?api=1', 'status.php?api=1', true], ['Status-Seite', 'status.php']]) ?>
     </div></section>
 
@@ -88,6 +99,21 @@ curl "<?= e(mk_base_url()) ?>/status.php?api=1"</pre>
                 <?php if ($themes): ?><table class="dv-tbl"><?php foreach ($themes as $t): ?><tr><td><?= e($t['name']) ?></td><td><?= e($ST[$t['status']] ?? $t['status']) ?></td><td class="muted">⬇ <?= (int)($t['installs'] ?? 0) ?></td></tr><?php endforeach; ?></table><?php else: ?><p>Noch keine eingereicht.</p><?php endif; ?>
                 <div class="dv-links"><a class="btn btn-sm" href="themes.php">Themes</a></div></article>
         </div>
+        <article class="dv-card" id="oauth" style="margin-top:12px"><h3>🔗 Meine OAuth-Apps (<?= count($apps) ?>)</h3>
+            <?php if ($oaErr): ?><p style="color:#ff5d73">⚠ <?= e($oaErr) ?></p><?php endif; ?><?php if ($oaMsg): ?><p>✅ <?= e($oaMsg) ?></p><?php endif; ?>
+            <?php if ($newApp): ?><div style="border:1px solid var(--accent-gold,#f3c262);padding:10px"><b>✅ App angelegt.</b> Client-ID: <code><?= e($newApp[0]['client_id']) ?></code>
+                <?php if ($newApp[1] !== ''): ?><br>Geheimnis (nur jetzt sichtbar – sicher aufbewahren, nie in Apps auf Geräten einbauen): <code><?= e($newApp[1]) ?></code><?php else: ?><br>Öffentliche App: kein Geheimnis, dafür PKCE (S256) Pflicht.<?php endif; ?></div><?php endif; ?>
+            <?php if ($apps): ?><table class="dv-tbl"><tr><th>Name</th><th>Client-ID</th><th>Art</th><th>Weiterleitungen</th><th></th></tr><?php foreach ($apps as $a): ?>
+                <tr><td data-no-i18n><?= e($a['name']) ?></td><td><code><?= e($a['client_id']) ?></code></td><td><?= $a['public'] ? 'öffentlich (PKCE)' : 'vertraulich' ?></td><td class="muted" data-no-i18n><?= e(implode(' ', $a['redirects'])) ?></td>
+                <td><form method="post" onsubmit="return confirm('App löschen? Alle Anmeldungen damit werden widerrufen.')"><input type="hidden" name="action" value="oa_delete"><input type="hidden" name="id" value="<?= (int)$a['id'] ?>"><button class="btn btn-sm btn-danger">Löschen</button></form></td></tr>
+            <?php endforeach; ?></table><?php endif; ?>
+            <form method="post" style="display:grid;gap:6px;margin-top:8px"><input type="hidden" name="action" value="oa_create">
+                <input name="name" maxlength="40" placeholder="Name der App" required>
+                <textarea name="redirects" rows="2" placeholder="Weiterleitungs-Adressen (https://…, eine pro Zeile, höchstens 5)" required></textarea>
+                <input name="homepage" placeholder="Webseite der App (optional, https://…)">
+                <label><input type="checkbox" name="confidential" value="1" checked> Vertraulich (Server mit Geheimnis) – aus für Handy-/Desktop-Apps und Single-Page-Apps</label>
+                <button class="btn btn-gold">➕ App anlegen</button></form>
+        </article>
     </section>
     <?php else: ?><p class="muted" style="margin-top:24px"><a href="admin.php?next=dev.php">Anmelden</a>, um Schlüssel, eigene Plugins und Themes hier zu sehen.</p><?php endif; ?>
 </div>

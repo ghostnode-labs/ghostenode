@@ -9,6 +9,7 @@ declare(strict_types=1);
 require_once __DIR__ . '/inc/core/common.php';
 require_once __DIR__ . '/inc/core/pages.php';
 require_once __DIR__ . '/inc/modules/webapi.php';
+require_once __DIR__ . '/inc/modules/market.php';   // mk_base_url (OAuth-Doku)
 
 $path = (string)($_GET['r'] ?? '');
 $apiV = (string)($_GET['v'] ?? '') === '2' ? 2 : 1;   // 8.1: API v2 (api.php/v2/<endpunkt> oder ?v=2&r=…)
@@ -110,7 +111,7 @@ body.ap{padding:0;display:block}
 .ok{color:#50fa7b}.bad{color:var(--accent-red)}
 @media(max-width:820px){.ap-wrap{grid-template-columns:1fr}.ap-toc{position:static;flex-direction:row;flex-wrap:wrap}.ap-toc b{width:100%}}
 </style></head><body class="ap"><div class="ap-wrap">
-<nav class="ap-toc"><b>Überblick</b><a href="#start">Start</a><a href="#keys">API-Schlüssel</a>
+<nav class="ap-toc"><b>Überblick</b><a href="#start">Start</a><a href="#keys">API-Schlüssel</a><a href="#oauth">OAuth</a>
 <b>Web-API</b><a href="#web">Grundlagen</a><a href="#web-ep">Endpunkte</a><a href="#web-ex">Beispiele</a><a href="#errors">Fehler &amp; Limits</a>
 <b>Client-API</b><a href="#client">Verbinden</a><a href="#client-ops">Befehle</a><a href="#client-topics">Ereignisse</a><a href="#client-actions">Aktionen</a><a href="#client-ex">Beispiele</a>
 <b>Sonst</b><a href="#rules">Regeln</a><a href="changelog.php">Changelog</a></nav>
@@ -159,6 +160,19 @@ const { items } = await r.json();</pre>
 <tr><td>429</td><td>Limit erreicht: <b>30 Aufrufe/min</b> ohne Schlüssel (je IP), <b>120/min</b> je Schlüssel</td></tr><tr><td>503</td><td>Quelle gerade nicht erreichbar (z. B. GitHub)</td></tr></table>
 <p>Über die API gibt es nie 🔞-Inhalte – auch nicht mit einem freigeschalteten Konto.</p>
 
+<h3 id="oauth">🔗 Mit GhostNode anmelden (OAuth 2.0)</h3>
+<p>Für Apps, Bots und Webseiten, die im Namen anderer Leute handeln. App im <a href="dev.php#oauth">Entwickler-Portal</a> anlegen → Client-ID (und Geheimnis bei vertraulichen Apps). Ablauf: Autorisierungscode, PKCE (S256) empfohlen und für öffentliche Apps Pflicht. Codes gelten 5 Minuten und nur einmal; wird ein Code zweimal benutzt, werden alle Token daraus widerrufen. Das Token (<code>gno_…</code>) funktioniert wie ein API-Schlüssel mit den freigegebenen Rechten.</p>
+<pre>1) Weiterleiten:  <?= e(mk_base_url()) ?>/oauth.php?r=authorize&amp;client_id=gnc_…&amp;redirect_uri=https://deine.app/cb&amp;scope=read&amp;state=ZUFALL&amp;code_challenge=…&amp;code_challenge_method=S256
+2) Zurück kommt:  https://deine.app/cb?code=…&amp;state=ZUFALL   (oder ?error=access_denied)
+3) Tauschen:
+curl -X POST <?= e(mk_base_url()) ?>/oauth.php?r=token \
+  -d grant_type=authorization_code -d code=… -d redirect_uri=https://deine.app/cb \
+  -d client_id=gnc_… -d code_verifier=…        # oder -u gnc_…:gns_… bei vertraulichen Apps
+→ {"access_token":"gno_…","token_type":"Bearer","scope":"read"}
+4) Wer ist das?   curl -H "Authorization: Bearer gno_…" <?= e(mk_base_url()) ?>/oauth.php?r=userinfo
+→ {"sub":"3","preferred_username":"luna","name":"Luna","scope":"read"}
+Widerrufen: POST oauth.php?r=revoke token=gno_… · Metadaten: oauth.php?r=meta</pre>
+<p>Leute sehen und trennen verbundene Apps unter <a href="me.php?tab=privacy">Mein Profil → Datenschutz</a>.</p>
 <h3 id="v2">🆕 Version 2 – Seiten &amp; einheitliche Antworten</h3>
 <p>Alle Endpunkte gibt es auch als <code>api.php/v2/&lt;endpunkt&gt;</code> (oder <code>api.php?v=2&amp;r=&lt;endpunkt&gt;</code>). v1 bleibt unverändert.</p>
 <ul>

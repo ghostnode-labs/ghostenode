@@ -27,7 +27,7 @@ function wa_keys(int $uid): array {
 }
 function wa_create(int $uid, string $name, array $scopes): string {
     wa_schema();
-    if (count(wa_keys($uid)) >= 10) throw new InvalidArgumentException('Höchstens 10 Schlüssel – bitte erst einen widerrufen.');
+    if (count(array_filter(wa_keys($uid), fn($k) => strpos((string)$k['prefix'], 'gnk_') === 0)) >= 10) throw new InvalidArgumentException('Höchstens 10 Schlüssel – bitte erst einen widerrufen.');
     $scopes = array_values(array_intersect(array_keys(WA_SCOPES), $scopes)) ?: ['read'];
     $key = 'gnk_' . bin2hex(random_bytes(20));
     site_db()->prepare('INSERT INTO api_keys (user_id, name, prefix, key_hash, scopes, created) VALUES (?, ?, ?, ?, ?, ?)')
@@ -43,9 +43,9 @@ function wa_revoke(int $uid, int $id): void {
 /** Schlüssel aus Authorization: Bearer … oder X-Api-Key → [Schlüssel-Zeile, Benutzer] oder null */
 function wa_auth(): ?array {
     $h = (string)($_SERVER['HTTP_AUTHORIZATION'] ?? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] ?? '');
-    $key = preg_match('/^Bearer\s+(gnk_[0-9a-f]{40})$/', $h, $m) ? $m[1] : (string)($_SERVER['HTTP_X_API_KEY'] ?? '');
+    $key = preg_match('/^Bearer\s+(gn[ko]_[0-9a-f]{40})$/', $h, $m) ? $m[1] : (string)($_SERVER['HTTP_X_API_KEY'] ?? '');
     if ($key === '') return null;
-    if (!preg_match('/^gnk_[0-9a-f]{40}$/', $key)) throw new WaError('Ungültiger API-Schlüssel.', 401);
+    if (!preg_match('/^gn[ko]_[0-9a-f]{40}$/', $key)) throw new WaError('Ungültiger API-Schlüssel.', 401);
     wa_schema();
     $st = site_db()->prepare('SELECT * FROM api_keys WHERE key_hash = ?');
     $st->execute([hash('sha256', $key)]);

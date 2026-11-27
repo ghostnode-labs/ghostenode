@@ -298,6 +298,7 @@ function me_privacy(int $uid): array {
     $out = ['public' => (int)$p['public'] === 1, 'slug' => (string)$p['slug'], 'hooks' => count((array)($d['hooks'] ?? [])), 'devices' => [], 'sessions' => 0, 'vrchat' => false, 'current' => (string)($_SESSION['auth']['sid'] ?? '')];
     try { require_once APP_ROOT . '/inc/modules/nexus_client.php'; $out['devices'] = nc_tokens($uid); } catch (Throwable $e) { $out['devices'] = []; }
     try { $out['sessions'] = count(sessions_list($uid)); } catch (Throwable $e) { $out['sessions'] = 0; }
+    try { require_once APP_ROOT . '/inc/modules/oauth.php'; $out['apps'] = oa_grants($uid); } catch (Throwable $e) { $out['apps'] = []; }   // 8.1 „Mit GhostNode anmelden“
     try { require_once APP_ROOT . '/inc/modules/vrchat.php'; $acc = vrc_account($uid); $out['vrchat'] = !empty($acc['vrc_id']); } catch (Throwable $e) { /* egal */ }
     return $out;
 }
@@ -323,6 +324,12 @@ function me_privacy_act(int $uid, string $act, array $in): string {
             site_db()->prepare('DELETE FROM user_sessions WHERE user_id = ? AND id <> ?')->execute([$uid, $sid]);
             audit('Datenschutz', 'andere Sitzungen abgemeldet', 'info');
             return 'Alle anderen Sitzungen sind abgemeldet.';
+        case 'apps_all':
+        case 'app_revoke':
+            require_once APP_ROOT . '/inc/modules/oauth.php';
+            $n = oa_revoke_grants($uid, $act === 'apps_all' ? 0 : max(1, (int)($in['app'] ?? 0)));
+            audit('Datenschutz', 'App-Zugriff widerrufen (' . $n . ')', 'info');
+            return $n ? 'Zugriff widerrufen.' : 'Nichts zu widerrufen.';
         case 'hooks_off':
             $p = me_get($uid); $d = $p['d']; $d['hooks'] = []; me_put($uid, $d);
             return 'Alle Webhooks entfernt.';

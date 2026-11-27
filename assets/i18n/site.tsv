@@ -121,3 +121,20 @@ Alle # Seiten im Dashboard	All # pages in the dashboard	Les # pages du tableau d
 gestört	disrupted	perturbé	障害
 Letzte Messung	Last check	Dernière mesure	最終チェック
 Seite lädt alle # Minuten neu	Page reloads every # minutes	La page se recharge toutes les # minutes	ページは # 分ごとに再読み込みされます
+// 8.1 „Mit GhostNode anmelden“ (oauth.php)
+Anmelden mit GhostNode	Sign in with GhostNode	Se connecter avec GhostNode	GhostNode でログイン
+möchte auf dein Konto	wants to access your account	souhaite accéder à ton compte	があなたのアカウント
+zugreifen	 	 	にアクセスしようとしています
+Deinen Namen und deine Konto-Nummer sehen	See your name and account number	Voir ton nom et ton numéro de compte	名前とアカウント番号の表示
+immer dabei	always included	toujours inclus	常に含まれます
+Lesen	Read	Lecture	読み取り
+Profil, Seiten, Kalender, Changelog, News	Profile, pages, calendar, changelog, news	Profil, pages, calendrier, changelog, actualités	プロフィール、ページ、カレンダー、更新履歴、ニュース
+Community	Community	Communauté	コミュニティ
+Nexus-Community lesen und posten (braucht ein verbundenes VRChat-Konto in VRC Nexus Web)	Read and post in the Nexus community (needs a linked VRChat account in VRC Nexus Web)	Lire et publier dans la communauté Nexus (nécessite un compte VRChat lié dans VRC Nexus Web)	Nexus コミュニティの閲覧と投稿（VRC Nexus Web で VRChat アカウントの連携が必要）
+Kein Zugriff auf Passwort, E-Mail, 🔞-Bereiche oder Einstellungen. Weiterleitung an	No access to password, email, 🔞 areas or settings. Redirects to	Aucun accès au mot de passe, à l'e-mail, aux zones 🔞 ou aux paramètres. Redirection vers	パスワード、メール、🔞 エリア、設定へのアクセスはありません。リダイレクト先：
+App von	App by	App de	アプリ作成者：
+Widerrufen jederzeit unter	Revoke any time under	Révocable à tout moment dans	いつでも取り消し可能：
+Mein Profil → Datenschutz	My profile → Privacy	Mon profil → Confidentialité	マイプロフィール → プライバシー
+Erlauben	Allow	Autoriser	許可
+Webseite	Website	Site web	ウェブサイト
+Zur Startseite	To the home page	Vers l'accueil	ホームへ
