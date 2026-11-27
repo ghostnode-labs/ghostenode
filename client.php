@@ -116,6 +116,26 @@ try {
             nc_reply(['ok' => true, 'id' => $id]);
         case 'remote':
             nc_reply(['ok' => true, 'state' => nc_state($uid), 'osc' => nc_osc_recent($uid), 'presets' => nc_presets($uid)]);
+        // ---------- 8.0.2: Einstellungs-Abgleich zwischen Geräten (in der App verschlüsselt – der Server sieht nur Zufallsdaten) ----------
+        case 'sync_get': {
+            $f = nc_backup_dir($uid) . '/sync.json';
+            $m = is_file($f) ? (json_decode((string)file_get_contents($f), true) ?: []) : [];
+            nc_reply(['ok' => true, 'rev' => (int)($m['rev'] ?? 0), 'device' => (string)($m['device'] ?? ''), 'updated' => (int)($m['updated'] ?? 0), 'data' => (string)($m['data'] ?? '')]);
+        }
+        case 'sync_put': {
+            if (!$post) nc_reply(['error' => 'Nur per POST.'], 405);
+            $data = (string)($body['data'] ?? '');
+            if (strlen($data) < 20 || strlen($data) > 700000 || !preg_match('/^[A-Za-z0-9+\/=]+$/', $data)) nc_reply(['error' => 'Ungültige Daten (höchstens ~500 KB).'], 400);
+            $f = nc_backup_dir($uid) . '/sync.json';
+            $fh = fopen($f . '.lock', 'c'); flock($fh, LOCK_EX);
+            $m = is_file($f) ? (json_decode((string)file_get_contents($f), true) ?: []) : [];
+            $rev = (int)($m['rev'] ?? 0);
+            if ((int)($body['base'] ?? -1) !== $rev) { flock($fh, LOCK_UN); fclose($fh); nc_reply(['ok' => false, 'conflict' => true, 'rev' => $rev], 409); }   // jemand war schneller → erst holen
+            $n = ['rev' => $rev + 1, 'device' => mb_substr(preg_replace('/[^\p{L}\p{N} ._-]/u', '', (string)($body['device'] ?? '')), 0, 40), 'updated' => time(), 'data' => $data];
+            file_put_contents($f . '.tmp', json_encode($n)); rename($f . '.tmp', $f);
+            flock($fh, LOCK_UN); fclose($fh);
+            nc_reply(['ok' => true, 'rev' => $n['rev']]);
+        }
         // ---------- Cloud-Sicherung der App (schon in der App verschlüsselt – der Server sieht nur Zufallsdaten) ----------
         case 'backup_list':
             nc_reply(['ok' => true, 'backups' => nc_backup_list($uid), 'limit_mb' => NC_BACKUP_MAX_MB]);
