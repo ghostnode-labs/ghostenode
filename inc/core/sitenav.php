@@ -56,6 +56,7 @@ function sitenav_inject(string $buf): string {
         $end = strpos($buf, '>', $pos);
         if ($end === false) return $buf;
         $buf = substr($buf, 0, $end + 1) . sitenav_html() . substr($buf, $end + 1);
+        if (function_exists('site_i18n_tags') && stripos($buf, 'site-i18n.js') === false && ($bp = strripos($buf, '</body>')) !== false) $buf = substr($buf, 0, $bp) . site_i18n_tags() . substr($buf, $bp);   // 8.1: Sprachwahl auf allen Seiten
         try { return a11y_fix($buf); } catch (Throwable $e) { return $buf; }
     } catch (Throwable $e) {
         error_log('sitenav: ' . $e->getMessage());
