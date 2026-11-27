@@ -338,7 +338,7 @@ $rm_default = [
     'Uhr-App 2.0 mit eigener Zifferblatt-Auswahl' => 'done',
 ];
 $released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0', '7.0.1', '7.1.0', '7.1.1', '7.2.0', '7.2.2', '7.3.0', '7.3.2', '8.0.0', '8.0.1', '8.0.2', '8.0.3', '8.0.4', '8.0.5'];   // bei jedem Release ergänzen
-$ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
+$ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren', 'Themes-Marktplatz für die Oberfläche', 'Steam Deck als zweiter Bildschirm'];
 
 // =====================================================================================================
 // Ausblick: fünf Major-Versionen (6.x – 10.x) – je Webseite, Client und 🔞 (öffentlich bewusst zurückhaltend formuliert)
@@ -674,6 +674,8 @@ $planWeb = [
         'Barrierefreiheit, Impressum und Datenschutz auf allen Seiten, ohne Tracking-Cookies',
     ]],
 ];
+// Fest für die Zukunft geplant (noch ohne Version)
+$planned = ['Ubuntu Touch Version (Android-Ableger)'];
 $ideas = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Steam Deck als zweiter Bildschirm', 'Avatar-Galerie mit Tags und Suche', 'KI-Übersetzung für Sprachchat (lokal)', 'Gruppen-Statistiken für Moderatoren', 'Themes-Marktplatz für die Oberfläche'];
 
 // =====================================================================================================
@@ -778,6 +780,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 .rm-toast{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);background:var(--panel-bg);border:1px solid var(--accent-cyan);padding:8px 14px;font-size:.85rem;z-index:9}
 @media(max-width:640px){.rm-wrap{padding:14px 16px 40px}.rm-items{grid-template-columns:1fr}.rm-tl{padding-left:20px}.rm-rel:before{left:-17px}}
 .rm-fcols{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.rm-fcols h4{margin:4px 0 6px;color:var(--accent-cyan);font-size:.85rem;letter-spacing:1px}.rm-fcols .rm-items{grid-template-columns:1fr}@media(max-width:900px){.rm-fcols{grid-template-columns:1fr}}
+.rm-sub{font-size:.85rem;letter-spacing:2px;color:var(--accent-cyan);margin:18px 0 8px}
 </style></head><body class="rm">
 <div class="rm-wrap">
 <div class="rm-top">
@@ -867,6 +870,9 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 </section>
 
 <section class="rm-pane" data-pane="ideas" hidden>
+    <h3 class="rm-sub">🗓 Für die Zukunft geplant</h3>
+    <div class="rm-list"><?php foreach ($planned as $p): ?><div>📌 <?= e($p) ?></div><?php endforeach; ?></div>
+    <h3 class="rm-sub">💡 Ideen</h3>
     <p class="rm-note">Ideen ohne festen Termin – Wünsche gern im Discord melden.</p>
     <div class="rm-list"><?php foreach ($ideas as $p): ?><div><?= in_array($p, $ideas_done, true) ? '✅ <s>' . e($p) . '</s> <small>schon drin</small>' : '💡 ' . e($p) ?></div><?php endforeach; ?></div>
 </section>
