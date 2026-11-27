@@ -74,7 +74,7 @@ $ready = botsso_ready();
             <h2>1 · Discord verknüpfen</h2>
             <p class="muted">Damit der Bot weiß, wer du bist, braucht dein GhostNode-Konto ein verknüpftes Discord-Konto.</p>
             <?php if (acc_discord_ready()): ?><a class="btn" href="auth-discord.php?go=link&amp;next=botdash.php">🔗 Discord verknüpfen</a>
-            <?php else: ?><p class="bad">Die Anmeldung mit Discord ist auf dieser Webseite noch nicht eingerichtet (Admin → Konten → Discord).</p><?php endif; ?>
+            <?php else: ?><p class="bad">Die Anmeldung mit Discord ist auf dieser Webseite noch nicht eingerichtet: Admin → System → „Registrierung“ (Discord-Client-ID, Client-Secret, Haken „Mit Discord anmelden“ anbieten).</p><?php endif; ?>
         <?php else: ?>
             <h2>Verbunden als <?= e($dc['discord_name'] ?: $dc['discord_id']) ?></h2>
             <?php if ($ready): ?><p><a class="btn btn-primary bd-big" href="botdash.php?go=1">🎛️ Bot-Dashboard öffnen</a></p>
