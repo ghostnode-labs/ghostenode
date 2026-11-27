@@ -6,10 +6,11 @@ declare(strict_types=1);
  *          Rollen owner / mod / member, Feed (Beiträge, anheften), Galerie (Bild-Links), Mitglieder, Bewerbungen.
  *   Events: Termin mit Ort (Welt/Instanz-Text), Plätzen, Anmeldung, Warteliste (rückt automatisch nach), iCal je Club,
  *           öffentlicher Kalender aller öffentlichen Clubs mit Filter (Sprache, Thema, Uhrzeit), Archiv vergangener Events.
- * 18+-Clubs kommen mit 7.3 (dort gelten dann die NSFW-Regeln); hier nur SFW.
+ * 7.3.2: 18+-Clubs (clubs.adult) sehen nur freigegebene Konten – Gate in cl_get/cl_list/cl_calendar über ad_ok() (inc/modules/adult.php).
  */
 require_once __DIR__ . '/nexuscomm.php';
 require_once __DIR__ . '/clubs2.php';   // 7.2: Moderation 2.0, Tickets, Partner, Einladungslinks, Statistik
+require_once __DIR__ . '/adult.php';    // 7.3.2: 18+-Clubs, Paar-Profile, Vorlagen, Einlass-Liste
 
 const CL_JOIN = ['open' => 'offen', 'apply' => 'mit Bewerbung', 'invite' => 'nur mit Einladung'];
 const CL_TOPICS = ['allgemein' => '💬 Allgemein', 'furry' => '🦊 Furry', 'musik' => '🎵 Musik & DJ', 'rp' => '🎭 Rollenspiel', 'tanz' => '💃 Tanzen', 'kunst' => '🎨 Kunst & Avatare', 'chill' => '😌 Chillen', 'games' => '🎮 Spiele', 'lernen' => '📚 Lernen & Sprache', 'events' => '🎉 Partys'];
@@ -36,13 +37,13 @@ function cl_schema(): void {
     ");
     set_setting('clubs_schema', '1');
 }
-function cl_db(): PDO { cl_schema(); cl2_schema(); return nc_db(); }
+function cl_db(): PDO { cl_schema(); cl2_schema(); ad_schema(); return nc_db(); }
 function cl_need_ok(array $who): void { $s = nc_sanction($who['vrc_id']); if (!empty($s['banned']) || (int)($s['mute_until'] ?? 0) > time()) throw new NcError('Dein Konto ist für die Community gerade gesperrt.'); }
 function cl_get(string $key): array {
     $st = cl_db()->prepare(ctype_digit($key) ? 'SELECT * FROM clubs WHERE id = ? AND status = \'active\'' : 'SELECT * FROM clubs WHERE slug = ? AND status = \'active\'');
     $st->execute([ctype_digit($key) ? (int)$key : strtolower($key)]);
     $c = $st->fetch(PDO::FETCH_ASSOC);
-    if (!$c) throw new NcError('Club nicht gefunden.');
+    if (!$c || (!empty($c['adult']) && !ad_ok())) throw new NcError('Club nicht gefunden.');   // 7.3.2: 18+ nur mit Freigabe
     return $c;
 }
 function cl_member(int $cid, string $vid): ?array { $st = cl_db()->prepare('SELECT * FROM club_members WHERE club_id = ? AND vrc_id = ?'); $st->execute([$cid, $vid]); return $st->fetch(PDO::FETCH_ASSOC) ?: null; }
@@ -57,7 +58,7 @@ function cl_pub(array $c, ?array $who = null): array {
     $next = $db->prepare("SELECT COUNT(*) FROM club_events WHERE club_id = ? AND status = 'active' AND ends > ?"); $next->execute([$c['id'], time()]);
     return ['id' => (int)$c['id'], 'slug' => $c['slug'], 'name' => $c['name'], 'descr' => $c['descr'], 'rules' => $c['rules'], 'lang' => $c['lang'], 'topic' => $c['topic'], 'join_mode' => $c['join_mode'],
         'questions' => json_decode($c['questions'], true) ?: [], 'banner' => $c['banner'], 'color' => $c['color'], 'listed' => (bool)$c['listed'], 'members' => (int)$n->fetchColumn(),
-        'upcoming' => (int)$next->fetchColumn(), 'created' => (int)$c['created'], 'my_role' => $who ? cl_role($c, $who) : ''];
+        'upcoming' => (int)$next->fetchColumn(), 'created' => (int)$c['created'], 'my_role' => $who ? cl_role($c, $who) : '', 'adult' => !empty($c['adult'])];
 }
 function cl_clean(array $in, bool $new): array {
     $name = nc_cut((string)($in['name'] ?? ''), 60);
@@ -84,11 +85,13 @@ function cl_create(array $who, array $in): array {
     $own = $db->prepare("SELECT COUNT(*) FROM clubs WHERE owner = ? AND status = 'active'"); $own->execute([$who['vrc_id']]);
     if ((int)$own->fetchColumn() >= 3 && empty($who['_mod'])) throw new NcError('Höchstens 3 eigene Clubs.');
     $d = cl_clean($in, true);
+    $adult = ad_club_flag($who, $in, $d, null);
     $ex = $db->prepare('SELECT 1 FROM clubs WHERE slug = ?'); $ex->execute([$d['slug']]);
     if ($ex->fetch()) throw new NcError('Diese Adresse ist schon vergeben.');
     $db->prepare('INSERT INTO clubs (slug, name, descr, rules, lang, topic, join_mode, questions, banner, color, listed, owner, created) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)')
         ->execute([$d['slug'], $d['name'], $d['descr'], $d['rules'], $d['lang'], $d['topic'], $d['join_mode'], $d['questions'], $d['banner'], $d['color'], $d['listed'], $who['vrc_id'], time()]);
     $id = (int)$db->lastInsertId();
+    if ($adult) $db->prepare('UPDATE clubs SET adult = 1 WHERE id = ?')->execute([$id]);
     $db->prepare("INSERT INTO club_members (club_id, vrc_id, role, status, joined) VALUES (?, ?, 'owner', 'active', ?)")->execute([$id, $who['vrc_id'], time()]);
     return ['club' => cl_pub(cl_get((string)$id), $who), 'msg' => '🏠 Club erstellt.'];
 }
@@ -96,19 +99,21 @@ function cl_update(array $who, string $key, array $in): array {
     $c = cl_get($key); cl_need_staff($c, $who);
     $old = $c; $old['questions'] = json_decode($c['questions'], true) ?: []; unset($old['id'], $old['slug'], $old['owner'], $old['status'], $old['created']);
     $d = cl_clean($in + $old, false); // fehlende Felder behalten ihren alten Wert
+    $adult = ad_club_flag($who, $in, $d, $c);
     cl_db()->prepare('UPDATE clubs SET name=?, descr=?, rules=?, lang=?, topic=?, join_mode=?, questions=?, banner=?, color=?, listed=? WHERE id = ?')
         ->execute([$d['name'], $d['descr'], $d['rules'], $d['lang'], $d['topic'], $d['join_mode'], $d['questions'], $d['banner'], $d['color'], $d['listed'], $c['id']]);
+    cl_db()->prepare('UPDATE clubs SET adult = ? WHERE id = ?')->execute([$adult, $c['id']]);
     return ['club' => cl_pub(cl_get((string)$c['id']), $who), 'msg' => 'Gespeichert.'];
 }
 function cl_list(array $who, array $opt): array {
-    $sql = "SELECT * FROM clubs WHERE status = 'active'"; $args = [];
+    $sql = "SELECT * FROM clubs WHERE status = 'active'" . ad_sql(); $args = [];
     if (($opt['mine'] ?? '') !== '') { $sql .= " AND id IN (SELECT club_id FROM club_members WHERE vrc_id = ? AND status IN ('active','pending'))"; $args[] = $who['vrc_id']; }
     else $sql .= ' AND listed = 1';
     if (isset(CL_TOPICS[$opt['topic'] ?? ''])) { $sql .= ' AND topic = ?'; $args[] = $opt['topic']; }
     if (isset(CL_LANGS[$opt['lang'] ?? ''])) { $sql .= ' AND lang = ?'; $args[] = $opt['lang']; }
     if (($q = trim((string)($opt['q'] ?? ''))) !== '') { $sql .= ' AND (name LIKE ? OR descr LIKE ?)'; $args[] = '%' . $q . '%'; $args[] = '%' . $q . '%'; }
     $st = cl_db()->prepare($sql . ' ORDER BY id DESC LIMIT 100'); $st->execute($args);
-    return ['items' => array_map(fn($c) => cl_pub($c, $who), $st->fetchAll(PDO::FETCH_ASSOC)), 'topics' => CL_TOPICS, 'langs' => CL_LANGS, 'join' => CL_JOIN];
+    return ['items' => array_map(fn($c) => cl_pub($c, $who), $st->fetchAll(PDO::FETCH_ASSOC)), 'topics' => CL_TOPICS, 'langs' => CL_LANGS, 'join' => CL_JOIN, 'adult_ok' => ad_ok()];
 }
 function cl_view(array $who, string $key): array {
     $c = cl_get($key); $role = cl_role($c, $who); $mem = in_array($role, ['owner', 'mod', 'member', 'site_mod'], true);
@@ -148,11 +153,13 @@ function cl_join(array $who, string $key, array $answers, string $code = ''): ar
     if ($m && $m['status'] === 'banned') throw new NcError('Du bist aus diesem Club ausgeschlossen.');
     if ($m && $m['status'] === 'pending') return ['msg' => 'Deine Bewerbung wird geprüft.'];
     if ($c['join_mode'] === 'invite' && !$invited) throw new NcError('Diesem Club tritt man nur mit Einladung bei.');
+    $rulesAt = ad_join_check($who, $c, $GLOBALS['cl_join_in'] ?? []);   // 7.3.2
     $q = json_decode($c['questions'], true) ?: [];
     $ans = [];
     if ($c['join_mode'] === 'apply' && !$invited) foreach ($q as $i => $qq) { $a = nc_cut((string)($answers[$i] ?? ''), 500); if ($a === '') throw new NcError('Bitte alle Einlass-Fragen beantworten.'); $ans[] = ['q' => $qq, 'a' => $a]; }
     $status = $c['join_mode'] === 'open' || $invited ? 'active' : 'pending';
     cl_db()->prepare('INSERT OR REPLACE INTO club_members (club_id, vrc_id, role, status, answers, joined) VALUES (?, ?, \'member\', ?, ?, ?)')->execute([$c['id'], $who['vrc_id'], $status, json_encode($ans, JSON_UNESCAPED_UNICODE), time()]);
+    if ($rulesAt) cl_db()->prepare('UPDATE club_members SET rules_at = ? WHERE club_id = ? AND vrc_id = ?')->execute([$rulesAt, $c['id'], $who['vrc_id']]);
     return ['msg' => $status === 'active' ? '🎉 Willkommen im Club!' : '📨 Bewerbung gesendet – die Club-Leitung meldet sich.', 'status' => $status];
 }
 function cl_leave(array $who, string $key): array {
@@ -274,7 +281,7 @@ function cl_events_of(?array $who, array $c, bool $past): array {
 }
 /** öffentlicher Kalender: kommende Events aller gelisteten Clubs (ohne „nur Mitglieder“) mit Filter */
 function cl_calendar(?array $who, array $f): array {
-    $sql = "SELECT e.*, c.slug, c.name AS club_name, c.lang, c.topic, c.color FROM club_events e JOIN clubs c ON c.id = e.club_id WHERE c.status = 'active' AND c.listed = 1 AND e.status = 'active' AND e.ends >= ? AND e.starts <= ?";
+    $sql = "SELECT e.*, c.slug, c.name AS club_name, c.lang, c.topic, c.color FROM club_events e JOIN clubs c ON c.id = e.club_id WHERE c.status = 'active' AND c.listed = 1 AND e.status = 'active' AND e.ends >= ? AND e.starts <= ?" . ($who ? ad_sql('c') : ' AND c.adult = 0');
     $args = [time(), time() + max(1, min(90, (int)($f['days'] ?? 30))) * 86400];
     if (!$who) $sql .= ' AND e.members_only = 0'; else { $sql .= " AND (e.members_only = 0 OR e.club_id IN (SELECT club_id FROM club_members WHERE vrc_id = ? AND status = 'active'))"; $args[] = $who['vrc_id']; }
     if (isset(CL_LANGS[$f['lang'] ?? ''])) { $sql .= ' AND c.lang = ?'; $args[] = $f['lang']; }
@@ -307,6 +314,8 @@ function cl_ics(string $slug): string {
 
 /** gemeinsame Aktionen für App (nexusclubs.php) und Web (nexus.php nw_club_*) */
 function cl_action(array $who, string $a, array $in): array {
+    $GLOBALS['cl_adult_ok'] = !empty($who['_nsfw']);   // 7.3.2: 18+-Clubs nur für freigegebene Konten
+    $GLOBALS['cl_join_in'] = $in;
     $k = (string)($in['club'] ?? '');
     switch ($a) {
         case 'list': return cl_list($who, $in);

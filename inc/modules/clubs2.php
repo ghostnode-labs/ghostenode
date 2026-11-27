@@ -158,7 +158,7 @@ function cl2_ticket_reply(array $who, array $c, int $id, string $text, string $s
 // ---------- Partnerschaften ----------
 function cl2_partners(array $c): array {
     $st = nc_db()->prepare("SELECT p.club_id, p.partner_id, p.status, c1.slug AS s1, c1.name AS n1, c2.slug AS s2, c2.name AS n2 FROM club_partners p JOIN clubs c1 ON c1.id = p.club_id JOIN clubs c2 ON c2.id = p.partner_id
-        WHERE (p.club_id = ? OR p.partner_id = ?) AND c1.status = 'active' AND c2.status = 'active'");
+        WHERE (p.club_id = ? OR p.partner_id = ?) AND c1.status = 'active' AND c2.status = 'active'" . ad_sql('c1') . ad_sql('c2'));
     $st->execute([$c['id'], $c['id']]);
     $out = [];
     foreach ($st->fetchAll(PDO::FETCH_ASSOC) as $r) {
@@ -171,6 +171,7 @@ function cl2_partner_request(array $who, array $c, string $other): array {
     cl_need_staff($c, $who);
     $o = cl_get($other);
     if ((int)$o['id'] === (int)$c['id']) throw new NcError('Das ist dein eigener Club.');
+    if ((int)($o['adult'] ?? 0) !== (int)($c['adult'] ?? 0)) throw new NcError('18+-Clubs und andere Clubs können keine Partner werden.');
     $db = nc_db();
     $ex = $db->prepare('SELECT * FROM club_partners WHERE (club_id = ? AND partner_id = ?) OR (club_id = ? AND partner_id = ?)'); $ex->execute([$c['id'], $o['id'], $o['id'], $c['id']]);
     $r = $ex->fetch(PDO::FETCH_ASSOC);
@@ -273,5 +274,6 @@ function cl2_action(array $who, string $a, array $in): array {
         case 'invite_delete': return cl2_invite_delete($who, $c(), (string)($in['code'] ?? ''));
         case 'stats': return cl2_stats($who, $c());
     }
+    if (($r = ad_action($who, $a, $in)) !== null) return $r;   // 7.3.2
     throw new NcError('Unbekannte Aktion.');
 }

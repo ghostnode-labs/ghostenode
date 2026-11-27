@@ -33,7 +33,7 @@ try {
         case 'inbox': $out(nc_inbox($who, !empty($in['seen'])));
         // 6.0 (18+): Anfragen, Verbindungen, Kompatibilität, Consent-Check
         case 'req_list': $out(nc_req_list($who));
-        case 'req_send': $out(nc_req_send($who, (string)($in['id'] ?? ''), (string)($in['message'] ?? '')));
+        case 'req_send': $out(nc_req_send($who, (string)($in['id'] ?? ''), (string)($in['message'] ?? ''), (string)($in['limits'] ?? '')));
         case 'req_answer': $out(nc_req_answer($who, (int)($in['id'] ?? 0), !empty($in['accept'])));
         case 'req_withdraw': $out(nc_req_withdraw($who, (int)($in['id'] ?? 0)));
         case 'compat': $out(nc_compat($who, (string)($in['id'] ?? '')));

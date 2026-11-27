@@ -509,7 +509,7 @@ function nc_req_target(string $id): array {
     if (($nf['open_contact'] ?? '') === 'no' || ($nf['visibility'] ?? '') === 'hidden') throw new NcError('Diese Person nimmt gerade keine Anfragen an.');
     return $acc;
 }
-function nc_req_send(array $who, string $to, string $message): array {
+function nc_req_send(array $who, string $to, string $message, string $limits = ''): array {
     nc_need_nsfw($who); nc_can_post($who);
     $to = strtolower(trim($to));
     if (!nx_uid_ok($to) || $to === $who['vrc_id']) throw new NcError('Ungültige Person.');
@@ -524,6 +524,7 @@ function nc_req_send(array $who, string $to, string $message): array {
     if ((int)$d->fetchColumn() > 0) throw new NcError('Diese Person hat vor Kurzem abgelehnt – erneut geht erst nach 30 Tagen.');
     $db->prepare('INSERT INTO comm_requests (from_id, to_id, message, status, created, expires) VALUES (?, ?, ?, \'pending\', ?, ?)')
         ->execute([$who['vrc_id'], $to, nc_cut($message, 500), time(), time() + NC_REQ_DAYS * 86400]);
+    if (trim($limits) !== '') { require_once __DIR__ . '/adult.php'; ad_req_limits_set((int)$db->lastInsertId(), $limits); }   // 7.3.2: Grenzen-Vorschau
     return ['link18' => nc_link_state($who['vrc_id'], $to), 'msg' => '💌 Anfrage geschickt.'];
 }
 function nc_req_row(int $id): ?array { $st = nc_db()->prepare('SELECT * FROM comm_requests WHERE id = ?'); $st->execute([$id]); return $st->fetch(PDO::FETCH_ASSOC) ?: null; }
@@ -561,13 +562,15 @@ function nc_req_list(array $who): array {
     $st->execute([$me, $me, time() - 30 * 86400]);
     $rows = $st->fetchAll(PDO::FETCH_ASSOC);
     $names = nc_names(array_merge(array_column($rows, 'from_id'), array_column($rows, 'to_id')));
+    require_once __DIR__ . '/adult.php';
+    $lim = ad_req_limits_get(array_map(fn($r) => (int)$r['id'], array_filter($rows, fn($r) => $r['status'] === 'pending')));   // 7.3.2
     $in = $out = $con = [];
     foreach ($rows as $r) {
         $other = $r['from_id'] === $me ? $r['to_id'] : $r['from_id'];
         $e = ['id' => (int)$r['id'], 'vrc_id' => $other, 'name' => (string)($names[$other] ?? ''), 'created' => (int)$r['created'], 'answered' => (int)$r['answered'], 'expires' => (int)$r['expires']];
         if ($r['status'] === 'accepted') { $con[] = $e + ['since' => (int)$r['answered']]; continue; }
         if ($r['status'] === 'pending' && (int)$r['expires'] < time()) $r['status'] = 'expired';
-        if ($r['to_id'] === $me) { if ($r['status'] === 'pending') $in[] = $e + ['message' => $r['message']]; }
+        if ($r['to_id'] === $me) { if ($r['status'] === 'pending') $in[] = $e + ['message' => $r['message'], 'limits' => (string)($lim[$r['id']] ?? '')]; }
         else $out[] = $e + ['message' => $r['message'], 'status' => $r['status'] === 'declined' ? 'not_accepted' : $r['status']];   // Ablehnung ohne Details
     }
     // 6.7: Erinnerung – offene Anfragen an mich, die schon über 3 Tage warten (laufen nach 14 Tagen ab)

@@ -20,7 +20,7 @@ return [
             $h .= '<div class="tdy-h">📅 Heute</div>';
             $h .= $ev ? '<ul class="tdy-l">' . implode('', array_map(fn($e) => '<li><b>' . e(date('H:i', $e['starts'])) . '</b> ' . e($e['title']) . ' <span class="muted">· ' . e($e['club']['name']) . '</span></li>', array_slice($ev, 0, max(1, (int)$w->cfg['events'])))) . '</ul>'
                 : '<p class="muted">Heute keine Club-Events – <a href="events.php">alle Events</a></p>';
-            $nc = cl_db()->prepare("SELECT slug, name FROM clubs WHERE status = 'active' AND listed = 1 AND created > ? ORDER BY created DESC LIMIT 3"); $nc->execute([time() - 7 * 86400]);
+            $nc = cl_db()->prepare("SELECT slug, name FROM clubs WHERE status = 'active' AND listed = 1 AND adult = 0 AND created > ? ORDER BY created DESC LIMIT 3"); $nc->execute([time() - 7 * 86400]);
             if ($rows = $nc->fetchAll(PDO::FETCH_ASSOC)) $h .= '<div class="tdy-h">🏠 Neue Clubs</div><p>' . implode(' · ', array_map(fn($c) => '<a href="nexus.php?club=' . e(rawurlencode($c['slug'])) . '">' . e($c['name']) . '</a>', $rows)) . '</p>';
         } catch (Throwable $e) { $h .= '<p class="muted">Club-Events gerade nicht verfügbar.</p>'; }
         try {

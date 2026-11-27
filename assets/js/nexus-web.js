@@ -286,7 +286,7 @@
     function l18Do(b, again) {
         const a = b.dataset.l18, rid = b.dataset.rid, vrc = b.dataset.vrc, sid = b.dataset.sid;
         const ok = d => { if (d && d.msg) toast(d.msg); again(); }, bad = x => toast('⚠ ' + x.message, true);
-        if (a === 'send') { const m = prompt('Kurze Nachricht zur Anfrage (optional):', ''); if (m === null) return; return api('nw_req_send', { id: vrc, message: m }).then(ok).catch(bad); }
+        if (a === 'send') { const m = prompt('Kurze Nachricht zur Anfrage (optional):', ''); if (m === null) return; const lim = prompt('Grenzen-Vorschau mitschicken? (optional, z. B. „🟢 Kuscheln · 🔴 Blut“ – leer lassen für keine)', ''); if (lim === null) return; return api('nw_req_send', { id: vrc, message: m, limits: lim }).then(ok).catch(bad); }
         if (a === 'open') { erpSub = 'links'; if (window.NexusTab) window.NexusTab('erp'); return openErp(); }
         if (a === 'accept' || a === 'decline') return api('nw_req_answer', { id: rid, accept: a === 'accept' ? '1' : '' }).then(ok).catch(bad);
         if (a === 'withdraw') return api('nw_req_withdraw', { id: rid }).then(ok).catch(bad);
@@ -313,7 +313,7 @@
             const card = (h, inner) => '<div class="nw-card"><h3>' + h + '</h3>' + inner + '</div>';
             body.innerHTML = (d.remind ? '<div class="nw-card" style="border-color:#f3c262">⏳ Erinnerung: ' + d.remind + ' Anfrage(n) warten schon über 3 Tage auf deine Antwort – nach 14 Tagen laufen sie ab.</div>' : '')
                 + '<div class="nw-muted" style="margin-bottom:8px">💌 Anfragen gibt es nur zwischen Konten mit Verified 18+ und NSFW an. Erst wenn beide zustimmen, seid ihr verbunden. Ablehnen bleibt anonym („nicht angenommen“).</div>'
-                + card('📥 Eingang (' + d.incoming.length + ')', d.incoming.length ? d.incoming.map(r => '<div class="nw-l18">' + nm(r) + ' <span class="nw-muted">' + dt(r.created) + '</span>' + (r.message ? '<div class="nw-text">' + esc(r.message) + '</div>' : '')
+                + card('📥 Eingang (' + d.incoming.length + ')', d.incoming.length ? d.incoming.map(r => '<div class="nw-l18">' + nm(r) + ' <span class="nw-muted">' + dt(r.created) + '</span>' + (r.message ? '<div class="nw-text">' + esc(r.message) + '</div>' : '') + (r.limits ? '<details class="ad-lim"><summary>📋 Grenzen-Vorschau</summary><pre class="ad-body">' + esc(r.limits) + '</pre></details>' : '')
                     + '<div class="nw-row"><button type="button" class="btn btn-sm btn-gold" data-l18="accept" data-rid="' + r.id + '">💞 Annehmen</button><button type="button" class="btn btn-sm" data-l18="decline" data-rid="' + r.id + '">Ablehnen</button></div></div>').join('') : '<span class="nw-muted">Keine offenen Anfragen.</span>')
                 + card('💞 Verbindungen (' + d.connections.length + ')', d.connections.length ? d.connections.map(c => {
                     const ss = d.sessions.filter(s => s.with === c.vrc_id && ['proposed', 'ready'].includes(s.status));
@@ -349,7 +349,7 @@
         if (!a.verified18) return gate(box, '🔞 Nur mit Verified 18+', 'Schließe in VRChat die Altersverifizierung (18+) ab und mach sie im Profil sichtbar – danach hier neu laden.');
         box.innerHTML = '<div class="nw-erp-hero"><div class="nw-row"><div style="flex:1"><h2>❤️ 18+ / ERP</h2><span class="nw-muted">Nur für dich sichtbar, weil dein Konto Verified 18+ ist. Inhalte bleiben im 18+-Bereich – nichts davon erscheint im normalen Feed.</span></div>'
             + '<label class="vx-auto"><input type="checkbox" id="nwNsfwOn"' + (me.nsfw ? ' checked' : '') + '> NSFW-Inhalte anzeigen</label></div></div>'
-            + (me.nsfw ? '<div class="nw-row">' + [['feed', '🔞 NSFW-Feed'], ['links', '💌 Anfragen & Consent'], ['reddit', '👽 r/VRchatERP'], ['profile', '👤 Mein 18+-Profil'], ['tips', '🛡 Sicherheit & Regeln']].map(([k, l]) => '<button type="button" class="chip' + (erpSub === k ? ' on' : '') + '" data-esub="' + k + '">' + l + '</button>').join('') + '</div><div id="nwErpBody" class="nw"></div>'
+            + (me.nsfw ? '<div class="nw-row">' + [['feed', '🔞 NSFW-Feed'], ['links', '💌 Anfragen & Consent'], ['reddit', '👽 r/VRchatERP'], ['profile', '👤 Mein 18+-Profil'], ['couple', '💞 Paar-Profil'], ['tpl', '📚 Vorlagen'], ['tips', '🛡 Sicherheit & Regeln']].map(([k, l]) => '<button type="button" class="chip' + (erpSub === k ? ' on' : '') + '" data-esub="' + k + '">' + l + '</button>').join('') + '</div><div id="nwErpBody" class="nw"></div>'
                 : '<div class="nw-card nw-gate"><b>NSFW ist aus</b><span class="nw-muted">Schalte oben „NSFW-Inhalte anzeigen“ ein. Das gilt auch in der App (gleiches Nexus-Konto) und lässt sich jederzeit wieder ausschalten.</span></div>');
         $('#nwNsfwOn', box).onchange = e => api('nw_nsfw', { on: e.target.checked ? '1' : '0' }).then(d => { toast(d.msg); meP = null; return ME(); }).then(openErp).catch(x => { e.target.checked = !e.target.checked; toast('⚠ ' + x.message, true); });
         $$('[data-esub]', box).forEach(b => { b.onclick = () => { erpSub = b.dataset.esub; openErp(); }; });
@@ -359,6 +359,7 @@
         if (erpSub === 'reddit') return openPulse(body, true);
         if (erpSub === 'links') return openLinks(body);
         if (erpSub === 'profile') { cs.box = body; return showProfile(a.vrc_id, body); }
+        if ((erpSub === 'couple' || erpSub === 'tpl') && window.NexusAdult) return window.NexusAdult.render(body, erpSub);   // 7.3.2
         body.innerHTML = '<div class="nw-tiles">' + [
             ['🤝', 'Einverständnis zuerst', 'Klärt Grenzen vorher. „Nein“ und Safewords gelten sofort – auch mitten in einer Szene.'],
             ['🔒', 'Privatsphäre', 'Keine echten Namen, Adressen oder Gesichtsbilder posten. Screenshots anderer nur mit deren Erlaubnis.'],

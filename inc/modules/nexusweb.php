@@ -59,7 +59,7 @@ function nxweb_action(int $uid, string $act, array $in): array {
         case 'nw_trends': return nc_trends($who, (string)($in['rating'] ?? 'sfw'));
         case 'nw_inbox': return nc_inbox($who, ($in['seen'] ?? '') === '1');
         case 'nw_req_list': return nc_req_list($who);
-        case 'nw_req_send': return nc_req_send($who, (string)($in['id'] ?? ''), (string)($in['message'] ?? ''));
+        case 'nw_req_send': return nc_req_send($who, (string)($in['id'] ?? ''), (string)($in['message'] ?? ''), (string)($in['limits'] ?? ''));
         case 'nw_req_answer': return nc_req_answer($who, (int)($in['id'] ?? 0), ($in['accept'] ?? '') === '1');
         case 'nw_req_withdraw': return nc_req_withdraw($who, (int)($in['id'] ?? 0));
         case 'nw_compat': return nc_compat($who, (string)($in['id'] ?? ''));

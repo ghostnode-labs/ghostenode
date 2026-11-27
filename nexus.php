@@ -1513,6 +1513,7 @@ session_write_close();
 <script src="assets/js/nexus-web.js"></script>
 <script src="assets/js/nexus-clubs.js"></script>
 <script src="assets/js/nexus-wiki.js"></script>
+<script src="assets/js/nexus-adult.js"></script>
 <script src="assets/js/nexus-client.js"></script>
 <script src="assets/js/nexus-translate.js"></script>
 </body>
