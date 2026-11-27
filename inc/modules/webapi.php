@@ -142,3 +142,33 @@ function wa_page_ok(array $p, array $u): bool {
     if (wa_can($u, '__system__')) return true;   // Systemrolle hat alles
     return in_array((string)$u['role_id'], array_filter(explode(',', (string)$p['allowed_roles'])), true);
 }
+
+/**
+ * 8.1: API v2 – gleiche Endpunkte wie v1, aber einheitliche Hülle und Seiten:
+ *   Liste:   {"data": [...], "page": {"limit": 25, "cursor": "…", "next": "…"|null, "total": 123}, "meta": {"version": 2}}
+ *   Objekt:  {"data": {...}, "meta": {"version": 2}}
+ *   Fehler:  {"error": {"status": 403, "message": "…"}, "meta": {"version": 2}}
+ * Seiten: ?limit=1–100 (Standard 25) & ?cursor=<next aus der vorigen Antwort>. Der Cursor ist undurchsichtig (Base64), nicht selbst bauen.
+ */
+function wa_v2_cursor(int $off): string { return rtrim(strtr(base64_encode('o:' . $off), '+/', '-_'), '='); }
+function wa_v2_offset(string $cursor): int {
+    if ($cursor === '') return 0;
+    $raw = base64_decode(strtr($cursor, '-_', '+/') . str_repeat('=', (4 - strlen($cursor) % 4) % 4), true);
+    if ($raw === false || !preg_match('/^o:(\d{1,7})$/', $raw, $m)) throw new WaError('Ungültiger Cursor.', 400);
+    return (int)$m[1];
+}
+function wa_v2(array $res, int $limit, string $cursor): array {
+    $meta = ['version' => 2];
+    if (isset($res['items']) && is_array($res['items']) && ($res['items'] === [] || array_keys($res['items']) === range(0, count($res['items']) - 1))) {
+        $limit = max(1, min(100, $limit ?: 25));
+        $off = wa_v2_offset($cursor);
+        $all = $res['items']; $total = count($all);
+        $page = array_slice($all, $off, $limit);
+        $rest = $res; unset($rest['items']);
+        if ($rest) $meta['extra'] = $rest;
+        return ['data' => $page, 'page' => ['limit' => $limit, 'cursor' => $cursor !== '' ? $cursor : null, 'next' => $off + $limit < $total ? wa_v2_cursor($off + $limit) : null, 'total' => $total], 'meta' => $meta];
+    }
+    if (isset($res['version']) && ($res['service'] ?? '') === 'ghostnode-web-api') $res['version'] = 2;
+    return ['data' => $res, 'meta' => $meta];
+}
+function wa_v2_error(string $msg, int $status): array { return ['error' => ['status' => $status, 'message' => $msg], 'meta' => ['version' => 2]]; }

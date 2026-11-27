@@ -11,7 +11,8 @@ require_once __DIR__ . '/inc/core/pages.php';
 require_once __DIR__ . '/inc/modules/webapi.php';
 
 $path = (string)($_GET['r'] ?? '');
-if ($path === '' && !empty($_SERVER['PATH_INFO'])) $path = preg_replace('#^/?v1/#', '', ltrim((string)$_SERVER['PATH_INFO'], '/'));
+$apiV = (string)($_GET['v'] ?? '') === '2' ? 2 : 1;   // 8.1: API v2 (api.php/v2/<endpunkt> oder ?v=2&r=…)
+if ($path === '' && !empty($_SERVER['PATH_INFO'])) { $pi = ltrim((string)$_SERVER['PATH_INFO'], '/'); if (strpos($pi, 'v2/') === 0) $apiV = 2; $path = preg_replace('#^/?v[12]/#', '', $pi); }
 $path = trim(preg_replace('#[^a-z0-9/_-]#', '', strtolower($path)), '/');
 
 // ---------------------------------------------------------------- API
@@ -23,7 +24,10 @@ if ($path !== '') {
     header('Access-Control-Allow-Headers: Authorization, X-Api-Key, Content-Type');
     header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
     if (($_SERVER['REQUEST_METHOD'] ?? '') === 'OPTIONS') { http_response_code(204); exit; }
-    $out = function (array $o, int $code = 200) { http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit; };
+    $out = function (array $o, int $code = 200) use ($apiV) {
+        if ($apiV === 2) { header('X-Api-Version: 2'); $o = isset($o['error']) && count($o) === 1 && is_string($o['error']) ? wa_v2_error($o['error'], $code) : ($code < 400 ? wa_v2($o, (int)($_GET['limit'] ?? 0), (string)($_GET['cursor'] ?? '')) : $o); }
+        http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit;
+    };
     try {
         $key = wa_auth();
         $who = $key ? 'k' . $key[0]['id'] : 'ip|' . client_ip();
@@ -155,6 +159,20 @@ const { items } = await r.json();</pre>
 <tr><td>429</td><td>Limit erreicht: <b>30 Aufrufe/min</b> ohne Schlüssel (je IP), <b>120/min</b> je Schlüssel</td></tr><tr><td>503</td><td>Quelle gerade nicht erreichbar (z. B. GitHub)</td></tr></table>
 <p>Über die API gibt es nie 🔞-Inhalte – auch nicht mit einem freigeschalteten Konto.</p>
 
+<h3 id="v2">🆕 Version 2 – Seiten &amp; einheitliche Antworten</h3>
+<p>Alle Endpunkte gibt es auch als <code>api.php/v2/&lt;endpunkt&gt;</code> (oder <code>api.php?v=2&amp;r=&lt;endpunkt&gt;</code>). v1 bleibt unverändert.</p>
+<ul>
+<li>Listen: <code>{"data":[…],"page":{"limit":25,"cursor":null,"next":"…","total":123},"meta":{"version":2}}</code> – weiter mit <code>?cursor=&lt;next&gt;</code>, Größe mit <code>?limit=1…100</code>. Den Cursor nicht selbst bauen.</li>
+<li>Einzelnes Objekt: <code>{"data":{…},"meta":{"version":2}}</code></li>
+<li>Fehler: <code>{"error":{"status":403,"message":"…"},"meta":{"version":2}}</code> · Kopfzeile <code>X-Api-Version: 2</code></li>
+</ul>
+<pre>curl "<?= e($base) ?>/v2/versions?limit=5"
+curl "<?= e($base) ?>/v2/versions?limit=5&amp;cursor=bzo1"</pre>
+<h3 id="hooksig">🔏 Webhook-Signatur</h3>
+<p>Webhooks aus „Mein Bereich“ und der Status-Webhook schicken <code>X-GhostNode-Timestamp</code> und <code>X-GhostNode-Signature: sha256=&lt;hex&gt;</code> = HMAC-SHA256 mit deinem Schlüssel (<code>whsec_…</code>) über <code>Zeitstempel + "." + Inhalt</code>. Prüfen: gleiche Rechnung, konstante Vergleichszeit, Zeit höchstens 5 Minuten alt.</p>
+<pre>// Node.js
+const ok = crypto.timingSafeEqual(Buffer.from(sig.slice(7), 'hex'), crypto.createHmac('sha256', secret).update(ts + '.' + body).digest())
+            &amp;&amp; Math.abs(Date.now() / 1000 - ts) &lt; 300;</pre>
 <h2 id="client">🖥 Client-API · Verbinden</h2>
 <p>Läuft in <b>VRC Nexus für Windows</b> (ab 5.4.1). Einschalten unter <b>Einstellungen → Integrationen → Stream-Deck-Schnittstelle</b>; dort stehen auch Port (Standard siehe App) und <b>Zugangsschlüssel</b>. Erreichbar nur vom eigenen PC:</p>
 <pre>ws://127.0.0.1:&lt;Port&gt;/ws?token=&lt;Zugangsschlüssel&gt;</pre>
