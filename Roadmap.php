@@ -191,7 +191,7 @@ $rm_default = [
     // Web & Foren
     'WoltLab-Core-Plugin: BBCodes [vrcworld] und [vrcavatar] mit Info-Karten' => 'done', 'Nexus-Web-Dashboard im Browser (Freunde, Welten, Kalender – nur lesen)' => 'done',
     // Android
-    'Homescreen-Widgets: Freunde online, Puls, nächstes Event' => 'wip', 'Nexus-Knöpfe als Schnellzugriff und Kachel in den Schnelleinstellungen' => 'wip',
+    'Homescreen-Widgets: Freunde online, Puls, nächstes Event' => 'done', 'Nexus-Knöpfe als Schnellzugriff und Kachel in den Schnelleinstellungen' => 'wip',
     // Events & Social
     'Event-Planer mit VRChat-Gruppen-Events, Zusagen und Erinnerungen' => 'wip', 'Gemeinsame Instanz-Einladungen für Freundesgruppen' => 'done',
     'Treffen-Rückblick: wer, wo, wie lange – als Karte und Zeitachse' => 'done',
@@ -279,8 +279,10 @@ $rm_default = [
     'Galerie je Club mit Freigabe-Rechten' => 'done',
     'Kalender-Abo je Club (iCal)' => 'done',
     'Club-Archiv: frühere Events mit Fotos und Teilnehmerzahl' => 'done',
+    // 7.0.1
+    'Handy-Widgets 2.0 (Puls, Freunde, Schnellaktionen)' => 'done',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0', '7.0.1'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 
 // =====================================================================================================
