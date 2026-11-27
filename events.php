@@ -27,10 +27,10 @@ body.ev{padding:0;display:block}.ev-wrap{box-sizing:border-box;max-width:980px;m
 <h1 style="margin:0">🗓️ Events</h1>
 <p class="muted">Kommende Events aus den öffentlichen Clubs. Anmelden, Clubs gründen und beitreten: im <a href="nexus.php">GhostNode Nexus</a> (Community → Clubs) oder in der VRC-Nexus-App.</p>
 <form class="ev-f" method="get">
-<select name="topic" onchange="this.form.submit()"><?php echo $sel($cal['topics'], $f['topic'], 'Alle Themen'); ?></select>
-<select name="lang" onchange="this.form.submit()"><?php echo $sel($cal['langs'], $f['lang'], 'Alle Sprachen'); ?></select>
-<select name="tod" onchange="this.form.submit()"><?php echo $sel(['morning' => '🌅 vormittags', 'afternoon' => '☀ nachmittags', 'evening' => '🌙 abends'], $f['tod'], 'Jede Uhrzeit'); ?></select>
-<select name="days" onchange="this.form.submit()"><?php foreach ([7, 30, 90] as $d) echo '<option value="' . $d . '"' . ($f['days'] === $d ? ' selected' : '') . '>' . $d . ' Tage</option>'; ?></select>
+<select name="topic" aria-label="Thema" onchange="this.form.submit()"><?php echo $sel($cal['topics'], $f['topic'], 'Alle Themen'); ?></select>
+<select name="lang" aria-label="Sprache" onchange="this.form.submit()"><?php echo $sel($cal['langs'], $f['lang'], 'Alle Sprachen'); ?></select>
+<select name="tod" aria-label="Uhrzeit" onchange="this.form.submit()"><?php echo $sel(['morning' => '🌅 vormittags', 'afternoon' => '☀ nachmittags', 'evening' => '🌙 abends'], $f['tod'], 'Jede Uhrzeit'); ?></select>
+<select name="days" aria-label="Zeitraum" onchange="this.form.submit()"><?php foreach ([7, 30, 90] as $d) echo '<option value="' . $d . '"' . ($f['days'] === $d ? ' selected' : '') . '>' . $d . ' Tage</option>'; ?></select>
 <noscript><button class="btn">Filtern</button></noscript></form>
 <?php if (!$cal['items']): ?><p class="muted">Keine Events in diesem Zeitraum.</p><?php endif;
 $day = '';

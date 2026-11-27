@@ -15,10 +15,37 @@ const SITENAV_MAIN = [
 function sitenav_start(): void {
     if (PHP_SAPI === 'cli' || isset($GLOBALS['__sitenav'])) return;
     $script = basename((string)($_SERVER['SCRIPT_NAME'] ?? ''));
+    if ($script === 'index.php') { $GLOBALS['__sitenav'] = true; ob_start(fn($b) => (function () { foreach (headers_list() as $h) if (stripos($h, 'content-type:') === 0 && stripos($h, 'text/html') === false) return false; return true; })() ? a11y_fix($b) : $b); return; }
     if ($script === '' || in_array($script, SITENAV_SKIP, true)) return;
     foreach (['api', 'dl', 'thumb', 'download', 'export', 'raw', 'json'] as $k) if (isset($_GET[$k])) return;
     $GLOBALS['__sitenav'] = true;
     ob_start('sitenav_inject');
+}
+
+/**
+ * 8.1 Barrierefreiheit (WCAG 2.2 AA) für alle Seiten, zentral über die Ausgabe:
+ * Hauptbereich (role=main) + „Zum Inhalt springen“, Feldnamen für Felder, die nur einen Platzhalter haben,
+ * sichtbarer Tastatur-Fokus, weniger Bewegung bei „reduzierte Bewegung“, Mindestgröße für Antippen.
+ */
+function a11y_fix(string $buf): string {
+    $b = stripos($buf, '<body');
+    if ($b === false) return $buf;
+    $head = substr($buf, 0, $b); $body = substr($buf, $b);
+    // Hauptbereich
+    $target = '';
+    if (preg_match('/<main\b[^>]*\bid="([^"]+)"/i', $body, $m)) $target = $m[1];
+    elseif (preg_match('/<main\b(?![^>]*\bid=)/i', $body)) { $body = preg_replace('/<main\b(?![^>]*\bid=)/i', '<main id="main"', $body, 1); $target = 'main'; }
+    elseif (!preg_match('/role="main"/', $body) && preg_match('/<div class="((?:wrapper|[a-z0-9]+-wrap)\b[^"]*)"(?![^>]*\b(id|role)=)/', $body)) { $body = preg_replace('/<div class="((?:wrapper|[a-z0-9]+-wrap)\b[^"]*)"(?![^>]*\b(id|role)=)/', '<div class="$1" id="main" role="main"', $body, 1); $target = 'main'; }
+    elseif (preg_match('/<[a-z]+\b[^>]*role="main"[^>]*\bid="([^"]+)"/i', $body, $m) || preg_match('/<[a-z]+\b[^>]*\bid="([^"]+)"[^>]*role="main"/i', $body, $m)) $target = $m[1];
+    // Felder nur mit Platzhalter → aria-label (ohne id kann es kein <label for> geben)
+    $body = preg_replace_callback('/<(input|textarea)\b(?![^>]*\b(aria-label|aria-labelledby|id)=)([^>]*?)\bplaceholder="([^"]+)"/i', fn($m) => '<' . $m[1] . ' aria-label="' . trim($m[4], ' ….') . '"' . $m[3] . 'placeholder="' . $m[4] . '"', $body);
+    $end = strpos($body, '>');
+    $skip = $target !== '' && strpos($body, 'class="gn-skip"') === false ? '<a class="gn-skip" href="#' . htmlspecialchars($target, ENT_QUOTES) . '">Zum Inhalt springen</a>' : '';
+    $css = '<style id="gn-a11y">.gn-skip{position:absolute;left:8px;top:-60px;z-index:10000;background:#f3c262;color:#040609;padding:8px 14px;font-weight:700;text-decoration:none;border-radius:4px}.gn-skip:focus{top:8px}'
+        . ':focus-visible{outline:2px solid #f3c262!important;outline-offset:2px}[id=main]:focus{outline:none}'
+        . '@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}'
+        . '@media (pointer:coarse){button,.btn,select,input[type=checkbox],input[type=radio]{min-height:24px;min-width:24px}}</style>';
+    return $head . substr($body, 0, $end + 1) . $skip . $css . substr($body, $end + 1);
 }
 
 function sitenav_inject(string $buf): string {
@@ -28,7 +55,8 @@ function sitenav_inject(string $buf): string {
         if ($pos === false || strpos($buf, 'data-no-sitenav') !== false || strpos($buf, 'class="gn-nav"') !== false) return $buf;
         $end = strpos($buf, '>', $pos);
         if ($end === false) return $buf;
-        return substr($buf, 0, $end + 1) . sitenav_html() . substr($buf, $end + 1);
+        $buf = substr($buf, 0, $end + 1) . sitenav_html() . substr($buf, $end + 1);
+        try { return a11y_fix($buf); } catch (Throwable $e) { return $buf; }
     } catch (Throwable $e) {
         error_log('sitenav: ' . $e->getMessage());
         return $buf;

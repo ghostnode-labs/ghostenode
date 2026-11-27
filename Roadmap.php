@@ -359,6 +359,8 @@ $rm_default = [
     'Offene Schnittstelle für Bots anderer Communities' => 'done',
     // -
     'Mehrere Domains und Weiterleitungen verwalten' => 'done',
+    // -
+    'Barrierefreiheit nach WCAG für alle Seiten' => 'wip',
 ];
 $released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0', '7.0.1', '7.1.0', '7.1.1', '7.2.0', '7.2.2', '7.3.0', '7.3.2', '8.0.0', '8.0.1', '8.0.2', '8.0.3', '8.0.4', '8.0.5'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren', 'Themes-Marktplatz für die Oberfläche', 'Steam Deck als zweiter Bildschirm'];
@@ -839,7 +841,7 @@ button.rm-st{background:none;cursor:pointer;font:inherit;font-size:.64rem}
 </nav>
 
 <section class="rm-pane" data-pane="plan">
-    <div class="rm-tools"><input type="search" id="rmQ" placeholder="Im Plan suchen …"><select id="rmF"><option value="">Alle Status</option><?php foreach (RM_STATES as $k => $l): ?><option value="<?= e($k) ?>"><?= e($l) ?></option><?php endforeach; ?></select></div>
+    <div class="rm-tools"><input type="search" id="rmQ" placeholder="Im Plan suchen …" aria-label="Im Plan suchen"><select id="rmF" aria-label="Status filtern"><option value="">Alle Status</option><?php foreach (RM_STATES as $k => $l): ?><option value="<?= e($k) ?>"><?= e($l) ?></option><?php endforeach; ?></select></div>
     <?php if ($edit_mode): ?><p class="rm-note">Klick auf einen Status schaltet ihn weiter: Geplant → In Arbeit → Erledigt. Änderungen sind sofort für alle sichtbar.</p><?php endif; ?>
     <div class="rm-tl">
     <?php foreach ($plan5 as $rel => [$ic, $desc, $items]): $r = $rows5[$rel]; $d = count(array_filter($r, fn($x) => $x[1] === 'done')); ?>

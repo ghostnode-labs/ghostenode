@@ -97,6 +97,7 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
     </div>
 </nav>
 
+<main id="main">
 <header class="ld-hero">
     <div class="ld-hero-txt">
         <div class="ld-eyebrow">VRCHAT // TOOLS // COMMUNITY</div>
@@ -200,6 +201,7 @@ $title = in_array($settings['site_title'], ['', 'Startseite'], true) ? 'GhostNod
     </div>
 </section>
 
+</main>
 <footer class="ld-foot">
     <span>◈ <?php echo e($title); ?> · <?php echo date('Y'); ?></span>
     <span><a href="dashboard.php">Dashboard</a> · <a href="admin.php<?php echo $user ? '' : '?next=dashboard.php'; ?>"><?php echo $user ? 'Admin & Konto' : 'Anmelden'; ?></a> · <a href="<?php echo e(LANDING_LINKS['github']); ?>" target="_blank" rel="noopener">GitHub</a></span>
