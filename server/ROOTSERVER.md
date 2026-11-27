@@ -107,6 +107,14 @@ Später geht das mit: `… olddb` (erneut versuchen), `… olddb --force` (neu h
 
 In Plesk muss beim Datenbank-Benutzer der Fernzugriff erlaubt sein, entweder von der IP des neuen Servers oder von „beliebig“.
 
+## Befehl „ghostnode“
+
+Nach `install` oder `update` gibt es den Befehl `ghostnode` (Link auf dieses Script, mit Tab-Vervollständigung). Einmalig von Hand anlegen: `bash /root/ghostenode/server/ghostnode-root.sh cli`. Übersicht: `ghostnode help`.
+
+```
+ghostnode update    ghostnode bot    ghostnode check    ghostnode bericht    ghostnode login liste
+```
+
 ## Später
 
 ```bash

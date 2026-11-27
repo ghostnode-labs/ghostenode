@@ -20,7 +20,7 @@
 #    cron  Aufgabenplaner der Webseite alle 5 Minuten (nur Rolle „alles“) + tägliches Server-Backup
 #    fw    Firewall (ufw), fail2ban, automatische Sicherheitsupdates
 #
-#  Aufruf (als root):
+#  Aufruf (als root):   ghostnode <befehl>   (Befehl wird bei install/update angelegt; sonst einmal: bash ghostnode-root.sh cli)
 #    bash ghostnode-root.sh install            alles einrichten (fragt nach Domain, E-Mail und Schlüsseln)
 #    bash ghostnode-root.sh update             Webseite, Weiterleitung und Bot aktualisieren, Dienste neu starten
 #    bash ghostnode-root.sh bot                nur den Discord-Bot aktualisieren (Git oder neueste Release-ZIP), neu starten und prüfen
@@ -85,8 +85,72 @@ die()  { echo "${c_err}✖ $*${c_0}" >&2; exit 1; }
 WARNINGS=(); FAILS=0
 trap 'echo "${c_err}✖ Abbruch in Zeile $LINENO: $BASH_COMMAND${c_0}" >&2' ERR
 
+# ---------------------------------------------------------------- Hilfe + Befehl „ghostnode“
+show_help() {
+    local b='' d='' z=''; [ -t 1 ] && { b=$'\e[1;36m'; d=$'\e[2m'; z=$'\e[0m'; }
+    cat <<EOF
+${b}ghostnode${z} – GhostNode Root-Server verwalten (als root)
+
+${b}Aufruf:${z} ghostnode <befehl> [optionen]      ${d}(oder: bash $(readlink -f "$0") <befehl>)${z}
+
+${b}Täglich${z}
+  update            Webseite, HypeRate-Weiterleitung und Bot aktualisieren, Dienste neu starten, prüfen
+  bot               nur den Discord-Bot aktualisieren (Git oder neueste Release-ZIP), neu starten, prüfen
+  check             alles prüfen (Dienste, Seiten, PHP-Erweiterungen, Zertifikate)
+  bericht           Zustand zum Weitergeben (Versionen, Dienste, letzte Fehler) – ohne Passwörter
+  crons             geplante Aufgaben mit letztem Ergebnis
+  backup            Server-Backup jetzt
+
+${b}Einstellungen${z}
+  secrets           Schlüssel (Discord, HypeRate, SMTP …) ändern und übernehmen
+  bungie            Bungie-Werte für D2 Nexus eintragen
+  certs             Zertifikate (erneut) holen
+
+${b}Notfall & Umzug${z}
+  login liste | entsperren | passwort BENUTZER | 2fa-aus BENUTZER | aktivieren BENUTZER
+  usedb             Webseite auf die MariaDB umschalten
+  olddb [--force|--neu]   alte MySQL (z. B. Plesk) übernehmen
+  migrate --db=… --files=… | --from=HOST --src-db=NAME --src-user=BENUTZER
+
+${b}Einrichtung${z}
+  install           alles einrichten (fragt nach Domain, E-Mail und Schlüsseln)
+  cli               den Befehl „ghostnode“ (und Tab-Vervollständigung) neu anlegen
+  help              diese Hilfe
+
+${b}Optionen${z}
+  --yes / -y        nicht nachfragen          --no-tls     ohne Zertifikate
+  --only=teil,…     nur diese Teile           --skip=teil,…  diese Teile auslassen
+  ${d}Teile: web db tls hr bot music turn ftp mail voice cron fw${z}
+
+${b}Beispiele${z}
+  ghostnode update            ghostnode bot            ghostnode check
+  ghostnode update --skip=bot ghostnode login liste    ghostnode bericht
+EOF
+}
+install_cli() {   # /usr/local/bin/ghostnode → dieses Script (bleibt nach Updates gültig, weil es auf den Git-Checkout zeigt)
+    local self; self=$(readlink -f "$0")
+    ln -sfn "$self" /usr/local/bin/ghostnode
+    if [ -d /etc/bash_completion.d ]; then
+        cat > /etc/bash_completion.d/ghostnode <<'EOF'
+# erzeugt von ghostnode-root.sh
+_ghostnode() {
+    local cur=${COMP_WORDS[COMP_CWORD]} prev=${COMP_WORDS[1]:-}
+    if [ "$COMP_CWORD" -eq 1 ]; then
+        COMPREPLY=($(compgen -W "update bot check bericht crons backup secrets bungie certs login usedb olddb migrate install cli help" -- "$cur"))
+    elif [ "$prev" = login ] && [ "$COMP_CWORD" -eq 2 ]; then
+        COMPREPLY=($(compgen -W "liste entsperren passwort 2fa-aus aktivieren" -- "$cur"))
+    else
+        COMPREPLY=($(compgen -W "--yes --no-tls --only= --skip= --force --neu --db= --files= --from= --src-db= --src-user= --src-port=" -- "$cur"))
+    fi
+}
+complete -o nospace -F _ghostnode ghostnode
+EOF
+    fi
+}
+
 # ---------------------------------------------------------------- Optionen
-CMD=${1:-install}; [ $# -gt 0 ] && shift
+CMD=${1:-help}; [ $# -gt 0 ] && shift
+case "$CMD" in -h|--help|help|hilfe|'?') show_help; exit 0 ;; esac
 ARGS=("$@")
 YES=0; NO_TLS=0; ONLY=""; SKIP=""; MIG_DB=""; MIG_FILES=""; MIG_FROM=""; MIG_SRC_DB=""; MIG_SRC_USER=""; MIG_SRC_PORT=3306
 for a in "$@"; do
@@ -102,7 +166,7 @@ for a in "$@"; do
         --src-user=*) MIG_SRC_USER=${a#--src-user=} ;;
         --src-port=*) MIG_SRC_PORT=${a#--src-port=} ;;
         --force|--neu) ;;   # für olddb
-        -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
+        -h|--help) show_help; exit 0 ;;
         *) [ "$CMD" = login ] || die "Unbekannte Option: $a (Hilfe: --help)" ;;   # login: Unterbefehl + Benutzername
     esac
 done
@@ -1853,6 +1917,7 @@ case "$CMD" in
         want tls  && setup_tls
         want fw   && setup_firewall
         write_credentials
+        install_cli
         check_all || true
         summary ;;
     update)
@@ -1863,6 +1928,7 @@ case "$CMD" in
         want hr  && setup_hr
         want bot && setup_bot
         want cron && setup_cron   # Wächter/Backup/Auto-Update mit dem neuesten Stand
+        install_cli
         check_all ;;
     bot)   # nur der Discord-Bot: Code holen (Git oder Release-ZIP), Einstellungen schreiben, neu starten, prüfen
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
@@ -1925,5 +1991,6 @@ case "$CMD" in
         [[ " ${ARGS[*]} " == *" --force "* ]] && rm -f /var/lib/ghostnode/old-db-imported
         setup_olddb; want cron && setup_cron ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
-    *) die "Unbekannter Befehl: $CMD (install, update, bot, certs, secrets, bungie, check, backup, migrate, crons, olddb, login, usedb, bericht)" ;;
+    cli) install_cli; ok "Befehl angelegt: ghostnode → $(readlink -f "$0")"; echo "  Tab-Vervollständigung gilt ab der nächsten Anmeldung (oder sofort: source /etc/bash_completion.d/ghostnode)." ;;
+    *) die "Unbekannter Befehl: $CMD – Hilfe: ghostnode help" ;;
 esac
