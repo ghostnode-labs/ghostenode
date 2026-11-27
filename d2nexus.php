@@ -28,6 +28,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = '✔ Anmelde-Einstellungen gespeichert.';
         }
     }
+    if (($_POST['action'] ?? '') === 'd2_admins') {
+        $ids = array_values(array_unique(array_filter(array_map('trim', preg_split('/[\s,;]+/', (string)($_POST['d2_admins'] ?? ''))), fn($x) => preg_match('/^\d{1,20}$/', $x))));
+        set_setting('d2_admins', implode(',', $ids));
+        audit('D2 Nexus: Chat-Admins geändert', count($ids) . ' Admin(s)', 'security');
+        $msg = '✔ ' . count($ids) . ' Chat-Admin(s) gespeichert.';
+    }
     if (($_POST['action'] ?? '') === 'd2_refresh') { d2_overview(true); $msg = '✔ Neu geladen.'; }
 }
 
@@ -134,6 +140,12 @@ body.d2{padding:0;display:block}.d2-wrap{box-sizing:border-box;max-width:1180px;
       <input name="d2_cid" placeholder="OAuth client_id" value="<?= e(setting('d2_client_id', '')) ?>" autocomplete="off" style="width:180px">
       <input name="d2_csec" type="password" placeholder="<?= setting('d2_client_secret', '') !== '' ? '•••••• (leer = behalten)' : 'OAuth client_secret' ?>" autocomplete="off" style="flex:1;min-width:240px">
       <label class="muted"><input type="checkbox" name="d2_csec_del" value="1"> Secret löschen</label><button class="btn">Speichern</button></form>
+  </div></div>
+  <div class="sec">// Admin: Admin-Panel in der App (Chat-Moderation)</div>
+  <div class="d2-card"><div class="bd">
+    <p class="muted">Diese Bungie-Konten sehen in D2 Nexus das Plugin „Admin-Panel“: Chat moderieren (Nachrichten löschen, Nutzer sperren), Nutzer & Statistik, 📢 Ankündigungen. Bungie-ID = die Zahl in deinem bungie.net-Profil-Link (<code>…/Profile/254/<b>12345678</b></code>). Mehrere mit Komma trennen.</p>
+    <form method="post" style="display:flex;gap:8px;flex-wrap:wrap"><input type="hidden" name="action" value="d2_admins">
+      <input name="d2_admins" value="<?= e(str_replace(',', ', ', setting('d2_admins', ''))) ?>" placeholder="z. B. 12345678, 23456789" style="flex:1;min-width:240px" autocomplete="off"><button class="btn">Speichern</button></form>
   </div></div>
 <?php endif; ?>
 <p class="muted" style="margin-top:24px">D2 Nexus ist nicht mit Bungie verbunden oder von Bungie unterstützt. Destiny ist eine Marke von Bungie, Inc.</p>

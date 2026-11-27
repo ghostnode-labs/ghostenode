@@ -69,8 +69,16 @@ function d2c_who(string $token): array {
     return $who;
 }
 
+/** Admins des D2-Nexus-Chats: Bungie-IDs aus GN_D2_ADMINS oder Einstellung „d2_admins“ (Komma-Liste) */
+function d2c_is_admin(array $who): bool {
+    $list = (string)getenv('GN_D2_ADMINS');
+    if ($list === '' && function_exists('setting')) $list = setting('d2_admins', '');
+    return in_array($who['id'], array_filter(array_map('trim', explode(',', $list))), true);
+}
+
 /** Darf $who diesen Kanal lesen/schreiben? clan:<groupId> nur Mitglieder, dm:<a>:<b> nur die beiden */
-function d2c_chan_ok(array $who, string $chan): bool {
+function d2c_chan_ok(array $who, string $chan, bool $write = false): bool {
+    if ($chan === 'news') return !$write || d2c_is_admin($who);   // 📢 Ankündigungen: alle lesen, nur Admins schreiben
     if (preg_match('/^clan:(\d{1,20})$/', $chan, $m)) return $who['clan'] !== '' && $who['clan'] === $m[1];
     if (preg_match('/^dm:(\d{1,20}):(\d{1,20})$/', $chan, $m)) return $m[1] < $m[2] ? in_array($who['id'], [$m[1], $m[2]], true) : false;
     return false;
@@ -81,6 +89,7 @@ function d2c_dm(string $a, string $b): string { return strcmp($a, $b) < 0 ? "dm:
 function d2c_chans(array $who): array {
     $db = d2c_db();
     $out = [];
+    $out[] = ['chan' => 'news', 'name' => 'Ankündigungen', 'kind' => 'news'];
     if ($who['clan'] !== '') $out[] = ['chan' => 'clan:' . $who['clan'], 'name' => $who['clanName'] ?: 'Clan', 'kind' => 'clan'];
     $st = $db->prepare("SELECT DISTINCT chan FROM msgs WHERE chan LIKE ? OR chan LIKE ?");
     $st->execute(['dm:' . $who['id'] . ':%', 'dm:%:' . $who['id']]);
@@ -99,7 +108,8 @@ function d2c_chans(array $who): array {
         $c['unread'] = (int)$x['n']; $c['lastTs'] = (int)$t->fetchColumn();
     }
     unset($c);
-    usort($out, fn($a, $b) => ($a['kind'] === 'clan' ? -1 : 0) - ($b['kind'] === 'clan' ? -1 : 0) ?: $b['lastTs'] <=> $a['lastTs']);
+    $rank = ['news' => 0, 'clan' => 1, 'dm' => 2];
+    usort($out, fn($a, $b) => ($rank[$a['kind']] <=> $rank[$b['kind']]) ?: $b['lastTs'] <=> $a['lastTs']);
     return $out;
 }
 
@@ -118,7 +128,7 @@ function d2c_messages(array $who, string $chan, int $after = 0): array {
 }
 
 function d2c_send(array $who, string $chan, string $text): array {
-    if (!d2c_chan_ok($who, $chan)) throw new D2cError('Kein Zugriff auf diesen Kanal.', 403);
+    if (!d2c_chan_ok($who, $chan, true)) throw new D2cError($chan === 'news' ? 'Ankündigungen schreiben nur Admins.' : 'Kein Zugriff auf diesen Kanal.', 403);
     $db = d2c_db();
     $b = $db->prepare('SELECT blocked FROM users WHERE bungie_id = ?'); $b->execute([$who['id']]);
     if ((int)$b->fetchColumn()) throw new D2cError('Du bist für den Chat gesperrt.', 403);
@@ -128,4 +138,40 @@ function d2c_send(array $who, string $chan, string $text): array {
     $db->prepare('INSERT INTO msgs (chan, from_id, from_name, body, ts) VALUES (?, ?, ?, ?, ?)')->execute([$chan, $who['id'], $who['name'], $text, time()]);
     if (mt_rand(1, 100) === 1) $db->prepare('DELETE FROM msgs WHERE ts < ?')->execute([time() - D2C_KEEP_DAYS * 86400]);
     return ['ok' => true, 'id' => (int)$db->lastInsertId()];
+}
+
+/* ---------- Admin (D2-Nexus-Plugin „Admin-Panel“) ---------- */
+function d2c_admin(array $who, string $op, array $in): array {
+    if (!d2c_is_admin($who)) throw new D2cError('Nur für Admins.', 403);
+    $db = d2c_db();
+    switch ($op) {
+        case 'stats':
+            $n = fn(string $sql, array $p = []) => (function () use ($db, $sql, $p) { $st = $db->prepare($sql); $st->execute($p); return (int)$st->fetchColumn(); })();
+            return ['users' => $n('SELECT COUNT(*) FROM users'), 'active24h' => $n('SELECT COUNT(*) FROM users WHERE last_seen > ?', [time() - 86400]), 'active7d' => $n('SELECT COUNT(*) FROM users WHERE last_seen > ?', [time() - 7 * 86400]),
+                'blocked' => $n('SELECT COUNT(*) FROM users WHERE blocked = 1'), 'msgs' => $n('SELECT COUNT(*) FROM msgs'), 'msgs24h' => $n('SELECT COUNT(*) FROM msgs WHERE ts > ?', [time() - 86400]),
+                'clans' => $n("SELECT COUNT(DISTINCT clan) FROM users WHERE clan <> ''"), 'login' => d2_oauth() ? (d2_oauth()['secret'] === '' ? 'Public' : 'Confidential') : 'fehlt', 'keepDays' => D2C_KEEP_DAYS];
+        case 'users':
+            $q = '%' . str_replace(['%', '_'], '', mb_substr((string)($in['q'] ?? ''), 0, 40)) . '%';
+            $st = $db->prepare('SELECT bungie_id, name, code, clan, last_seen, blocked FROM users WHERE name LIKE ? OR bungie_id LIKE ? ORDER BY last_seen DESC LIMIT 200'); $st->execute([$q, $q]);
+            return ['users' => array_map(fn($u) => ['id' => $u['bungie_id'], 'name' => $u['name'], 'code' => (int)$u['code'], 'clan' => $u['clan'], 'lastSeen' => (int)$u['last_seen'], 'blocked' => (bool)$u['blocked']], $st->fetchAll(PDO::FETCH_ASSOC))];
+        case 'msgs':
+            $chan = (string)($in['chan'] ?? '');
+            if ($chan !== '') { $st = $db->prepare('SELECT id, chan, from_id, from_name, body, ts FROM msgs WHERE chan = ? ORDER BY id DESC LIMIT 150'); $st->execute([$chan]); }
+            else $st = $db->query('SELECT id, chan, from_id, from_name, body, ts FROM msgs ORDER BY id DESC LIMIT 150');
+            // Direktnachrichten nur mit Kanalnamen, Inhalt bleibt privat
+            return ['msgs' => array_map(fn($m) => ['id' => (int)$m['id'], 'chan' => $m['chan'], 'from' => $m['from_id'], 'name' => $m['from_name'], 'text' => strpos($m['chan'], 'dm:') === 0 ? '(Direktnachricht – privat)' : $m['body'], 'ts' => (int)$m['ts']], $st->fetchAll(PDO::FETCH_ASSOC))];
+        case 'delete':
+            $db->prepare('DELETE FROM msgs WHERE id = ?')->execute([(int)($in['id'] ?? 0)]);
+            return ['ok' => true];
+        case 'block':
+            $id = (string)($in['id'] ?? '');
+            if (!preg_match('/^\d{1,20}$/', $id)) throw new D2cError('Ungültige ID.');
+            if ($id === $who['id']) throw new D2cError('Dich selbst sperrst du besser nicht.');
+            $db->prepare('UPDATE users SET blocked = ? WHERE bungie_id = ?')->execute([!empty($in['blocked']) ? 1 : 0, $id]);
+            if (!empty($in['purge'])) $db->prepare("DELETE FROM msgs WHERE from_id = ? AND chan NOT LIKE 'dm:%'")->execute([$id]);
+            return ['ok' => true];
+        case 'announce':
+            return d2c_send($who, 'news', (string)($in['text'] ?? ''));
+    }
+    throw new D2cError('Unbekannte Admin-Aktion.', 404);
 }
