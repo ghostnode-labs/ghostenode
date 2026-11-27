@@ -70,8 +70,8 @@ Admin → Nests → *Import Egg*:
 
 | Egg | Datei | Zuweisung (Allocation) |
 |---|---|---|
-| GhostNode Discord-Bot | [`node_discord/pterodactyl/egg-ghostnode-discord-bot.json`](https://github.com/ghostnode-labs/node_discord/tree/main/pterodactyl) | `127.0.0.1:18092` |
-| GhostNode HypeRate-Weiterleitung | [`vrc_nexus/apps/hyperate-relay/egg-ghostnode-hyperate-relay.json`](https://github.com/ghostnode-labs/vrc_nexus/tree/main/apps/hyperate-relay) | `127.0.0.1:18091` |
+| GhostNode Discord-Bot | [`node_discord/pterodactyl/egg-ghostnode-discord-bot.json`](https://github.com/ghostnode-labs/node_discord/tree/HEAD/pterodactyl) | `127.0.0.1:18092` |
+| GhostNode HypeRate-Weiterleitung | [`vrc_nexus/apps/hyperate-relay/egg-ghostnode-hyperate-relay.json`](https://github.com/ghostnode-labs/vrc_nexus/tree/HEAD/apps/hyperate-relay) | `127.0.0.1:18091` |
 | Mumble | im Panel mitgeliefertes Egg „Mumble Server“ (Nest „Voice Servers“) | `<Server-IP>:64738` |
 
 Lege die Zuweisungen für Bot und Weiterleitung auf `127.0.0.1` an (Admin → Nodes → Allocation). Dann sind sie nur über nginx/HTTPS erreichbar. Beim `install` fragt das Script nach genau diesen Zuweisungen.
