@@ -134,7 +134,9 @@ function german_datetime(int $ts, bool $with_time = true): string {
 function site_i18n_tags(): string {
     static $done = false; if ($done) return ''; $done = true;
     $v = @filemtime(APP_ROOT . '/assets/js/site-dict.js') ?: 1;
-    return '<script src="assets/js/site-dict.js?v=' . $v . '" defer></script><script src="assets/js/site-i18n.js?v=' . (@filemtime(APP_ROOT . '/assets/js/site-i18n.js') ?: 1) . '" defer></script>';
+    $cv = '';   // 8.1: freigegebene Community-Übersetzungen (uebersetzen.php)
+    try { $cv = function_exists('setting') ? (string)setting('i18ncomm_ver', '') : ''; } catch (Throwable $e) { $cv = ''; }
+    return '<script src="assets/js/site-dict.js?v=' . $v . '" defer></script>' . ($cv !== '' ? '<script src="uebersetzen.php?js=1&amp;v=' . rawurlencode($cv) . '" defer></script>' : '') . '<script src="assets/js/site-i18n.js?v=' . (@filemtime(APP_ROOT . '/assets/js/site-i18n.js') ?: 1) . '" defer></script>';
 }
 /**
  * 8.1: Bild mit WebP-Variante (liegt neben dem Original eine .webp-Datei, bekommen Browser die kleinere Datei; sonst das Original).

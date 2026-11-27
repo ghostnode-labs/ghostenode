@@ -138,3 +138,27 @@ Mein Profil → Datenschutz	My profile → Privacy	Mon profil → Confidentialit
 Erlauben	Allow	Autoriser	許可
 Webseite	Website	Site web	ウェブサイト
 Zur Startseite	To the home page	Vers l'accueil	ホームへ
+// 8.1 Übersetzen helfen (uebersetzen.php)
+Übersetzen helfen	Help translate	Aider à traduire	翻訳に協力する
+Die Webseite gibt es auf Deutsch, Englisch, Französisch und Japanisch. Hilf mit: Übersetzungen vorschlagen oder verbessern. Das Team prüft jeden Vorschlag; freigegebene Texte gelten sofort.	The website is available in German, English, French and Japanese. Help out: suggest or improve translations. The team reviews every suggestion; approved texts go live immediately.	Le site existe en allemand, anglais, français et japonais. Participe : propose ou améliore des traductions. L'équipe vérifie chaque proposition ; les textes validés sont appliqués immédiatement.	このサイトはドイツ語・英語・フランス語・日本語に対応しています。翻訳の提案や改善にご協力ください。すべての提案はチームが確認し、承認されたテキストはすぐに反映されます。
+# / # Texte	# / # texts	# / # textes	# / # テキスト
+# Texte	# texts	# textes	# テキスト
+Zu prüfen (#)	To review (#)	À vérifier (#)	確認待ち (#)
+Nichts offen.	Nothing pending.	Rien en attente.	保留中のものはありません。
+Neuen Text vorschlagen	Suggest a new text	Proposer un nouveau texte	新しいテキストを提案
+Ein deutscher Text auf der Webseite ist noch nicht übersetzt? Original genau abschreiben und Übersetzung eintragen. Zahlen im Text als	A German text on the website isn't translated yet? Copy the original exactly and enter the translation. Write numbers in the text as	Un texte allemand du site n'est pas encore traduit ? Recopie l'original exactement et saisis la traduction. Écris les nombres du texte sous la forme	サイト上のドイツ語がまだ翻訳されていませんか？原文を正確に写し、翻訳を入力してください。文中の数字は
+schreiben	 	 	と書いてください
+Original (Deutsch)	Original (German)	Original (allemand)	原文（ドイツ語）
+Vorschlagen	Suggest	Proposer	提案する
+Suchen…	Search…	Rechercher…	検索…
+nur fehlende	missing only	manquants seulement	未翻訳のみ
+Filtern	Filter	Filtrer	絞り込み
+Deutsch	German	Allemand	ドイツ語
+fehlt	missing	manquant	未翻訳
+Besser übersetzen…	Improve translation…	Améliorer la traduction…	より良い翻訳…
+Danke! Dein Vorschlag wartet auf Prüfung.	Thanks! Your suggestion is awaiting review.	Merci ! Ta proposition attend d'être vérifiée.	ありがとう！提案は確認待ちです。
+Deine offenen Vorschläge: #	Your pending suggestions: #	Tes propositions en attente : #	保留中の提案：#
+, um Übersetzungen vorzuschlagen.	to suggest translations.	pour proposer des traductions.	すると翻訳を提案できます。
+um Übersetzungen vorzuschlagen	to suggest translations	pour proposer des traductions	すると翻訳を提案できます
+Bitte Original und Übersetzung ausfüllen.	Please fill in the original and the translation.	Merci de remplir l'original et la traduction.	原文と翻訳を入力してください。
+Genau diesen Vorschlag gibt es schon.	This exact suggestion already exists.	Cette proposition existe déjà.	まったく同じ提案がすでにあります。

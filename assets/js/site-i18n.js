@@ -72,6 +72,8 @@
     }
     function set(l) { if (!LANGS[l]) return; lang = l; try { localStorage.setItem('gnLang', l); } catch (e) { /* egal */ } document.documentElement.lang = l; walk(document.body); corner(); }
     function start() {
+        const X = window.SiteDictExtra;   // freigegebene Community-Übersetzungen gehen vor
+        if (X && window.SiteDict) for (const l of Object.keys(X)) window.SiteDict[l] = Object.assign({}, window.SiteDict[l] || {}, X[l]);
         const css = document.createElement('style');
         css.textContent = '.gn-lang{position:fixed;left:12px;bottom:12px;z-index:9000;font-size:.82rem}.gn-lang-btn{background:var(--panel-bg,#0b121b);color:var(--text-main,#e2e8f0);border:1px solid var(--border-color,#2a3a4a);padding:5px 9px;border-radius:16px;cursor:pointer}'
             + '.gn-lang-menu{display:none;position:absolute;bottom:34px;left:0;background:var(--panel-bg,#0b121b);border:1px solid var(--border-color,#2a3a4a);min-width:140px}.gn-lang.open .gn-lang-menu{display:block}'
