@@ -27,6 +27,7 @@
 #    bash ghostnode-root.sh secrets            Schlüssel (Discord, HypeRate, SMTP …) ändern und übernehmen
 #    bash ghostnode-root.sh check              alles prüfen (Dienste, Seiten, PHP-Erweiterungen, Zertifikate)
 #    bash ghostnode-root.sh backup             Server-Backup jetzt (Datenbank, data/, Bot-Daten, Einstellungen)
+#    bash ghostnode-root.sh login …            Notfall-Zugang zur Webseite: liste | entsperren | passwort BENUTZER | 2fa-aus BENUTZER | aktivieren BENUTZER
 #    bash ghostnode-root.sh olddb              alte MySQL (z. B. Plesk) übernehmen bzw. erneut holen (--force), Zugang ändern (--neu)
 #    bash ghostnode-root.sh crons              geplante Aufgaben (Webseite, Wächter, Backup, Auto-Update) mit letztem Ergebnis
 #    bash ghostnode-root.sh migrate …          Umzug von Plesk: MySQL-Datenbank + data/ + uploads/ (richtet die Webseite hier ein)
@@ -98,7 +99,7 @@ for a in "$@"; do
         --src-port=*) MIG_SRC_PORT=${a#--src-port=} ;;
         --force|--neu) ;;   # für olddb
         -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
-        *) die "Unbekannte Option: $a (Hilfe: --help)" ;;
+        *) [ "$CMD" = login ] || die "Unbekannte Option: $a (Hilfe: --help)" ;;   # login: Unterbefehl + Benutzername
     esac
 done
 want() {   # want <teil> → läuft dieser Teil?
@@ -1573,6 +1574,12 @@ case "$CMD" in
     check)  [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; check_all ;;
     migrate) cmd_migrate ;;
     crons) cmd_crons ;;
+    login)   # Notfall-Zugang zur Webseite über SSH (Sperre aufheben, Passwort, Zwei-Faktor)
+        [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
+        want web || die "Die Webseite läuft nicht auf diesem Server (Rolle „dienste“)."
+        [ -f "$WEB_DIR/tools/login.php" ] || { git_as -C "$WEB_DIR" pull --ff-only -q || true; }
+        [ -f "$WEB_DIR/tools/login.php" ] || die "tools/login.php fehlt – zuerst: $0 update"
+        runuser -u "$APP_USER" -- php "$WEB_DIR/tools/login.php" "${ARGS[@]}" || exit $? ;;
     olddb)
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
         if [ -z "${OLD_DB_HOST:-}" ] || [[ " ${ARGS[*]} " == *" --neu "* ]]; then
@@ -1584,5 +1591,5 @@ case "$CMD" in
         [[ " ${ARGS[*]} " == *" --force "* ]] && rm -f /var/lib/ghostnode/old-db-imported
         setup_olddb; want cron && setup_cron ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
-    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons, olddb)" ;;
+    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons, olddb, login)" ;;
 esac

@@ -73,6 +73,18 @@ Die Anmeldung am Bot-Dashboard läuft über die Webseite (`botdash.php`). Den ge
 Liegt die Webseite auf Plesk, schreibt das Script den TURN-Zugang nach `/etc/ghostnode/turn-fuer-plesk.json` (nur root).
 Lade diese Datei in Plesk mit dem Dateimanager als `data/keys/turn.json` in die Webseite hoch und setze die Rechte auf 600. Danach laufen die Anrufe im Nexus-Chat über diesen Server.
 
+## Notfall-Zugang zur Webseite (SSH)
+
+Für den Fall, dass die Anmeldung auf der Webseite nicht mehr geht: Wer root auf dem Server ist, kommt so wieder hinein. Jede Änderung landet im Protokoll.
+
+```bash
+bash /root/ghostenode/server/ghostnode-root.sh login liste              # Konten, Rollen, Sperren, Zwei-Faktor
+bash /root/ghostenode/server/ghostnode-root.sh login entsperren         # „Zu viele Fehlversuche“ aufheben
+bash /root/ghostenode/server/ghostnode-root.sh login passwort BENUTZER   # Einmal-Passwort, beim Login neu setzen
+bash /root/ghostenode/server/ghostnode-root.sh login 2fa-aus BENUTZER   # Zwei-Faktor aus (Handy verloren)
+bash /root/ghostenode/server/ghostnode-root.sh login aktivieren BENUTZER
+```
+
 ## Server-Dashboard im Admin-Panel
 
 Unter Admin → **🖥 Server** (Recht „System“) siehst du:

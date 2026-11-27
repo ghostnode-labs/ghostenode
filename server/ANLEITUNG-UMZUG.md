@@ -102,5 +102,6 @@ Oder einfach im Admin-Panel unter **🖥 Server**.
 |---|---|
 | `dpkg was interrupted` / `parsing file …/updates/…` | erledigt der Installer selbst; sonst `find /var/lib/dpkg/updates -type f -size 0 -delete; dpkg --configure -a` |
 | `Permission denied` | vorher `sudo -i` |
+| „Zu viele Fehlversuche“ / Passwort vergessen / 2FA-Handy weg | per SSH: `bash /root/ghostenode/server/ghostnode-root.sh login entsperren` · `… login passwort BENUTZER` · `… login 2fa-aus BENUTZER` · `… login liste` |
 | Alte MySQL nicht erreichbar | Fernzugriff in Plesk, richtige Adresse (Datenbankserver), Port 3306 beim alten Anbieter offen? |
 | Zertifikat schlägt fehl | DNS prüfen (alles auf `45.93.249.81`), dann `… certs` erneut |
