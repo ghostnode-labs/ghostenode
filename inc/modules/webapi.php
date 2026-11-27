@@ -114,6 +114,16 @@ function wa_route(string $method, string $path, ?array $key): array {
             return ['items' => array_map(fn($it) => ['title' => (string)($it['title'] ?? ''), 'start' => $it['start'] instanceof DateTimeInterface ? $it['start']->format(DATE_ATOM) : '', 'end' => isset($it['end']) && $it['end'] instanceof DateTimeInterface ? $it['end']->format(DATE_ATOM) : '',
                 'all_day' => !empty($it['all_day']), 'kind' => (string)($it['layer'] ?? $it['kind'] ?? ''), 'location' => (string)($it['location'] ?? '')], array_slice($items, 0, 200))];
         }
+        case 'GET bot/feed': {   // 8.1: offene Schnittstelle für Bots anderer Communities – ohne Schlüssel, ein Aufruf für alles
+            require_once __DIR__ . '/changelog.php'; require_once __DIR__ . '/status.php'; require_once __DIR__ . '/nexuspulse.php';
+            $rel = []; $inc = []; $news = [];
+            try { $rel = cl_fetch(); } catch (Throwable $e) { /* Quelle fällt aus → Rest liefern */ }
+            try { $inc = st_summary()['incidents'] ?? []; } catch (Throwable $e) { }
+            try { $news = np_steam(); } catch (Throwable $e) { }
+            $types = array_filter(explode(',', (string)$q('types', '')));
+            $items = wa_bot_items($rel, $inc, $news, (int)$q('since', 0), $types, max(1, min(50, (int)$q('limit', 20))));
+            return (string)$q('format') === 'discord' ? wa_bot_discord($items) : ['items' => $items, 'next_since' => $items ? max(array_column($items, 'time')) : (int)$q('since', 0)];
+        }
         case 'GET community/feed':
         case 'POST community/post':
         case 'GET community/trends': {
@@ -172,3 +182,28 @@ function wa_v2(array $res, int $limit, string $cursor): array {
     return ['data' => $res, 'meta' => $meta];
 }
 function wa_v2_error(string $msg, int $status): array { return ['error' => ['status' => $status, 'message' => $msg], 'meta' => ['version' => 2]]; }
+
+/** 8.1 Bot-Feed: Versionen, Störungen und VRChat-News in einer einheitlichen Form, neueste zuerst. $since = nur Neueres (Unix-Zeit). */
+function wa_bot_items(array $releases, array $incidents, array $news, int $since = 0, array $types = [], int $limit = 20): array {
+    $base = function_exists('mk_base_url') ? mk_base_url() : '';
+    $out = [];
+    foreach ($releases as $r) {
+        if (!empty($r['pre'])) continue;
+        $t = strtotime((string)($r['date'] ?? '')) ?: 0;
+        $out[] = ['type' => 'release', 'id' => 'release:' . $r['v'], 'time' => $t, 'title' => 'VRC Nexus ' . $r['v'], 'text' => 'Neue Version von VRC Nexus.', 'url' => (string)($r['url'] ?? '')];
+    }
+    foreach ($incidents as $i) {
+        $out[] = ['type' => 'incident', 'id' => 'incident:' . $i['id'] . ':' . (int)$i['start'], 'time' => (int)$i['start'], 'title' => '⚠ Störung: ' . $i['name'], 'text' => (string)($i['msg'] ?? ''), 'url' => $base . '/status.php'];
+        if (!empty($i['end'])) $out[] = ['type' => 'resolved', 'id' => 'resolved:' . $i['id'] . ':' . (int)$i['start'], 'time' => (int)$i['end'], 'title' => '✅ Wieder in Ordnung: ' . $i['name'], 'text' => '', 'url' => $base . '/status.php'];
+    }
+    foreach ($news as $n) $out[] = ['type' => 'news', 'id' => (string)$n['id'], 'time' => (int)($n['ts'] ?? 0), 'title' => (string)$n['title'], 'text' => (string)($n['text'] ?? ''), 'url' => (string)($n['url'] ?? ''), 'kind' => (string)($n['kind'] ?? '')];
+    $out = array_values(array_filter($out, fn($x) => $x['time'] > $since && (!$types || in_array($x['type'], $types, true))));
+    usort($out, fn($a, $b) => $b['time'] <=> $a['time']);
+    return array_slice($out, 0, $limit);
+}
+/** Dieselben Einträge als fertige Discord-Webhook-Nachricht (höchstens 10 Embeds) – Bots müssen nur weiterreichen. */
+function wa_bot_discord(array $items): array {
+    $col = ['release' => 0x38d5e6, 'incident' => 0xff5d73, 'resolved' => 0x4ade80, 'news' => 0xf3c262];
+    return ['username' => 'GhostNode', 'embeds' => array_map(fn($x) => array_filter(['title' => mb_substr($x['title'], 0, 250), 'description' => mb_substr($x['text'], 0, 400),
+        'url' => preg_match('#^https?://#', $x['url']) ? $x['url'] : null, 'color' => $col[$x['type']] ?? 0x888888, 'timestamp' => $x['time'] ? gmdate('c', $x['time']) : null], fn($v) => $v !== null && $v !== ''), array_slice(array_reverse($items), -10))];
+}

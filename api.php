@@ -15,6 +15,7 @@ $path = (string)($_GET['r'] ?? '');
 $apiV = (string)($_GET['v'] ?? '') === '2' ? 2 : 1;   // 8.1: API v2 (api.php/v2/<endpunkt> oder ?v=2&r=…)
 if ($path === '' && !empty($_SERVER['PATH_INFO'])) { $pi = ltrim((string)$_SERVER['PATH_INFO'], '/'); if (strpos($pi, 'v2/') === 0) $apiV = 2; $path = preg_replace('#^/?v[12]/#', '', $pi); }
 $path = trim(preg_replace('#[^a-z0-9/_-]#', '', strtolower($path)), '/');
+if ((string)($_GET['format'] ?? '') === 'discord') $apiV = 1;   // fertige Discord-Nachricht nie in die v2-Hülle packen
 
 // ---------------------------------------------------------------- API
 if ($path !== '') {
@@ -57,6 +58,7 @@ $EP = [
     ['GET', 'versions', '–', 'VRC-Nexus-Versionen mit Downloads (<code>limit</code> 1–100)', '{"items":[{"version":"5.3.0","date":"…","downloads":[…]}]}'],
     ['GET', 'versions/latest', '–', 'Neueste Version', '{"version":"5.3.0","downloads":[…]}'],
     ['GET', 'news', '–', 'Offizielle VRChat-News (<code>kind</code>: patch, dev, security, creator, news · <code>limit</code>)', '{"items":[{"title":"…","kind":"patch","url":"…"}]}'],
+    ['GET', 'bot/feed', '–', 'Für Bots: Versionen, Störungen und VRChat-News in einer Liste (<code>since</code>, <code>types</code>=release,incident,resolved,news, <code>limit</code>, <code>format=discord</code>) – siehe <a href="#bots">Bots</a>', '{"items":[{"type":"release","id":"release:8.0.8","time":1764240000,"title":"VRC Nexus 8.0.8","url":"…"}],"next_since":1764240000}'],
     ['GET', 'market', '–', 'Plugin-Katalog des Marktplatzes', '{"plugins":[…]}'],
     ['GET', 'me', 'read', 'Wem der Schlüssel gehört', '{"id":3,"name":"Luna","scopes":["read"]}'],
     ['GET', 'pages', 'read', 'Seiten des Dashboards, die das Konto sehen darf', '{"items":[{"title":"Kalender","url":"calendar.php"}]}'],
@@ -111,7 +113,7 @@ body.ap{padding:0;display:block}
 .ok{color:#50fa7b}.bad{color:var(--accent-red)}
 @media(max-width:820px){.ap-wrap{grid-template-columns:1fr}.ap-toc{position:static;flex-direction:row;flex-wrap:wrap}.ap-toc b{width:100%}}
 </style></head><body class="ap"><div class="ap-wrap">
-<nav class="ap-toc"><b>Überblick</b><a href="#start">Start</a><a href="#keys">API-Schlüssel</a><a href="#oauth">OAuth</a>
+<nav class="ap-toc"><b>Überblick</b><a href="#start">Start</a><a href="#keys">API-Schlüssel</a><a href="#oauth">OAuth</a><a href="#bots">Bots</a>
 <b>Web-API</b><a href="#web">Grundlagen</a><a href="#web-ep">Endpunkte</a><a href="#web-ex">Beispiele</a><a href="#errors">Fehler &amp; Limits</a>
 <b>Client-API</b><a href="#client">Verbinden</a><a href="#client-ops">Befehle</a><a href="#client-topics">Ereignisse</a><a href="#client-actions">Aktionen</a><a href="#client-ex">Beispiele</a>
 <b>Sonst</b><a href="#rules">Regeln</a><a href="changelog.php">Changelog</a></nav>
@@ -160,6 +162,20 @@ const { items } = await r.json();</pre>
 <tr><td>429</td><td>Limit erreicht: <b>30 Aufrufe/min</b> ohne Schlüssel (je IP), <b>120/min</b> je Schlüssel</td></tr><tr><td>503</td><td>Quelle gerade nicht erreichbar (z. B. GitHub)</td></tr></table>
 <p>Über die API gibt es nie 🔞-Inhalte – auch nicht mit einem freigeschalteten Konto.</p>
 
+<h3 id="bots">🤖 Für Bots anderer Communities</h3>
+<p>Ein Endpunkt, ohne Schlüssel, für Discord-, Matrix-, Telegram- oder Forum-Bots: <code>bot/feed</code> liefert neue VRC-Nexus-Versionen, Störungen (und deren Ende) und offizielle VRChat-News in einer einheitlichen Form. Einfach alle paar Minuten mit <code>since=&lt;next_since&gt;</code> abfragen – es kommt nur Neues. Mit <code>format=discord</code> kommt eine fertige Discord-Webhook-Nachricht zurück, die dein Bot unverändert weiterschicken kann. Limit ohne Schlüssel: 30 Aufrufe/min; bitte höchstens alle 2 Minuten abfragen.</p>
+<pre>// Node 18+ – keine Pakete nötig
+let since = Math.floor(Date.now() / 1000);
+setInterval(async () => {
+  const r = await fetch('<?= e($base) ?>/v1/bot/feed?types=release,incident,resolved&amp;since=' + since);
+  const { items, next_since } = await r.json();
+  for (const it of items.reverse()) console.log(`[${it.type}] ${it.title} ${it.url}`);   // → an deinen Kanal schicken
+  since = next_since;
+}, 5 * 60 * 1000);
+
+# Direkt in einen Discord-Webhook weiterreichen
+curl -s "<?= e($base) ?>/v1/bot/feed?format=discord&amp;types=release" | curl -s -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK_URL"</pre>
+<p>Lieber Push statt Abfragen? Webhooks mit Signatur gibt es unter <a href="me.php?tab=hooks">Mein Profil → Webhooks</a> (<a href="#hooksig">Signatur prüfen</a>). Im Namen von Leuten handeln? → <a href="#oauth">OAuth</a>.</p>
 <h3 id="oauth">🔗 Mit GhostNode anmelden (OAuth 2.0)</h3>
 <p>Für Apps, Bots und Webseiten, die im Namen anderer Leute handeln. App im <a href="dev.php#oauth">Entwickler-Portal</a> anlegen → Client-ID (und Geheimnis bei vertraulichen Apps). Ablauf: Autorisierungscode, PKCE (S256) empfohlen und für öffentliche Apps Pflicht. Codes gelten 5 Minuten und nur einmal; wird ein Code zweimal benutzt, werden alle Token daraus widerrufen. Das Token (<code>gno_…</code>) funktioniert wie ein API-Schlüssel mit den freigegebenen Rechten.</p>
 <pre>1) Weiterleiten:  <?= e(mk_base_url()) ?>/oauth.php?r=authorize&amp;client_id=gnc_…&amp;redirect_uri=https://deine.app/cb&amp;scope=read&amp;state=ZUFALL&amp;code_challenge=…&amp;code_challenge_method=S256
