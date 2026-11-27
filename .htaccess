@@ -20,6 +20,9 @@ RedirectMatch 404 ^.*/(data|tools|clients)/.*$
 
 Options -Indexes
 
+# 8.1: Kurz-Weiterleitungen (/discord, /dl …) und eigene 404-Seite – verwaltet unter Admin → System → Domains
+ErrorDocument 404 /go.php
+
 # 8.1: Leistung – Browser-Zwischenspeicher für Bilder, Schriften, CSS und JS (Dateinamen ändern sich bei Updates nicht immer → 7 Tage, Bilder 30 Tage)
 <IfModule mod_expires.c>
     ExpiresActive On

@@ -156,6 +156,11 @@ function emoji_favicon(string $emoji): string {
     return '<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>' . $emoji . '</text></svg>">' . $watch;
 }
 
+// 8.1: Neben-Domains → Haupt-Domain (Admin → System → Domains)
+if (PHP_SAPI !== 'cli' && !empty($_SERVER['HTTP_HOST'])) {
+    try { require_once __DIR__ . '/site.php'; require_once APP_ROOT . '/inc/modules/domains.php'; dom_guard(); } catch (Throwable $e) { /* nie blockieren */ }
+}
+
 // Webseite 2.0: einheitliches Menü auf allen Seiten
 require_once __DIR__ . '/sitenav.php';
 sitenav_start();

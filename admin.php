@@ -156,7 +156,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'db_config' => 'database.manage', 'db_test' => 'database.manage', 'db_transfer' => 'database.manage', 'db_switch' => 'database.manage',
         'db_check' => 'database.manage', 'db_dump' => 'database.manage',
         'reg_save' => 'system.manage',
-        'tasks_save' => 'system.manage', 'task_run' => 'system.manage', 'tasks_newkey' => 'system.manage', 'backup_delete' => 'backup.download', 'backup_now' => 'backup.download',
+        'tasks_save' => 'system.manage', 'domains_save' => 'system.manage', 'task_run' => 'system.manage', 'tasks_newkey' => 'system.manage', 'backup_delete' => 'backup.download', 'backup_now' => 'backup.download',
         // Nexus (VRC Nexus: Konten, Warnliste, Community, Chat)
         'nx_service' => 'admin.access', 'nx_ban' => 'admin.access', 'nx_unban' => 'admin.access', 'nx_age_revoke' => 'nexus.age', 'nx_age_grant' => 'nexus.age', 'nx_cadm' => 'nexus.community', 'nx_lic' => 'admin.access', 'nx_cron' => 'admin.access',
         'nx_warn_settings' => 'admin.access', 'nx_warn_update' => 'admin.access', 'nx_warn_delete' => 'admin.access', 'nx_warn_clear' => 'admin.access', 'nx_warn_appeal' => 'admin.access',
@@ -682,6 +682,22 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$res[$tid]['ok']) throw new InvalidArgumentException(TASKS[$tid][1] . ': ' . $res[$tid]['text']);
                 $msg = TASKS[$tid][0] . ' ' . TASKS[$tid][1] . ': ' . $res[$tid]['text'] . ' (' . $res[$tid]['seconds'] . ' s)';
                 break;
+            // ---------- 8.1: Domains & Weiterleitungen (nur Inhaber – falsche Einträge könnten die Seite unerreichbar machen) ----------
+            case 'domains_save': {
+                if (empty($me['role_is_system'])) throw new InvalidArgumentException('Nur der Inhaber darf Domains ändern.');
+                require_once __DIR__ . '/inc/modules/domains.php';
+                $old = []; foreach (dom_cfg()['redirects'] as $r) $old[$r['from']] = (int)$r['hits'];
+                $doms = []; foreach (preg_split('/\R/', (string)($_POST['dom_list'] ?? '')) as $l) { $p = preg_split('/\s+/', trim($l)); if ($p[0] === '') continue; $doms[] = ['host' => $p[0], 'mode' => in_array(strtolower($p[1] ?? ''), ['ausliefern', 'serve'], true) ? 'serve' : 'redirect']; }
+                $reds = []; foreach (preg_split('/\R/', (string)($_POST['dom_redirects'] ?? '')) as $l) { $p = preg_split('/\s+/', trim($l)); if ($p[0] === '') continue; $f = '/' . trim(strtolower($p[0]), '/'); $reds[] = ['from' => $f, 'to' => $p[1] ?? '', 'code' => (int)($p[2] ?? 302), 'hits' => $old[$f] ?? 0]; }
+                $main = dom_host((string)($_POST['dom_main'] ?? ''));
+                $here = dom_host((string)($_SERVER['HTTP_HOST'] ?? ''));
+                $cfg = dom_clean(['main' => $main, 'https' => !empty($_POST['dom_https']), 'domains' => $doms, 'redirects' => $reds]);
+                if ($here !== '' && $main !== '' && $here !== $main && !in_array($here, array_column($cfg['domains'], 'host'), true) && dom_valid_host($here)) $msg = 'Hinweis: Du bist gerade über ' . $here . ' hier – diese Domain steht nicht in der Liste und wird nicht umgeleitet. ';
+                dom_save($cfg);
+                audit('Domains & Weiterleitungen gespeichert', ($main ?: '–') . ' · ' . count($cfg['domains']) . ' Domains · ' . count($cfg['redirects']) . ' Weiterleitungen');
+                $msg = ($msg ?? '') . 'Domains & Weiterleitungen gespeichert.';
+                break;
+            }
             case 'tasks_newkey':
                 set_setting('tasks_key', bin2hex(random_bytes(16)));
                 audit('Cron-Schlüssel erneuert', '', 'security');
@@ -1900,6 +1916,21 @@ function bytes(int $b): string {
                     <button class="btn btn-sm btn-danger" onclick="if (!confirm('Neuen Schlüssel erzeugen? Die alte Adresse funktioniert dann nicht mehr.')) return false; this.form.elements.action.value='tasks_newkey';">↻ Neuer Schlüssel</button>
                 </details>
             </form>
+            <?php if (!empty($me['role_is_system'])): require_once __DIR__ . '/inc/modules/domains.php'; $dc = dom_cfg(); ?>
+            <form method="POST" class="panel" id="domains"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="domains_save">
+                <div class="panel-title"><span>// 🌐 Domains &amp; Weiterleitungen</span><span class="muted small"><?php echo count($dc['domains']); ?> Domains · <?php echo count($dc['redirects']); ?> Kurz-Links</span></div>
+                <p class="muted small">Alle Domains müssen in Plesk auf dieses Verzeichnis zeigen (Alias-Domain oder gleicher Dokumentenstamm) und ein Zertifikat haben. Neben-Domains leiten mit 301 auf die Haupt-Domain um – gleicher Pfad. Mit „ausliefern“ dahinter wird nicht umgeleitet.</p>
+                <div class="f2">
+                    <div><label class="field">Haupt-Domain</label><input name="dom_main" placeholder="ghostnode-labs.dev" value="<?php echo e($dc['main']); ?>">
+                        <label class="small"><input type="checkbox" name="dom_https" value="1" <?php echo $dc['https'] ? 'checked' : ''; ?>> Weiterleitungen auf https://</label></div>
+                    <div><label class="field">Neben-Domains (eine pro Zeile)</label><textarea name="dom_list" rows="3" placeholder="www.ghostnode-labs.dev&#10;alte-domain.de&#10;test.ghostnode-labs.dev ausliefern"><?php echo e(implode("\n", array_map(fn($d) => $d['host'] . ($d['mode'] === 'serve' ? ' ausliefern' : ''), $dc['domains']))); ?></textarea></div>
+                    <div style="grid-column:1/-1"><label class="field">Kurz-Weiterleitungen: <code>/pfad ziel [301]</code> – Ziel https://… oder eine Seite wie downloads.php; Standard 302</label>
+                        <textarea name="dom_redirects" rows="5" placeholder="/discord https://discord.gg/…&#10;/dl downloads.php 301&#10;/status status.php"><?php echo e(implode("\n", array_map(fn($r) => $r['from'] . ' ' . $r['to'] . ($r['code'] === 301 ? ' 301' : ''), $dc['redirects']))); ?></textarea>
+                        <?php if ($dc['redirects']): ?><small class="muted">Aufrufe: <?php echo e(implode(' · ', array_map(fn($r) => $r['from'] . ' ' . (int)$r['hits'], $dc['redirects']))); ?></small><?php endif; ?></div>
+                </div>
+                <button class="btn btn-gold" style="margin-top: 12px;">Speichern</button>
+            </form>
+            <?php endif; ?>
             <div class="panel">
                 <div class="panel-title"><span>// 💾 Automatische Backups</span><span class="muted small">data/backups · <?php echo count($auto_backups); ?></span></div>
                 <?php if (!$auto_backups): ?><p class="muted small">Noch keine. Aufgabe „Automatisches Backup“ einschalten oder jetzt eines erstellen.</p><?php endif; ?>
