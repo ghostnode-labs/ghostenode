@@ -221,10 +221,10 @@ $rm_default = [
     'Web-API (PHP) mit API-Schlüsseln, Limits und Dokumentations-Seite' => 'done', 'Dashboard-Baukasten: Widgets per Drag & Drop, Sichtbarkeit je Gast / angemeldet / Rolle' => 'done',
     'Profil-Anfragen: 18+-Profile können sich gegenseitig anfragen – nur mit beidseitiger Zustimmung sichtbar' => 'done', 'Privater Vorlieben-Abgleich zwischen freigegebenen Profilen' => 'done',
     'Einverständnis-Check vor jeder gemeinsamen Session' => 'done', 'Kompatibilitäts-Anzeige nur bei gegenseitiger Freigabe' => 'done',
-    '18+-Bereich auf der Webseite: Anfragen, Grenzen und Vorlagen auch im Browser' => 'wip', 'Anfragen mit Nachricht, Ablauf und Erinnerung – ablehnen ohne Begründung' => 'wip',
+    '18+-Bereich auf der Webseite: Anfragen, Grenzen und Vorlagen auch im Browser' => 'wip', 'Anfragen mit Nachricht, Ablauf und Erinnerung – ablehnen ohne Begründung' => 'done',
     'Grenzen-Profil zum Teilen (Ja / Vielleicht / Nein) – beim Anfragen automatisch verglichen' => 'wip',
     'Szenen-Vorlagen mit Zeitplan und Steigerung, jederzeit per Safeword beendet' => 'done', 'Szenen-Editor mit Zeitleiste, Stufen und Pausen' => 'wip',
-    'Fantasie- & Szenen-Baukasten: Ablauf, Rollen und Grenzen gemeinsam festlegen' => 'wip',
+    'Fantasie- & Szenen-Baukasten: Ablauf, Rollen und Grenzen gemeinsam festlegen' => 'done',
     // 6.3.0
     'Rechte je verbundener App (nur lesen / Chatbox / Avatar / alles) mit Freigabe-Dialog' => 'done',
     'Automationen 2.0: Wenn-Dann-Regeln (Welt, Uhrzeit, Puls, Freunde) mit Vorschau' => 'done',
@@ -261,8 +261,15 @@ $rm_default = [
     'Kontolöschung und Datenexport (DSGVO) mit einem Klick' => 'done',
     'Installierbare Web-App (PWA) mit Offline-Ansicht' => 'done',
     'Datenschutz-Center mit allen Einstellungen an einem Ort' => 'wip',
+    // 6.7.0
+    'Grenzen-Profil mit Kategorien und Notizen, jederzeit änderbar' => 'done',
+    'Safeword-Varianten (Wort, Geste, Knopf, Uhr) überall gleich' => 'done',
+    'Privat-Modus 2.0: alles 18+ mit einem Schalter unsichtbar' => 'done',
+    'Protokoll nur lokal und verschlüsselt, auf Wunsch automatisch gelöscht' => 'done',
+    'Neue Geräte- und Spielzeug-Profile' => 'done',
+    'Bessere Hilfe & Erklärungen direkt im 18+-Bereich' => 'done',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 
 // =====================================================================================================

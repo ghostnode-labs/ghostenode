@@ -311,7 +311,8 @@
                 + [['match', '💚'], ['maybe', '💛'], ['conflict', '🚫']].map(([k, i]) => c[k].length ? '<div class="nw-row">' + c[k].map(x => '<span class="chip">' + i + ' ' + esc(x.k.replace(/_/g, ' ')) + ' ' + (x.dir === 'me' ? '↙' : '↗') + '</span>').join('') + '</div>' : '').join('')
                 + '<span class="nw-muted">↙ du empfängst · ↗ du gibst</span></div>';
             const card = (h, inner) => '<div class="nw-card"><h3>' + h + '</h3>' + inner + '</div>';
-            body.innerHTML = '<div class="nw-muted" style="margin-bottom:8px">💌 Anfragen gibt es nur zwischen Konten mit Verified 18+ und NSFW an. Erst wenn beide zustimmen, seid ihr verbunden. Ablehnen bleibt anonym („nicht angenommen“).</div>'
+            body.innerHTML = (d.remind ? '<div class="nw-card" style="border-color:#f3c262">⏳ Erinnerung: ' + d.remind + ' Anfrage(n) warten schon über 3 Tage auf deine Antwort – nach 14 Tagen laufen sie ab.</div>' : '')
+                + '<div class="nw-muted" style="margin-bottom:8px">💌 Anfragen gibt es nur zwischen Konten mit Verified 18+ und NSFW an. Erst wenn beide zustimmen, seid ihr verbunden. Ablehnen bleibt anonym („nicht angenommen“).</div>'
                 + card('📥 Eingang (' + d.incoming.length + ')', d.incoming.length ? d.incoming.map(r => '<div class="nw-l18">' + nm(r) + ' <span class="nw-muted">' + dt(r.created) + '</span>' + (r.message ? '<div class="nw-text">' + esc(r.message) + '</div>' : '')
                     + '<div class="nw-row"><button type="button" class="btn btn-sm btn-gold" data-l18="accept" data-rid="' + r.id + '">💞 Annehmen</button><button type="button" class="btn btn-sm" data-l18="decline" data-rid="' + r.id + '">Ablehnen</button></div></div>').join('') : '<span class="nw-muted">Keine offenen Anfragen.</span>')
                 + card('💞 Verbindungen (' + d.connections.length + ')', d.connections.length ? d.connections.map(c => {

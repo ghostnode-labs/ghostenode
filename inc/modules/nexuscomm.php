@@ -570,7 +570,9 @@ function nc_req_list(array $who): array {
         if ($r['to_id'] === $me) { if ($r['status'] === 'pending') $in[] = $e + ['message' => $r['message']]; }
         else $out[] = $e + ['message' => $r['message'], 'status' => $r['status'] === 'declined' ? 'not_accepted' : $r['status']];   // Ablehnung ohne Details
     }
-    return ['incoming' => $in, 'outgoing' => $out, 'connections' => $con, 'sessions' => nc_sess_list($who)];
+    // 6.7: Erinnerung – offene Anfragen an mich, die schon über 3 Tage warten (laufen nach 14 Tagen ab)
+    $remind = count(array_filter($in, fn($r) => $r['created'] < time() - 3 * 86400));
+    return ['incoming' => $in, 'outgoing' => $out, 'connections' => $con, 'sessions' => nc_sess_list($who), 'remind' => $remind];
 }
 /** Kompatibilität aus den Vorlieben (kinks: [empfangen, geben], −1 nein … 2 sehr gern) – nur für Verbundene */
 function nc_compat(array $who, string $other): array {
