@@ -339,7 +339,7 @@ $rm_default = [
     // -
     'Status-Seite für alle Dienste' => 'done',
     'Status-Seite für alle Dienste (nexus.php, HypeRate-Weiterleitung, Discord-Bot)' => 'done',
-    'Status-Benachrichtigungen bei Störungen (Discord, E-Mail)' => 'wip',
+    'Status-Benachrichtigungen bei Störungen (Discord, E-Mail)' => 'done',
     'API-Version 2 mit Paginierung und Webhooks-Signatur' => 'done',
     // -
     'Automatische Backups mit Wiederherstellung' => 'done',

@@ -97,16 +97,28 @@ function st_summary(int $now = 0): array {
     $down = count(array_filter($svc, fn($x) => !$x['ok']));
     return ['ok' => $down === 0, 'down' => $down, 'checked' => (int)$s['at'], 'stale' => $s['at'] && $now - $s['at'] > 3600, 'services' => $svc, 'incidents' => array_slice($s['incidents'], 0, 15)];
 }
+/** 8.1: Störungsmeldung per E-Mail (PHP mail() – unter Plesk ohne weitere Einrichtung). Adresse aus Einstellung „status_email“. */
+function st_mail(string $to, string $text, ?callable $send = null): bool {
+    $to = trim($to);
+    if (!filter_var($to, FILTER_VALIDATE_EMAIL) || preg_match('/[\r\n]/', $to)) return false;
+    $host = preg_replace('/[^a-z0-9.\-]/', '', strtolower(parse_url(me_site(), PHP_URL_HOST) ?: 'ghostnode-labs.dev'));
+    $subj = '=?UTF-8?B?' . base64_encode((strpos($text, '⚠') !== false ? '⚠ Störung' : '✅ Wieder da') . ' – GhostNode-Status') . '?=';
+    $body = str_replace(['**'], '', $text) . "\n\n– Diese Nachricht kommt von der Status-Seite (Admin → System → Aufgaben → Status-Webhook/E-Mail).\n";
+    $hdr = "From: GhostNode Status <noreply@" . $host . ">\r\nContent-Type: text/plain; charset=UTF-8\r\nContent-Transfer-Encoding: 8bit\r\nAuto-Submitted: auto-generated";
+    return $send ? (bool)$send($to, $subj, $body, $hdr) : @mail($to, $subj, $body, $hdr);
+}
 /** Aufgabe „status“ */
-function st_task(?callable $fetch = null, ?callable $notify = null): string {
+function st_task(?callable $fetch = null, ?callable $notify = null, ?callable $send = null): string {
     $res = st_check($fetch);
     $changes = st_record($res);
     $hook = trim(setting('status_webhook', '')) ?: (string)(getenv('STATUS_WEBHOOK') ?: '');
-    if ($changes && ($hook !== '' || $notify)) {
+    $mail = trim(setting('status_email', ''));
+    if ($changes && ($hook !== '' || $notify || $mail !== '')) {
         require_once APP_ROOT . '/inc/modules/me.php';
         $txt = implode("\n", array_map(fn($c) => ($c[2] ? '✅ **' . $c[1] . '** läuft wieder.' : '⚠ **' . $c[1] . '** ist gestört (' . $c[3] . ').'), $changes)) . "\nStatus: " . me_site() . '/status.php';
+        if ($mail !== '') st_mail($mail, $txt, $send);
         if ($notify) $notify($txt);
-        else { me_hook_send($hook, $txt, [], setting('status_webhook_secret', '')); }
+        elseif ($hook !== '') { me_hook_send($hook, $txt, [], setting('status_webhook_secret', '')); }
     }
     $down = count(array_filter($res, fn($x) => !$x[2]));
     return count($res) . ' Dienste geprüft' . ($down ? ' · ⚠ ' . $down . ' gestört' : ' · alle ok') . ($changes ? ' · ' . count($changes) . ' Wechsel gemeldet' : '');
