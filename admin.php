@@ -9,6 +9,7 @@ require_once __DIR__ . '/inc/modules/countdown.php';
 require_once __DIR__ . '/inc/modules/hub.php';
 require_once __DIR__ . '/inc/admin/nexus_tabs.php';
 require_once __DIR__ . '/inc/admin/poster_tab.php';
+require_once __DIR__ . '/inc/admin/server_tab.php';
 require_once __DIR__ . '/inc/core/accounts.php';
 acc_schema();
 
@@ -162,7 +163,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'nx_warn_settings' => 'admin.access', 'nx_warn_update' => 'admin.access', 'nx_warn_delete' => 'admin.access', 'nx_warn_clear' => 'admin.access', 'nx_warn_appeal' => 'admin.access',
         'nx_comm' => 'admin.access', 'nx_chat_remove' => 'admin.access',
         // VRChat-Poster
-        'ps_settings' => 'posters.manage', 'ps_run' => 'posters.manage', 'ps_slot_toggle' => 'posters.manage',
+        'sv_do' => 'system.manage', 'ps_settings' => 'posters.manage', 'ps_run' => 'posters.manage', 'ps_slot_toggle' => 'posters.manage',
     ];
     // Während „Ansicht als Rolle“ zählt für diese Aktionen die echte Rolle nicht – nur die Vorschau beenden geht immer.
     guard_post($perm_for[$act] ?? null);
@@ -200,6 +201,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     try {
         if (isset($perm_for[$act]) && strpos($act, 'nx_') === 0) { $msg = admin_nexus_post($act, $_POST); $act = '__done'; }
         if (isset($perm_for[$act]) && strpos($act, 'ps_') === 0) { $msg = admin_poster_post($act, $_POST); $act = '__done'; }
+        if (isset($perm_for[$act]) && strpos($act, 'sv_') === 0) { $msg = admin_server_post($act, $_POST); $act = '__done'; }
         switch ($act) {
             case 'logout':
                 audit('Logout');
@@ -875,7 +877,7 @@ if ($mode === 'panel') {
         'audit'    => ['📜', 'Protokoll', 'audit.view'],
         'database' => ['🗄️', 'Datenbank', 'database.manage'],
         'system'   => ['🛰️', 'System', 'system.manage'],
-    ] + NX_ADMIN_TABS + PS_ADMIN_TABS + [
+    ] + SV_ADMIN_TABS + NX_ADMIN_TABS + PS_ADMIN_TABS + [
         'account'  => ['👤', 'Mein Konto', null],
     ];
     $TABS = array_filter($TABS, function ($t) { return $t[2] === null || count(array_filter((array)$t[2], 'can')) > 0; });
@@ -1984,6 +1986,8 @@ function bytes(int $b): string {
         <?php admin_nexus_view($tab); ?>
 <?php elseif (isset(PS_ADMIN_TABS[$tab])): ?>
         <?php admin_poster_view(); ?>
+<?php elseif (isset(SV_ADMIN_TABS[$tab])): ?>
+        <?php admin_server_view(); ?>
 <?php elseif ($tab === 'account'): ?>
         <div class="grid2">
             <form method="POST" class="panel" autocomplete="off">

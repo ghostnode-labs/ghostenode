@@ -73,6 +73,28 @@ Die Anmeldung am Bot-Dashboard läuft über die Webseite (`botdash.php`). Den ge
 Liegt die Webseite auf Plesk, schreibt das Script den TURN-Zugang nach `/etc/ghostnode/turn-fuer-plesk.json` (nur root).
 Lade diese Datei in Plesk mit dem Dateimanager als `data/keys/turn.json` in die Webseite hoch und setze die Rechte auf 600. Danach laufen die Anrufe im Nexus-Chat über diesen Server.
 
+## Server-Dashboard im Admin-Panel
+
+Unter Admin → **🖥 Server** (Recht „System“) siehst du:
+- CPU, RAM und Festplatte
+- alle Dienste mit Knopf zum Neustarten
+- geplante Aufgaben, Backups, Zertifikat, Versionen, offene Paket-Updates und das Protokoll
+
+Mit den Knöpfen startest du Backup, Update von GitHub, Prüfung, Zertifikate und den Wächter.
+
+Dafür schreibt ein Root-Agent (`/usr/local/sbin/ghostnode-agent`, jede Minute) den Status nach `/var/lib/ghostnode/status.json`. Er führt nur fest erlaubte Aufträge aus, die die Webseite in `/var/lib/ghostnode/requests/` ablegt. Die Webseite selbst bekommt keine Root-Rechte. Jeder Auftrag erscheint im Protokoll.
+
+## Alte MySQL übernehmen und als Backup nutzen
+
+Beim `install` fragt das Script nach einer alten MySQL (z. B. Plesk), also nach Adresse, Port, Datenbank, Benutzer und Passwort. Dann:
+1. Es sichert die alte Datenbank als `/var/backups/ghostnode/alte-mysql-….sql.gz`.
+2. Es spielt sie einmalig in die neue MariaDB ein, mit Sicherung vorher und automatischem Rückweg bei Fehlern.
+3. Auf Wunsch wird die alte MySQL danach zum Backup-Ziel: Jede Nacht um 03:17 wird die neue Datenbank dorthin gespiegelt.
+
+Später geht das mit: `… olddb` (erneut versuchen), `… olddb --force` (neu holen), `… olddb --neu` (Zugang ändern).
+
+In Plesk muss beim Datenbank-Benutzer der Fernzugriff erlaubt sein, entweder von der IP des neuen Servers oder von „beliebig“.
+
 ## Später
 
 ```bash

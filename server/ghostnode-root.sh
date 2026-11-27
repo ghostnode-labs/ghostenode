@@ -899,10 +899,136 @@ command -v turnserver >/dev/null && probe turn "$(yes_if pgrep -x turnserver)" c
 exit $rc
 EOF2
     chmod 700 /usr/local/sbin/ghostnode-watchdog
+    # Server-Agent (root, jede Minute): Status für das Admin-Panel (🖥 Server) + erlaubte Aufträge aus der Webseite ausführen
+    install -d -m 0750 -o root -g "$APP_USER" /var/lib/ghostnode/results
+    install -d -m 1770 -o root -g "$APP_USER" /var/lib/ghostnode/requests
+    chgrp "$APP_USER" /var/lib/ghostnode; chmod 0750 /var/lib/ghostnode
+    cat > /usr/local/sbin/ghostnode-agent <<EOF2
+#!/usr/bin/env python3
+# erzeugt von ghostnode-root.sh – schreibt /var/lib/ghostnode/status.json und arbeitet Aufträge aus /var/lib/ghostnode/requests ab.
+# Nur fest erlaubte Aufträge (Dienst neu starten, Backup, Update, Prüfung, Zertifikate, Wächter) – nie freie Befehle.
+ROOT_SCRIPT = "$(readlink -f "$0")"
+APP_GROUP = "$APP_USER"
+EOF2
+    cat >> /usr/local/sbin/ghostnode-agent <<'EOF2'
+import json, os, re, time, shutil, subprocess, glob, fcntl, grp, socket
+S = '/var/lib/ghostnode'; REQ = S + '/requests'; RES = S + '/results'
+SERVICES = ['nginx', 'apache2', 'php-fpm', 'mariadb', 'ghostnode-bot', 'ghostnode-hr', 'coturn', 'mumble-server', 'vsftpd', 'cron', 'fail2ban']
+ACTIONS = {'backup': ([ '/usr/local/sbin/ghostnode-backup'], 900), 'update': (['bash', ROOT_SCRIPT, 'update', '--yes'], 1800),
+           'check': (['bash', ROOT_SCRIPT, 'check'], 300), 'certs': (['bash', ROOT_SCRIPT, 'certs', '--yes'], 600),
+           'watchdog': (['/usr/local/sbin/ghostnode-watchdog'], 120)}
+def sh(cmd, t=20):
+    try: r = subprocess.run(cmd, capture_output=True, text=True, timeout=t); return r.returncode, (r.stdout + r.stderr)
+    except Exception as e: return 1, str(e)
+def conf():
+    c = {}
+    try:
+        for l in open('/etc/ghostnode/setup.conf'):
+            m = re.match(r"^([A-Z_]+)='(.*)'$", l.strip())
+            if m: c[m.group(1)] = m.group(2)
+    except Exception: pass
+    return c
+def fpm():
+    u = sorted(os.path.basename(x)[:-8] for x in glob.glob('/lib/systemd/system/php*-fpm.service')) or sorted(os.path.basename(x) for x in glob.glob('/etc/init.d/php*-fpm'))
+    return u[-1] if u else 'php-fpm'
+def unit(n): return fpm() if n == 'php-fpm' else n
+def exists(n):
+    u = unit(n)
+    return any(os.path.exists(p) for p in ('/lib/systemd/system/%s.service' % u, '/etc/systemd/system/%s.service' % u, '/etc/init.d/' + u, '/run/%s.pid' % u))
+def active(n):
+    u = unit(n)
+    if os.path.isdir('/run/systemd/system'): return sh(['systemctl', 'is-active', u], 5)[1].strip() == 'active'
+    pidf = '/run/%s.pid' % u
+    if os.path.exists(pidf):
+        try: os.kill(int(open(pidf).read().strip()), 0); return True
+        except Exception: return False
+    proc = {'mariadb': 'mariadbd|mysqld', 'coturn': 'turnserver', 'mumble-server': 'murmurd|mumble-server', 'php-fpm': 'php-fpm'}.get(n, n)
+    return sh(['pgrep', '-f', proc], 5)[0] == 0
+def gitv(d):
+    if not os.path.isdir(d + '/.git'): return None
+    rc, o = sh(['git', '-c', 'safe.directory=*', '-C', d, 'log', '-1', '--format=%h|%cI|%s'], 10)
+    if rc: return None
+    h, t, m = (o.strip().split('|', 2) + ['', ''])[:3]
+    return {'hash': h, 'date': t, 'msg': m[:120]}
+def status():
+    c = conf(); now = int(time.time())
+    mem = {}
+    for l in open('/proc/meminfo'):
+        k, v = l.split(':', 1); mem[k] = int(v.split()[0]) * 1024
+    du = shutil.disk_usage('/')
+    out = {'time': now, 'host': socket.gethostname(), 'domain': c.get('DOMAIN', ''), 'role': c.get('ROLE', ''),
+           'os': next((l.split('=', 1)[1].strip().strip('"') for l in open('/etc/os-release') if l.startswith('PRETTY_NAME=')), ''),
+           'uptime': int(float(open('/proc/uptime').read().split()[0])), 'load': [float(x) for x in open('/proc/loadavg').read().split()[:3]],
+           'cpus': os.cpu_count(), 'mem': {'total': mem.get('MemTotal', 0), 'avail': mem.get('MemAvailable', 0)},
+           'swap': {'total': mem.get('SwapTotal', 0), 'free': mem.get('SwapFree', 0)},
+           'disk': {'total': du.total, 'used': du.used, 'free': du.free},
+           'services': [{'name': n, 'active': active(n)} for n in SERVICES if exists(n)], 'cron': [], 'backups': [], 'versions': {}}
+    for f in sorted(glob.glob(S + '/cron-*.status')):
+        try: t, rc = open(f).read().split(); out['cron'].append({'name': os.path.basename(f)[5:-7], 'time': int(t), 'rc': int(rc)})
+        except Exception: pass
+    bk = sorted(glob.glob('/var/backups/ghostnode/*'), key=os.path.getmtime, reverse=True)[:10]
+    out['backups'] = [{'name': os.path.basename(b), 'size': os.path.getsize(b) if os.path.isfile(b) else 0, 'time': int(os.path.getmtime(b))} for b in bk]
+    for k, d in (('webseite', c.get('WEB_DIR', '/var/www/ghostnode')), ('bot', '/opt/ghostnode/discord-bot'), ('hyperate', '/opt/ghostnode/hyperate-relay/.src'),
+                 ('installer', os.path.dirname(os.path.dirname(ROOT_SCRIPT)))):
+        v = gitv(d)
+        if v: out['versions'][k] = v
+    dom = c.get('DOMAIN', '')
+    for cert in ['/etc/letsencrypt/live/%s/fullchain.pem' % dom, '/etc/ghostnode/tls/fullchain.pem']:
+        if os.path.exists(cert):
+            rc, o = sh(['openssl', 'x509', '-enddate', '-noout', '-in', cert], 10)
+            m = re.search(r'notAfter=(.*)', o)
+            if m:
+                rc2, o2 = sh(['date', '-d', m.group(1).strip(), '+%s'], 5)
+                if rc2 == 0: out['cert'] = {'until': int(o2.strip()), 'file': cert}
+            break
+    # Paket-Updates nur alle 30 min zählen (apt ist langsam)
+    cache = S + '/apt-upgradable'
+    if not os.path.exists(cache) or now - os.path.getmtime(cache) > 1800:
+        rc, o = sh(['apt-get', '-s', '-q', 'upgrade'], 120)
+        open(cache, 'w').write(str(len([l for l in o.splitlines() if l.startswith('Inst ')])) if rc == 0 else '')
+    try: out['apt_upgradable'] = int(open(cache).read() or -1)
+    except Exception: pass
+    try: out['cronlog'] = open('/var/log/ghostnode-cron.log').read().splitlines()[-25:]
+    except Exception: out['cronlog'] = []
+    out['reboot_required'] = os.path.exists('/var/run/reboot-required')
+    tmp = S + '/status.json.tmp'
+    with open(tmp, 'w') as f: json.dump(out, f)
+    os.chmod(tmp, 0o640); os.chown(tmp, 0, grp.getgrnam(APP_GROUP).gr_gid); os.replace(tmp, S + '/status.json')
+def requests():
+    lock = open('/run/ghostnode-agent.lock', 'w')
+    try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except OSError: return   # ein Auftrag läuft noch
+    gid = grp.getgrnam(APP_GROUP).gr_gid
+    for f in sorted(glob.glob(REQ + '/*.json'), key=os.path.getmtime):
+        try: r = json.load(open(f))
+        except Exception: os.unlink(f); continue
+        os.unlink(f)
+        rid, act, by = str(r.get('id', '')), str(r.get('action', '')), str(r.get('by', ''))[:60]
+        if not re.fullmatch(r'[0-9a-f]{16}', rid) or time.time() - float(r.get('ts', 0)) > 900: continue
+        if act.startswith('restart:') and act[8:] in SERVICES: cmd, t = ['systemctl', 'restart', unit(act[8:])] if os.path.isdir('/run/systemd/system') else ['service', unit(act[8:]), 'restart'], 120
+        elif act in ACTIONS: cmd, t = ACTIONS[act]
+        else: continue
+        res = RES + '/' + rid + '.json'
+        def write(d):
+            with open(res + '.tmp', 'w') as fh: json.dump(d, fh)
+            os.chmod(res + '.tmp', 0o640); os.chown(res + '.tmp', 0, gid); os.replace(res + '.tmp', res)
+        d = {'id': rid, 'action': act, 'by': by, 'started': int(time.time()), 'state': 'läuft'}; write(d)
+        rc, o = sh(['/usr/local/sbin/ghostnode-run', 'web-' + act.replace(':', '-')] + cmd, t)
+        o = re.sub(r'\x1b\[[0-9;]*m', '', o)
+        d.update({'finished': int(time.time()), 'rc': rc, 'state': 'ok' if rc == 0 else 'Fehler', 'out': '\n'.join(o.splitlines()[-60:])}); write(d)
+    for f in glob.glob(RES + '/*.json'):
+        if time.time() - os.path.getmtime(f) > 7 * 86400: os.unlink(f)
+if __name__ == '__main__':
+    try: status()
+    except Exception as e: open(S + '/agent-error.log', 'a').write(time.strftime('%F %T ') + repr(e) + '\n')
+    requests()
+EOF2
+    chmod 700 /usr/local/sbin/ghostnode-agent
     {
         echo "# erzeugt von ghostnode-root.sh – Übersicht: $(readlink -f "$0") crons"; echo "SHELL=/bin/sh"; echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
         if want web; then echo "*/5 * * * * root ghostnode-run aufgaben runuser -u $APP_USER -- /usr/local/sbin/ghostnode-cron"; fi
         echo "*/5 * * * * root ghostnode-run waechter /usr/local/sbin/ghostnode-watchdog"
+        echo "* * * * * root /usr/local/sbin/ghostnode-agent >/dev/null 2>&1"
         echo "17 3 * * * root ghostnode-run backup /usr/local/sbin/ghostnode-backup"
         [ "${AUTO_UPDATE:-1}" = 1 ] && echo "41 4 * * * root ghostnode-run update bash $(readlink -f "$0") update --yes"
     } > /etc/cron.d/ghostnode
