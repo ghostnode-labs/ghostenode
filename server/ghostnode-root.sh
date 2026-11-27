@@ -288,6 +288,12 @@ install_quiet() {
 # ---------------------------------------------------------------- Teile
 base_packages() {
     step "System & Pakete"
+    local i=0
+    while { command -v fuser >/dev/null && fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock >/dev/null 2>&1; } || pgrep -x 'apt|apt-get|dpkg|unattended-upgr' >/dev/null; do
+        [ $i = 0 ] && echo "  … warte auf laufende System-Updates"; i=$((i+1)); [ $i -gt 120 ] && die "Paketverwaltung blockiert."; sleep 5
+    done
+    find /var/lib/dpkg/updates -type f -size 0 -delete 2>/dev/null || true
+    [ -z "$(ls -A /var/lib/dpkg/updates 2>/dev/null)$(dpkg --audit 2>/dev/null)" ] || { dpkg --configure -a && apt-get -f install -y -qq >/dev/null; } || die "Paketverwaltung defekt – „dpkg --configure -a“ von Hand ausführen."
     timedatectl set-timezone "$TZ_NAME" 2>/dev/null || ln -sf "/usr/share/zoneinfo/$TZ_NAME" /etc/localtime
     apt-get update -qq
     apt-get install -y -qq ca-certificates curl gnupg git unzip zip acl openssl cron logrotate >/dev/null

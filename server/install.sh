@@ -20,8 +20,24 @@ die() { printf '\033[1;31m✖ %s\033[0m\n' "$*" >&2; exit 1; }
 [ -r /etc/os-release ] && . /etc/os-release
 case "${ID:-}" in debian|ubuntu) ;; *) die "Nur Debian 12 / Ubuntu 22.04 / 24.04 (gefunden: ${PRETTY_NAME:-unbekannt})." ;; esac
 
-say "Werkzeuge (git, curl) installieren"
 export DEBIAN_FRONTEND=noninteractive
+# frischer Server: automatische Updates laufen oft noch → warten; unterbrochene Installationen reparieren
+apt_wait() {
+    local i=0
+    while { command -v fuser >/dev/null && fuser /var/lib/dpkg/lock-frontend /var/lib/dpkg/lock /var/lib/apt/lists/lock >/dev/null 2>&1; } || pgrep -x 'apt|apt-get|dpkg|unattended-upgr' >/dev/null; do
+        [ $i = 0 ] && say "Warte auf laufende System-Updates (automatische Updates des Servers) …"
+        i=$((i+1)); [ $i -gt 120 ] && die "Paketverwaltung seit 10 Minuten blockiert – Server neu starten und erneut versuchen."
+        sleep 5
+    done
+}
+apt_wait
+if [ -n "$(ls -A /var/lib/dpkg/updates 2>/dev/null)" ] || [ -n "$(dpkg --audit 2>/dev/null)" ]; then
+    say "Unterbrochene Paket-Installation reparieren (dpkg --configure -a)"
+    find /var/lib/dpkg/updates -type f -size 0 -print -delete 2>/dev/null | sed 's/^/  leere Journal-Datei entfernt: /' || true   # „parsing file …/updates/00xx near line 0“
+    dpkg --configure -a || die "dpkg --configure -a fehlgeschlagen – Ausgabe oben prüfen."
+    apt-get -f install -y -qq >/dev/null || true
+fi
+say "Werkzeuge (git, curl) installieren"
 command -v git >/dev/null 2>&1 && command -v curl >/dev/null 2>&1 || { apt-get update -qq && apt-get install -y -qq git curl ca-certificates >/dev/null; }
 
 if [ -d "$DIR/.git" ]; then
