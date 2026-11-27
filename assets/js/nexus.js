@@ -166,6 +166,7 @@
         if (name !== 'client' && window.NexusClient) window.NexusClient.close();
         if (window.NexusWeb) window.NexusWeb.open(name, sub);
         if (window.NexusClubs) window.NexusClubs.open(name, sub);
+        if (window.NexusWiki) window.NexusWiki.open(name);
         syncSubNav(name, sub);
     }
     window.NexusTab = tab;

@@ -43,6 +43,7 @@ function nxweb_action(int $uid, string $act, array $in): array {
     $J = function (string $k) use ($in) { $v = json_decode((string)($in[$k] ?? ''), true); return is_array($v) ? $v : []; };
     // 7.0 Clubs & Events: gleiche Aktionen wie nexusclubs.php (App), Daten als JSON im Feld „data“
     if (strpos($act, 'nw_club_') === 0) { require_once __DIR__ . '/clubs.php'; return cl_action($who, substr($act, 8), $J('data')); }
+    if (strpos($act, 'nw_sb_') === 0) { require_once __DIR__ . '/wiki.php'; return sb_action($who, substr($act, 6), $J('data')); }   // 7.2 Steckbriefe & Creator
     switch ($act) {
         case 'nw_me': {
             $a = nx_public($who);
