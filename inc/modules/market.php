@@ -87,7 +87,7 @@ function mk_inspect(string $file): array {
     $cut = fn($v, $n) => mb_substr(trim(preg_replace('/\s+/', ' ', (string)$v)), 0, $n);
     $home = (string)($m['homepage'] ?? '');
     return ['id' => $id, 'version' => $ver, 'name' => $cut($m['name'] ?? $id, 60) ?: $id, 'author' => $cut($m['author'] ?? '', 60), 'description' => $cut($m['description'] ?? '', 500),
-        'icon' => mb_substr((string)($m['icon'] ?? '🧩'), 0, 4) ?: '🧩', 'nexus' => preg_replace('/[^0-9.<>=]/', '', (string)($m['nexus'] ?? '')), 'permissions' => $perms, 'groups' => array_slice($groups, 0, 5),
+        'icon' => mb_substr((string)($m['icon'] ?? '🧩'), 0, 4) ?: '🧩', 'nexus' => preg_replace('/[^0-9.<>=]/', '', (string)($m['nexus'] ?? '')), 'd2nexus' => preg_replace('/[^0-9.<>=]/', '', (string)($m['d2nexus'] ?? '')), 'permissions' => $perms, 'groups' => array_slice($groups, 0, 5),
         'homepage' => preg_match('#^https://[^\s"<>]{3,300}$#', $home) ? $home : '', 'apps' => $apps, 'tags' => mk_tags((array)($m['tags'] ?? []))];
 }
 /** Tags säubern: klein, 2–20 Zeichen, höchstens 8 */
@@ -167,7 +167,7 @@ function mk_index(): array {
         $v = mk_latest($p);
         if (!$v) continue;
         $out[] = ['id' => $p['id'], 'name' => $v['name'], 'version' => $v['version'], 'author' => $v['author'], 'description' => $v['description'], 'icon' => $v['icon'],
-            'category' => $p['category'] ?? 'other', 'apps' => $v['apps'] ?? ['vrc'], 'tags' => $v['tags'] ?? [], 'permissions' => $v['permissions'], 'groups' => $v['groups'], 'nexus' => $v['nexus'], 'homepage' => $v['homepage'],
+            'category' => $p['category'] ?? 'other', 'apps' => $v['apps'] ?? ['vrc'], 'tags' => $v['tags'] ?? [], 'permissions' => $v['permissions'], 'groups' => $v['groups'], 'nexus' => $v['nexus'], 'd2nexus' => $v['d2nexus'] ?? '', 'homepage' => $v['homepage'],
             'size' => $v['size'], 'sha256' => $v['sha256'], 'updated' => $v['uploaded'], 'downloads' => (int)($p['downloads'] ?? 0), 'changelog' => $v['changelog'] ?? '',
             'url' => mk_base_url() . '/market.php?dl=' . rawurlencode($p['id']) . '&v=' . rawurlencode($v['version'])];
     }
