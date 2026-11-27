@@ -7,6 +7,7 @@
  *
  *   POST toyrelay.php?a=send  {"token", "to": "<64 hex>", "msg": "<Text, max. 6000 Zeichen>"}   → {"ok":true}
  *   POST toyrelay.php?a=poll  {"token", "to": "<64 hex>", "key": "<Briefkasten-Schlüssel>"}      → {"msgs":[…]}
+ *   POST toyrelay.php?a=who   {"token"} + Kopf X-GhostNode-Live (nur der Live-Dienst auf dem Root-Server) → {"box":"<64 hex>"}
  *
  * „to“ ist ein Hash der VRChat-User-ID (die ID selbst steht nirgends). Lesen darf nur, wer beim ersten Abholen
  * den Briefkasten-Schlüssel gesetzt hat. Nachrichten verfallen nach 90 s. Keine Sitzung, keine Cookies, keine Datenbank.
@@ -47,9 +48,14 @@ function tr_with(string $file, callable $fn) {
 if (($_SERVER['REQUEST_METHOD'] ?? '') !== 'POST') tr_out(['error' => 'Nur POST.'], 405);
 $dir = tr_dir();
 
+// 8.2.1: Live-Dienst (apps/nexus-live) prüft ein Konto – nur mit dem gemeinsamen Schlüssel (GN_LIVE_SECRET), ohne IP-Bremse
+$live_secret = (string)getenv('GN_LIVE_SECRET');
+$is_live = ($_GET['a'] ?? '') === 'who' && strlen($live_secret) >= 32 && hash_equals(hash('sha256', $live_secret), hash('sha256', (string)($_SERVER['HTTP_X_GHOSTNODE_LIVE'] ?? '')));
+if (($_GET['a'] ?? '') === 'who' && !$is_live) tr_out(['error' => 'Nur für den Live-Dienst.'], 403);
+
 // Bremse pro IP
 $ip = hash('sha256', 'tr|' . ($_SERVER['REMOTE_ADDR'] ?? '?'));
-$over = tr_with($dir . '/_rate_' . substr($ip, 0, 16) . '.php', function (array &$d) {
+$over = $is_live ? false : tr_with($dir . '/_rate_' . substr($ip, 0, 16) . '.php', function (array &$d) {
     $m = (int)floor(time() / 60);
     if (($d['m'] ?? 0) !== $m) $d = ['m' => $m, 'n' => 0];
     return ++$d['n'] > TR_RATE;
@@ -69,6 +75,7 @@ require_once __DIR__ . '/inc/modules/nexusacct.php';
 try { $acc = nx_auth((string)($in['token'] ?? '')); }
 catch (Throwable $e) { tr_out(['error' => 'Fernsteuerung nur mit Nexus-Konto (Verified 18+, NSFW an) – bitte VRC Nexus aktualisieren und das Konto verbinden.'], 401); }
 if (!nx_nsfw_allowed($acc)) tr_out(['error' => 'Fernsteuerung nur mit „Verified 18+“ und eingeschaltetem NSFW.'], 403);
+if ($a === 'who') tr_out(['box' => hash('sha256', 'vrcnx-toy|' . strtolower((string)$acc['vrc_id']))]);
 if ($a === 'poll' && !hash_equals(hash('sha256', 'vrcnx-toy|' . strtolower((string)$acc['vrc_id'])), $to)) tr_out(['error' => 'Nur der eigene Briefkasten.'], 403);
 
 // ab und zu aufräumen (verwaiste Briefkästen nach 30 Tagen, Bremsen nach 1 Tag)

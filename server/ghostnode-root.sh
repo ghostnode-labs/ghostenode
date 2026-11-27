@@ -62,6 +62,7 @@ REPO_BOT=${REPO_BOT:-https://github.com/ghostnode-labs/node_discord.git}
 APP_USER=ghostnode
 HR_PORT=18091          # nur 127.0.0.1 – hohe Ports, damit sie nicht mit Spielserver-Ports (Pterodactyl) kollidieren
 BOT_PORT=18092
+LIVE_PORT=18093        # Live-Dienst (WebSocket, Fernsteuerung in Echtzeit) – nur 127.0.0.1, über nginx /live/
 BACKEND_PORT=18080     # Apache hinter nginx (nur im nginx-Modus)
 FTP_PASV_MIN=40000
 FTP_PASV_MAX=40050
@@ -142,7 +143,7 @@ save_kv() {   # save_kv DATEI VAR... – Format VAR='wert', lesbar für bash und
 }
 SECRET_VARS=(HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET
              GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM STATUS_WEBHOOK
-             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET OLD_DB_PASS)
+             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET OLD_DB_PASS LIVE_SECRET)
 CONF_VARS=(ROLE RUN_MODE DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST VOICE_HOST HR_UPSTREAM BOT_UPSTREAM FTP_USER TZ_NAME OLD_DB_HOST OLD_DB_PORT OLD_DB_NAME OLD_DB_USER OLD_DB_MIRROR AUTO_UPDATE)
 
 ask_config() {
@@ -214,7 +215,7 @@ ask_secrets() {
     fi
     if [ -n "${OLD_DB_HOST:-}" ]; then ask OLD_DB_PASS "Passwort der alten MySQL ($OLD_DB_USER@$OLD_DB_HOST)" "" s; fi
     if want voice && [ "$PTERO" = 0 ]; then ask MUMBLE_PASS "Mumble-Serverpasswort (leer = offen für alle)" "" s; fi
-    DB_PASS=${DB_PASS:-$(rand 32)}; TURN_SECRET=${TURN_SECRET:-$(rand 48)}; FTP_PASS=${FTP_PASS:-$(rand 20)}; MUMBLE_SUPW=${MUMBLE_SUPW:-$(rand 24)}; BOT_SSO_SECRET=${BOT_SSO_SECRET:-$(rand 48)}
+    DB_PASS=${DB_PASS:-$(rand 32)}; TURN_SECRET=${TURN_SECRET:-$(rand 48)}; FTP_PASS=${FTP_PASS:-$(rand 20)}; MUMBLE_SUPW=${MUMBLE_SUPW:-$(rand 24)}; BOT_SSO_SECRET=${BOT_SSO_SECRET:-$(rand 48)}; LIVE_SECRET=${LIVE_SECRET:-$(rand 48)}
     save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
     ok "gespeichert in $SECRETS (nur root lesbar)"
 }
@@ -246,6 +247,7 @@ nosd_restart() {
     case "$name" in
         ghostnode-hr)  dir=/opt/ghostnode/hyperate-relay; env=$CONF_DIR/hr.env; file=app.js ;;
         ghostnode-bot) dir=/opt/ghostnode/discord-bot;    env=$CONF_DIR/bot.env; file=bot.js ;;
+        ghostnode-live) dir=/opt/ghostnode/live;          env=$CONF_DIR/live.env; file=live.js ;;
         *) return 0 ;;
     esac
     [ -f "/run/$name.pid" ] && kill "$(cat "/run/$name.pid")" 2>/dev/null || true
@@ -330,7 +332,7 @@ install_node() {
 
 setup_web() {
     # Bot-Dashboard-Anmeldung über die Webseite (botdash.php): gemeinsamer Schlüssel, automatisch auf beiden Seiten
-    local GN_BOT_SSO_SECRET="${BOT_SSO_SECRET:-}" GN_BOT_SSO_URL="https://${BOT_HOST:-discord.$DOMAIN}"
+    local GN_BOT_SSO_SECRET="${BOT_SSO_SECRET:-}" GN_BOT_SSO_URL="https://${BOT_HOST:-discord.$DOMAIN}" GN_LIVE_SECRET="${LIVE_SECRET:-}"
     step "Webseite (Apache + PHP-FPM$([ "$FRONT" = nginx ] && echo ' hinter nginx'))"
     # Vorhandenes PHP (z. B. vom Pterodactyl-Panel) behalten: gleiche Version nachinstallieren, nichts umstellen
     local PV0="" pk; command -v php >/dev/null && PV0=$(php_ver)
@@ -372,7 +374,7 @@ setup_web() {
         echo "php_admin_value[max_execution_time] = 120"; echo "php_admin_value[date.timezone] = $TZ_NAME"; echo "php_admin_flag[expose_php] = off"
         echo "php_admin_value[session.cookie_secure] = 1"; echo "php_admin_value[session.cookie_httponly] = 1"
         [ -x /usr/bin/msmtp ] && echo "php_admin_value[sendmail_path] = \"/usr/bin/msmtp -t -i\""
-        for v in GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL; do
+        for v in GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL GN_LIVE_SECRET; do
             [ -n "${!v:-}" ] && printf 'env[%s] = "%s"\n' "$v" "${!v//\"/}"
         done
         echo 'env[PATH] = /usr/local/bin:/usr/bin:/bin'
@@ -381,7 +383,7 @@ setup_web() {
     # Standard-Pool „www“ bleibt (das Pterodactyl-Panel nutzt ihn); ältere Script-Versionen hatten ihn abgeschaltet → zurückholen
     if [ -f "/etc/php/$PV/fpm/pool.d/www.conf.aus" ] && [ ! -f "/etc/php/$PV/fpm/pool.d/www.conf" ]; then mv "/etc/php/$PV/fpm/pool.d/www.conf.aus" "/etc/php/$PV/fpm/pool.d/www.conf"; fi
     # gleiche Variablen für Cron (Kommandozeile)
-    save_kv "$CONF_DIR/web.env" GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL
+    save_kv "$CONF_DIR/web.env" GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET STATUS_WEBHOOK REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET GN_BOT_SSO_SECRET GN_BOT_SSO_URL GN_LIVE_SECRET
     chown root:"$APP_USER" "$CONF_DIR/web.env" "$CONF_DIR"; chmod 640 "$CONF_DIR/web.env"; chmod 750 "$CONF_DIR"
     # Kommandozeilen-PHP: gleiche Grenzen
     printf 'memory_limit = 384M\ndate.timezone = %s\n%s\n' "$TZ_NAME" "$([ -x /usr/bin/msmtp ] && echo 'sendmail_path = "/usr/bin/msmtp -t -i"')" > "/etc/php/$PV/cli/conf.d/90-ghostnode.ini"
@@ -459,6 +461,18 @@ nginx_site() {   # nginx_site NAME "HOSTS" PORT web|sse|plain|redirect
         else
             echo "    access_log /var/log/nginx/$name.access.log;"; echo "    error_log /var/log/nginx/$name.error.log;"
             echo "    client_max_body_size 70m;"
+            if [ "$kind" = web ]; then   # Live-Dienst (WebSocket) auf derselben Domain
+                echo "    location /live/ {"
+                echo "        proxy_pass http://127.0.0.1:$LIVE_PORT;"
+                echo "        proxy_http_version 1.1;"
+                echo "        proxy_set_header Upgrade \$http_upgrade;"
+                echo "        proxy_set_header Connection \"upgrade\";"
+                echo "        proxy_set_header Host \$host;"
+                echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
+                echo "        proxy_read_timeout 3600s;"
+                echo "        proxy_send_timeout 3600s;"
+                echo "    }"
+            fi
             echo "    location / {"
             echo "        proxy_pass http://$up;"
             echo "        proxy_http_version 1.1;"
@@ -538,6 +552,25 @@ setup_olddb() {
         warn "Ohne die Schlüsseldateien aus Plesk (data/keys) lassen sich verschlüsselt gespeicherte Werte nicht lesen: im Admin „Mit Discord anmelden“ (Client-Secret) neu eintragen und das VRChat-Dienstkonto neu verbinden."
     fi
     [ "${OLD_DB_MIRROR:-0}" = 1 ] && ok "Alte MySQL ist ab jetzt Backup-Ziel: jede Nacht (03:17) wird die neue Datenbank dorthin gespiegelt" || ok "Alte MySQL bleibt unverändert (kein Spiegeln)"
+}
+
+setup_live() {
+    step "Live-Dienst (Fernsteuerung in Echtzeit, https://$DOMAIN/live/)"
+    local dir=/opt/ghostnode/live src=/opt/ghostnode/src/vrc_nexus
+    install -d -o "$APP_USER" -g "$APP_USER" /opt/ghostnode /opt/ghostnode/src "$dir"
+    if [ -d "$src/.git" ]; then git_as -C "$src" sparse-checkout add apps/nexus-live 2>/dev/null || true; git_as -C "$src" pull --ff-only -q || warn "git pull (vrc_nexus) fehlgeschlagen – alte Version bleibt."
+    else
+        git_as clone -q --depth 1 --filter=blob:none --sparse "$REPO_NEXUS" "$src" || die "Live-Dienst konnte nicht geholt werden ($REPO_NEXUS)."
+        git_as -C "$src" sparse-checkout set apps/hyperate-relay apps/nexus-live
+    fi
+    [ -f "$src/apps/nexus-live/live.js" ] || { warn "apps/nexus-live fehlt im Repo – Live-Dienst übersprungen (App nutzt den Briefkasten)."; return 0; }
+    install -o "$APP_USER" -g "$APP_USER" -m 0644 "$src/apps/nexus-live/live.js" "$src/apps/nexus-live/package.json" "$dir/"
+    local PORT=$LIVE_PORT HOST=127.0.0.1 SITE_BACKEND="http://127.0.0.1:$BACKEND_PORT" SITE_HOST="$DOMAIN"
+    save_kv "$CONF_DIR/live.env" LIVE_SECRET PORT HOST SITE_BACKEND SITE_HOST; chmod 600 "$CONF_DIR/live.env"
+    need_port "$LIVE_PORT" node
+    write_unit ghostnode-live "GhostNode Live (Echtzeit für VRC Nexus)" "$dir" live.js "$CONF_DIR/live.env"
+    svc enable ghostnode-live; svc restart ghostnode-live
+    ok "läuft auf 127.0.0.1:$LIVE_PORT → wss://$DOMAIN/live/ws"
 }
 
 setup_hr() {
@@ -894,6 +927,7 @@ fi
 if [ "${RUN_MODE:-systemd}" = systemd ]; then
     unit ghostnode-hr  && probe hyperate "$([ "$(code http://127.0.0.1:18091/health)" != 000 ] && echo 1 || echo 0)" ghostnode-hr
     unit ghostnode-bot && probe bot "$([ "$(code http://127.0.0.1:18092/health)" != 000 ] && echo 1 || echo 0)" ghostnode-bot
+    unit ghostnode-live && probe live "$([ "$(code http://127.0.0.1:18093/live/health)" = 200 ] && echo 1 || echo 0)" ghostnode-live
 fi
 command -v turnserver >/dev/null && probe turn "$(yes_if pgrep -x turnserver)" coturn
 exit $rc
@@ -913,7 +947,7 @@ EOF2
     cat >> /usr/local/sbin/ghostnode-agent <<'EOF2'
 import json, os, re, time, shutil, subprocess, glob, fcntl, grp, socket
 S = '/var/lib/ghostnode'; REQ = S + '/requests'; RES = S + '/results'
-SERVICES = ['nginx', 'apache2', 'php-fpm', 'mariadb', 'ghostnode-bot', 'ghostnode-hr', 'coturn', 'mumble-server', 'vsftpd', 'cron', 'fail2ban']
+SERVICES = ['nginx', 'apache2', 'php-fpm', 'mariadb', 'ghostnode-live', 'ghostnode-bot', 'ghostnode-hr', 'coturn', 'mumble-server', 'vsftpd', 'cron', 'fail2ban']
 ACTIONS = {'backup': ([ '/usr/local/sbin/ghostnode-backup'], 900), 'update': (['bash', ROOT_SCRIPT, 'update', '--yes'], 1800),
            'check': (['bash', ROOT_SCRIPT, 'check'], 300), 'certs': (['bash', ROOT_SCRIPT, 'certs', '--yes'], 600),
            'watchdog': (['/usr/local/sbin/ghostnode-watchdog'], 120)}
@@ -968,7 +1002,7 @@ def status():
         except Exception: pass
     bk = sorted(glob.glob('/var/backups/ghostnode/*'), key=os.path.getmtime, reverse=True)[:10]
     out['backups'] = [{'name': os.path.basename(b), 'size': os.path.getsize(b) if os.path.isfile(b) else 0, 'time': int(os.path.getmtime(b))} for b in bk]
-    for k, d in (('webseite', c.get('WEB_DIR', '/var/www/ghostnode')), ('bot', '/opt/ghostnode/discord-bot'), ('hyperate', '/opt/ghostnode/hyperate-relay/.src'),
+    for k, d in (('webseite', c.get('WEB_DIR', '/var/www/ghostnode')), ('bot', '/opt/ghostnode/discord-bot'), ('hyperate', '/opt/ghostnode/src/vrc_nexus'),
                  ('installer', os.path.dirname(os.path.dirname(ROOT_SCRIPT)))):
         v = gitv(d)
         if v: out['versions'][k] = v
@@ -1165,6 +1199,12 @@ http_code() { local c; c=$(lcurl "$1" "$2" -o /dev/null -w '%{http_code}' 2>/dev
 check_all() {
     step "Prüfung"
     FAILS=0
+    if want web && [ "$RUN_MODE" = systemd ] && [ -f /opt/ghostnode/live/live.js ]; then
+        local lc; lc=$(curl -s -m 8 "http://127.0.0.1:$LIVE_PORT/live/health" 2>/dev/null) || true
+        [[ "$lc" == *'"ghostnode-live"'* ]] && ok "Live-Dienst antwortet (Fernsteuerung in Echtzeit)" || fail "Live-Dienst antwortet nicht (journalctl -u ghostnode-live)"
+        lc=$(curl -s -m 8 -H "Host: $DOMAIN" "http://127.0.0.1/live/health" 2>/dev/null) || true
+        [[ "$lc" == *'"ghostnode-live"'* ]] && ok "nginx leitet /live/ weiter" || fail "nginx leitet /live/ nicht weiter"
+    fi
     local PV; PV=$(php_ver 2>/dev/null || echo "?")
     if want web; then
         is_active apache2 && ok "Apache läuft" || fail "Apache läuft nicht"
@@ -1415,6 +1455,7 @@ case "$CMD" in
         want web  && setup_web
         want db   && setup_db
         want web  && setup_olddb
+        want web  && [ "$RUN_MODE" = systemd ] && setup_live
         want hr   && setup_hr
         want bot  && setup_bot
         want turn && setup_turn
@@ -1436,6 +1477,7 @@ case "$CMD" in
             GN_SELF_UPDATED=1 exec bash "$(readlink -f "$0")" update "${ARGS[@]}"
         fi
         if want web; then step "Webseite"; git_as -C "$WEB_DIR" pull --ff-only || die "git pull der Webseite fehlgeschlagen."; ok "aktuell: $(git_as -C "$WEB_DIR" log -1 --format='%h %s')"; svc reload apache2 || true; fi
+        want web && [ "$RUN_MODE" = systemd ] && setup_live
         want hr  && setup_hr
         want bot && setup_bot
         want cron && setup_cron   # Wächter/Backup/Auto-Update mit dem neuesten Stand

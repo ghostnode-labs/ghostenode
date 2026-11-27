@@ -8,10 +8,10 @@
 
 const SV_ADMIN_TABS = ['server' => ['🖥', 'Server', 'system.manage']];
 const SV_DIR = '/var/lib/ghostnode';
-const SV_SERVICES = ['nginx', 'apache2', 'php-fpm', 'mariadb', 'ghostnode-bot', 'ghostnode-hr', 'coturn', 'mumble-server', 'vsftpd', 'cron', 'fail2ban'];
+const SV_SERVICES = ['nginx', 'apache2', 'php-fpm', 'mariadb', 'ghostnode-live', 'ghostnode-bot', 'ghostnode-hr', 'coturn', 'mumble-server', 'vsftpd', 'cron', 'fail2ban'];
 const SV_ACTIONS = ['backup' => '💾 Backup jetzt', 'update' => '⬆ Alles aktualisieren (GitHub)', 'check' => '🩺 Prüfung', 'certs' => '🔒 Zertifikate erneuern', 'watchdog' => '🐕 Wächter jetzt'];
 const SV_LABELS = ['nginx' => 'nginx (Reverse Proxy)', 'apache2' => 'Apache (Webseite)', 'php-fpm' => 'PHP-FPM', 'mariadb' => 'MariaDB (Datenbank)',
-    'ghostnode-bot' => 'Discord-Bot', 'ghostnode-hr' => 'HypeRate-Weiterleitung', 'coturn' => 'TURN (Anrufe)', 'mumble-server' => 'Mumble (Voice)',
+    'ghostnode-live' => 'Live-Dienst (Echtzeit)', 'ghostnode-bot' => 'Discord-Bot', 'ghostnode-hr' => 'HypeRate-Weiterleitung', 'coturn' => 'TURN (Anrufe)', 'mumble-server' => 'Mumble (Voice)',
     'vsftpd' => 'Poster-FTPS', 'cron' => 'Cron', 'fail2ban' => 'fail2ban'];
 
 /** Status des Agents oder null (kein Root-Server / Agent läuft nicht) */
@@ -131,7 +131,7 @@ function admin_server_view(): void {
             <?php if ($pend): ?><p class="sv-warn small" style="margin-top:10px">⏳ Wartet: <?= e(implode(', ', array_map(fn($p) => (string)($p['action'] ?? ''), $pend))) ?> – wird innerhalb einer Minute ausgeführt.</p><?php endif; ?>
             <div class="panel-title" style="margin-top:14px"><span>// Versionen</span></div>
             <table class="sv-t">
-            <?php foreach (['webseite' => 'Webseite', 'bot' => 'Discord-Bot', 'hyperate' => 'HypeRate', 'installer' => 'Installer'] as $k => $n): $v = $s['versions'][$k] ?? null; ?>
+            <?php foreach (['webseite' => 'Webseite', 'bot' => 'Discord-Bot', 'hyperate' => 'HypeRate + Live', 'installer' => 'Installer'] as $k => $n): $v = $s['versions'][$k] ?? null; ?>
                 <tr><td><?= e($n) ?></td><td><?= $v ? '<code>' . e($v['hash']) . '</code> <span class="muted small">' . e(date('d.m.Y', strtotime($v['date']))) . '</span>' : '–' ?></td></tr>
             <?php endforeach; ?>
             </table>
