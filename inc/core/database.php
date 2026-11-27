@@ -341,7 +341,7 @@ function db_mysql_dump(string $file): bool {
     $db = doc_db();
     $fh = fopen($file, 'w');
     if (!$fh) return false;
-    fwrite($fh, "-- GHOST NODE Datenbank-Sicherung vom " . date('d.m.Y H:i') . "\n-- Einspielen: mysql -u BENUTZER -p DATENBANK < datei.sql\nSET NAMES utf8mb4;\nSET SESSION sql_mode = 'NO_BACKSLASH_ESCAPES,NO_ENGINE_SUBSTITUTION';\nSET FOREIGN_KEY_CHECKS = 0;\n\n");
+    fwrite($fh, "-- GHOST NODE Datenbank-Sicherung vom " . date('d.m.Y H:i') . "\n-- Einspielen: mysql -u BENUTZER -p DATENBANK < datei.sql\nSET NAMES utf8mb4;\nSET SESSION sql_mode = 'NO_ENGINE_SUBSTITUTION';\nSET FOREIGN_KEY_CHECKS = 0;\n\n");
     $st = $db->rawPrepare("SELECT TABLE_NAME FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME LIKE ? ORDER BY TABLE_NAME");
     $st->execute([$db->globalPrefix . '%']);
     foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $t) {

@@ -692,6 +692,20 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 audit('Backup erstellt', $r['name']);
                 $msg = 'Backup ' . $r['name'] . ' erstellt (' . round($r['size'] / 1024) . ' KB).';
                 break;
+            case 'backup_restore':   // 8.1: nur das Besitzer-Konto; vorher automatisch ein Sicherheits-Backup
+                require_once __DIR__ . '/inc/core/backup.php';
+                if (empty(current_user()['role_is_system'])) throw new InvalidArgumentException('Nur das Besitzer-Konto darf wiederherstellen.');
+                if (($_POST['confirm'] ?? '') !== 'WIEDERHERSTELLEN') throw new InvalidArgumentException('Zur Bestätigung WIEDERHERSTELLEN eintippen.');
+                $src = '';
+                if (!empty($_FILES['zip']['tmp_name']) && is_uploaded_file($_FILES['zip']['tmp_name'])) $src = $_FILES['zip']['tmp_name'];
+                else $src = (string)backup_file((string)($_POST['name'] ?? ''));
+                if ($src === '' || !is_file($src)) throw new InvalidArgumentException('Backup nicht gefunden.');
+                $parts = array_values(array_intersect(['db', 'json', 'uploads'], (array)($_POST['parts'] ?? ['db', 'json'])));
+                if (!$parts) throw new InvalidArgumentException('Mindestens einen Teil wählen.');
+                $r = backup_restore($src, $parts);
+                audit('Backup wiederhergestellt', ($_POST['name'] ?? 'Upload') . ' · ' . implode(',', $parts) . ' · Sicherheits-Backup ' . $r['safety'], 'warn');
+                $msg = 'Wiederhergestellt: ' . $r['db'] . ' Datenbank(en), ' . $r['json'] . ' JSON-Dateien, ' . $r['uploads'] . ' Bilder. Vorheriger Stand liegt als ' . $r['safety'] . ' bereit.';
+                break;
             case 'backup_delete':
                 require_once __DIR__ . '/inc/core/backup.php';
                 $bf = backup_file((string)($_POST['name'] ?? ''));
@@ -1889,9 +1903,16 @@ function bytes(int $b): string {
                 <?php foreach (array_slice($auto_backups, 0, 15) as $b): ?>
                     <div class="stor"><span>📦 <?php echo e(date('d.m.Y H:i', $b['time'])); ?></span><span class="mono small"><?php echo bytes($b['size']); ?></span>
                         <span class="tools"><?php if (can('backup.download')): ?><a class="btn btn-sm" href="backup.php?auto=<?php echo urlencode($b['name']); ?>">⇩</a>
-                        <form method="POST" onsubmit="return confirm('Backup löschen?');"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="backup_delete"><input type="hidden" name="name" value="<?php echo e($b['name']); ?>"><button class="btn btn-sm btn-danger">×</button></form><?php endif; ?></span></div>
+                        <form method="POST" onsubmit="return confirm('Backup löschen?');"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="backup_delete"><input type="hidden" name="name" value="<?php echo e($b['name']); ?>"><button class="btn btn-sm btn-danger">×</button></form><?php endif; ?>
+                        <?php if (!empty($me['role_is_system'])): ?><form method="POST" onsubmit="var c=prompt('Datenbank und JSON-Daten auf den Stand vom <?php echo e(date('d.m.Y H:i', $b['time'])); ?> zurücksetzen? Vorher wird automatisch ein Sicherheits-Backup angelegt. Zum Bestätigen WIEDERHERSTELLEN eintippen:');if(c===null)return false;this.confirm.value=c;return true;"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="backup_restore"><input type="hidden" name="confirm" value=""><input type="hidden" name="parts[]" value="db"><input type="hidden" name="parts[]" value="json"><input type="hidden" name="name" value="<?php echo e($b['name']); ?>"><button class="btn btn-sm" title="Wiederherstellen">↺</button></form><?php endif; ?></span></div>
                 <?php endforeach; ?>
                 <?php if (can('backup.download')): ?><form method="POST" style="margin-top: 12px;"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="backup_now"><button class="btn btn-sm">💾 Jetzt Backup erstellen</button></form><?php endif; ?>
+                <?php if (!empty($me['role_is_system'])): ?><details style="margin-top: 12px;"><summary class="small">↺ Backup-Datei hochladen und wiederherstellen</summary>
+                    <form method="POST" enctype="multipart/form-data" style="margin-top: 8px;"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="backup_restore">
+                        <input type="file" name="zip" accept=".zip" required>
+                        <div class="small" style="margin: 6px 0;"><label><input type="checkbox" name="parts[]" value="db" checked> Datenbank</label> <label><input type="checkbox" name="parts[]" value="json" checked> JSON-Daten</label> <label><input type="checkbox" name="parts[]" value="uploads"> Bilder</label></div>
+                        <input type="text" name="confirm" placeholder="WIEDERHERSTELLEN eintippen" autocomplete="off" required> <button class="btn btn-sm btn-danger">↺ Wiederherstellen</button>
+                        <p class="muted small">Vorher wird automatisch ein Sicherheits-Backup des aktuellen Stands angelegt. Nur Dateien aus GhostNode-Backups werden übernommen (Datenbanken werden auf Beschädigung geprüft).</p></form></details><?php endif; ?>
                 <p class="muted small" style="margin-top: 10px;">Enthält Datenbank(en) und JSON-Daten, keine Bilder und keine Schlüssel (data/keys – bitte getrennt sichern). Ein vollständiges Backup mit Bildern gibt es über „Backup herunterladen“.</p>
             </div>
         </div>
