@@ -19,7 +19,8 @@ function cl_fetch(): array {
         foreach ($j as $r) {
             if (!empty($r['draft']) || !preg_match('/^vrc-nexus-v(\d+\.\d+\.\d+)$/', (string)($r['tag_name'] ?? ''), $m)) continue;
             $assets = [];
-            foreach ((array)($r['assets'] ?? []) as $a) $assets[] = ['name' => (string)$a['name'], 'url' => (string)$a['browser_download_url'], 'size' => (int)$a['size']];
+            foreach ((array)($r['assets'] ?? []) as $a) $assets[] = ['name' => (string)$a['name'], 'url' => (string)$a['browser_download_url'], 'size' => (int)$a['size'],
+                'sha256' => preg_match('/^sha256:([0-9a-f]{64})$/', (string)($a['digest'] ?? ''), $dm) ? $dm[1] : '', 'downloads' => (int)($a['download_count'] ?? 0)];   // 6.6: Prüfsumme von GitHub
             $all[] = ['v' => $m[1], 'date' => (string)($r['published_at'] ?? ''), 'body' => (string)($r['body'] ?? ''), 'url' => (string)($r['html_url'] ?? ''), 'assets' => $assets, 'pre' => !empty($r['prerelease'])];
         }
         if (count($j) < 100) break;

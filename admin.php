@@ -3,6 +3,7 @@
  * Admin-Zentrale: Ersteinrichtung, Login, Übersicht, Benutzer, Rollen & Rechte, Seiten, Protokoll, System, Mein Konto.
  */
 require_once __DIR__ . '/inc/core/pages.php';
+require_once __DIR__ . '/inc/modules/me.php';   // 6.6: Startseite nach dem Anmelden
 require_once __DIR__ . '/inc/modules/linkcheck.php';
 require_once __DIR__ . '/inc/modules/countdown.php';
 require_once __DIR__ . '/inc/modules/hub.php';
@@ -60,7 +61,7 @@ if (!$configured) {
         elseif ($how = totp_check_login($pu, (string)($_POST['code'] ?? ''))) {
             auth_finish_login($pu, !empty($pending['remember']), $how === 'recovery' ? 'mit Wiederherstellungscode' : '2FA');
             if ($how === 'recovery') audit('Wiederherstellungscode benutzt', count(json_decode(user_load((int)$pu['id'])['totp_recovery'], true) ?: []) . ' übrig', 'security');
-            header('Location: ' . ($next === 'admin.php' && !can('admin.access') ? 'dashboard.php' : $next));
+            header('Location: ' . me_after_login($next));   // 6.6: eigene Startseite
             exit;
         } else {
             auth_register_fail();
@@ -127,7 +128,7 @@ if (!$configured) {
             exit;
         } elseif ($res) {
             // Ohne Admin-Zugang direkt zur gewünschten Seite bzw. zum Index
-            header('Location: ' . ($next === 'admin.php' && !can('admin.access') ? 'dashboard.php' : $next));
+            header('Location: ' . me_after_login($next));   // 6.6: eigene Startseite
             exit;
         } else {
             $locked = auth_locked_seconds();

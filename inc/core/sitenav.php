@@ -9,7 +9,7 @@ const SITENAV_SKIP = ['index.php', 'p.php', 'cron.php', 'session.php', 'toyrelay
     'nexusacct.php', 'nexuschat.php', 'nexuscomm.php', 'nexuswarn.php', 'nexuspulse.php', 'nexuslic.php', 'auth-discord.php'];
 const SITENAV_MAIN = [
     ['dashboard.php', '🧭', 'Dashboard'], ['nexus.php', '🥽', 'VRC Nexus'], ['poster.php', '🖼️', 'Poster'],
-    ['market.php', '🧩', 'Marktplatz'], ['changelog.php', '📜', 'Changelog'], ['Roadmap.php', '🗺', 'Roadmap'],
+    ['market.php', '🧩', 'Marktplatz'], ['changelog.php', '📜', 'Changelog'], ['downloads.php', '⬇', 'Downloads'], ['Roadmap.php', '🗺', 'Roadmap'],
 ];
 
 function sitenav_start(): void {
@@ -66,9 +66,12 @@ function sitenav_html(): string {
         $o .= '</div></div>';
     }
     $o .= '<div class="gn-search"><input type="search" placeholder="Suchen … ( / )" aria-label="Seiten suchen" autocomplete="off"><div class="gn-res" hidden></div></div>';
-    $o .= $u ? '<a class="gn-user" href="admin.php" title="' . $h($u['role_name'] ?? '') . '">👤 ' . $h(function_exists('user_label') ? user_label($u) : ($u['username'] ?? '')) . '</a>'
+    if ($u) { try { require_once APP_ROOT . '/inc/modules/me.php'; $o = me_style((int)$u['id']) . $o; } catch (Throwable $e) { /* ohne Darstellung */ } }   // 6.6: Darstellung je Konto
+    $o .= $u ? '<a class="gn-user" href="me.php" title="Mein Bereich · ' . $h($u['role_name'] ?? '') . '">👤 ' . $h(function_exists('user_label') ? user_label($u) : ($u['username'] ?? '')) . '</a>'
              : '<a class="gn-user" href="admin.php?next=' . $h(urlencode($here)) . '">🔒 Anmelden</a>';
     $o .= '</div></nav><div class="gn-spacer"></div>';
+    // 6.6: installierbare Web-App (PWA) – Manifest + Service Worker (nur https, nur Offline-Hinweis, nichts Persönliches im Zwischenspeicher)
+    $o .= '<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#040609"><script>if(location.protocol==="https:"&&"serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){});</script>';
     $items = json_encode($search, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
     return $o . <<<'CSS'
 <style>
@@ -103,12 +106,13 @@ CSS
     let sel = 0, hits = [];
     const draw = () => { const q = inp.value.trim().toLowerCase(); if (!q) { res.hidden = true; return; }
         hits = ITEMS.filter(i => (i.t + ' ' + i.d).toLowerCase().includes(q)).slice(0, 12); sel = 0;
-        res.innerHTML = hits.length ? hits.map((i, n) => '<a href="' + esc(i.h) + '"' + (n === sel ? ' class="sel"' : '') + '>' + esc(i.i) + ' ' + esc(i.t) + (i.d ? '<small>' + esc(i.d) + '</small>' : '') + '</a>').join('') : '<a href="#" onclick="return false"><small>Nichts gefunden – Enter sucht im Web</small></a>';
+        res.innerHTML = (hits.length ? hits.map((i, n) => '<a href="' + esc(i.h) + '"' + (n === sel ? ' class="sel"' : '') + '>' + esc(i.i) + ' ' + esc(i.t) + (i.d ? '<small>' + esc(i.d) + '</small>' : '') + '</a>').join('') : '')
+            + '<a href="search.php?q=' + encodeURIComponent(inp.value.trim()) + '">🔍 Alles durchsuchen: „' + esc(inp.value.trim()) + '“<small>Changelog, Termine, Plugins, Seiten</small></a>';
         res.hidden = false; };
     inp.addEventListener('input', draw);
     inp.addEventListener('keydown', e => {
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); if (!hits.length) return; sel = (sel + (e.key === 'ArrowDown' ? 1 : hits.length - 1)) % hits.length; res.querySelectorAll('a').forEach((a, n) => a.classList.toggle('sel', n === sel)); }
-        if (e.key === 'Enter') { e.preventDefault(); if (hits[sel]) location.href = hits[sel].h; else if (inp.value.trim()) window.open('https://www.google.com/search?q=' + encodeURIComponent(inp.value.trim()), '_blank', 'noopener'); }
+        if (e.key === 'Enter') { e.preventDefault(); if (hits[sel]) location.href = hits[sel].h; else if (inp.value.trim()) location.href = 'search.php?q=' + encodeURIComponent(inp.value.trim()); }
         if (e.key === 'Escape') { inp.value = ''; res.hidden = true; inp.blur(); }
     });
     inp.addEventListener('blur', () => setTimeout(() => { res.hidden = true; }, 150));

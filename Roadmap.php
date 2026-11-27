@@ -245,6 +245,22 @@ $rm_default = [
     'Nexus Watch: Benachrichtigungen (Freund kommt online, Einladung) mit Antwort-Knöpfen' => 'done',
     'Handy als Fernbedienung 2.0: Stream-Deck-Seiten auch auf dem Handy' => 'done',
     'Offline-Modus für Android mit Abgleich beim nächsten Start' => 'done',
+    // -
+    'Webhooks: Webseite meldet Ereignisse (neuer Beitrag, Event, Release) an eigene Adressen' => 'done',
+    'Öffentliche Profilseiten (freiwillig) mit eigener Adresse' => 'done',
+    'Benachrichtigungs-Center auf der Webseite (Antworten, Events, Releases)' => 'done',
+    'Download-Center mit Prüfsummen und Installationshilfe' => 'done',
+    'Nexus Web als installierbare App (PWA) für das Handy' => 'done',
+    'Lizenz-Verwaltung im Konto: Schlüssel ansehen, Geräte entfernen, übertragen' => 'wip',
+    'Themen für die Webseite (Cyber, Neon, Ozean, Wald, Sonnenuntergang, AMOLED)' => 'done',
+    'Schriftart und Schriftgröße der Webseite pro Konto' => 'done',
+    'Startseite des Kontos frei wählbar (Dashboard, Nexus, Community …)' => 'done',
+    'Globale Suche über Seiten, Community, Events und Changelog' => 'done',
+    'Zwei-Faktor-Anmeldung auch für Discord-Konten' => 'done',
+    'Sitzungen verwalten: alle angemeldeten Geräte sehen und abmelden' => 'done',
+    'Kontolöschung und Datenexport (DSGVO) mit einem Klick' => 'done',
+    'Installierbare Web-App (PWA) mit Offline-Ansicht' => 'done',
+    'Datenschutz-Center mit allen Einstellungen an einem Ort' => 'wip',
 ];
 $released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
