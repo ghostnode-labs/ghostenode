@@ -27,6 +27,7 @@
 #    bash ghostnode-root.sh secrets            Schlüssel (Discord, HypeRate, SMTP …) ändern und übernehmen
 #    bash ghostnode-root.sh check              alles prüfen (Dienste, Seiten, PHP-Erweiterungen, Zertifikate)
 #    bash ghostnode-root.sh backup             Server-Backup jetzt (Datenbank, data/, Bot-Daten, Einstellungen)
+#    bash ghostnode-root.sh olddb              alte MySQL (z. B. Plesk) übernehmen bzw. erneut holen (--force), Zugang ändern (--neu)
 #    bash ghostnode-root.sh crons              geplante Aufgaben (Webseite, Wächter, Backup, Auto-Update) mit letztem Ergebnis
 #    bash ghostnode-root.sh migrate …          Umzug von Plesk: MySQL-Datenbank + data/ + uploads/ (richtet die Webseite hier ein)
 #        --db=/root/plesk-dump.zip            Datenbank-Export aus Plesk (.sql, .sql.gz oder .zip)
@@ -94,6 +95,7 @@ for a in "$@"; do
         --src-db=*) MIG_SRC_DB=${a#--src-db=} ;;
         --src-user=*) MIG_SRC_USER=${a#--src-user=} ;;
         --src-port=*) MIG_SRC_PORT=${a#--src-port=} ;;
+        --force|--neu) ;;   # für olddb
         -h|--help) sed -n '2,36p' "$0"; exit 0 ;;
         *) die "Unbekannte Option: $a (Hilfe: --help)" ;;
     esac
@@ -140,8 +142,8 @@ save_kv() {   # save_kv DATEI VAR... – Format VAR='wert', lesbar für bash und
 }
 SECRET_VARS=(HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET
              GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM STATUS_WEBHOOK
-             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET)
-CONF_VARS=(ROLE RUN_MODE DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST VOICE_HOST HR_UPSTREAM BOT_UPSTREAM FTP_USER TZ_NAME)
+             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET OLD_DB_PASS)
+CONF_VARS=(ROLE RUN_MODE DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST VOICE_HOST HR_UPSTREAM BOT_UPSTREAM FTP_USER TZ_NAME OLD_DB_HOST OLD_DB_PORT OLD_DB_NAME OLD_DB_USER OLD_DB_MIRROR AUTO_UPDATE)
 
 ask_config() {
     step "Einstellungen"
@@ -151,7 +153,19 @@ ask_config() {
     if [ "$ROLE" = alles ]; then
         ask WEB_DIR   "Verzeichnis der Webseite" "/var/www/ghostnode"
         ask DB_ENGINE "Datenbank: mariadb oder sqlite" "mariadb"
+        if [ "$DB_ENGINE" = mariadb ]; then
+            ask OLD_DB_HOST "Alte MySQL übernehmen (z. B. Plesk) – Adresse des alten Datenbank-Servers (leer = keine)" ""
+            if [ -n "$OLD_DB_HOST" ]; then
+                ask OLD_DB_PORT   "… Port" "3306"
+                ask OLD_DB_NAME   "… Name der alten Datenbank" ""
+                ask OLD_DB_USER   "… Benutzer der alten Datenbank" ""
+                ask OLD_DB_MIRROR "Alte MySQL danach als Backup nutzen (jede Nacht die neue Datenbank dorthin spiegeln)? j/n" "j"
+                case "$OLD_DB_MIRROR" in j|J|ja|y|yes|1) OLD_DB_MIRROR=1 ;; *) OLD_DB_MIRROR=0 ;; esac
+                [ -n "$OLD_DB_NAME" ] && [ -n "$OLD_DB_USER" ] || die "Für die alte MySQL bitte Name und Benutzer angeben."
+            fi
+        fi
     fi
+    ask AUTO_UPDATE "Automatische Updates von GitHub jede Nacht (Webseite, Bot, HypeRate, dieses Script)? 1/0" "1"
     ask HR_HOST    "Adresse der HypeRate-Weiterleitung" "hr.$DOMAIN"
     ask BOT_HOST   "Adresse des Discord-Bot-Dashboards" "discord.$DOMAIN"
     ask TURN_HOST  "Adresse des TURN-Servers (Anrufe)" "turn.$DOMAIN"
@@ -198,6 +212,7 @@ ask_secrets() {
             ask SMTP_FROM "Absender-Adresse" "noreply@$DOMAIN"
         fi
     fi
+    if [ -n "${OLD_DB_HOST:-}" ]; then ask OLD_DB_PASS "Passwort der alten MySQL ($OLD_DB_USER@$OLD_DB_HOST)" "" s; fi
     if want voice && [ "$PTERO" = 0 ]; then ask MUMBLE_PASS "Mumble-Serverpasswort (leer = offen für alle)" "" s; fi
     DB_PASS=${DB_PASS:-$(rand 32)}; TURN_SECRET=${TURN_SECRET:-$(rand 48)}; FTP_PASS=${FTP_PASS:-$(rand 20)}; MUMBLE_SUPW=${MUMBLE_SUPW:-$(rand 24)}; BOT_SSO_SECRET=${BOT_SSO_SECRET:-$(rand 48)}
     save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
@@ -498,6 +513,33 @@ EOF
     ok "MariaDB: Datenbank „$DB_NAME“, Benutzer „$DB_USER“ (nur lokal)"
 }
 
+# ---------------------------------------------------------------- alte MySQL: einmal übernehmen, danach als Backup-Ziel
+old_db_cnf() {   # Zugang zur alten MySQL (nur root lesbar)
+    umask 077
+    printf '[client]\nhost=%s\nport=%s\nuser=%s\npassword="%s"\ndefault-character-set=utf8mb4\n' "$OLD_DB_HOST" "${OLD_DB_PORT:-3306}" "$OLD_DB_USER" "${OLD_DB_PASS//\"/\\\"}" > "$CONF_DIR/old-db.cnf"
+    chmod 600 "$CONF_DIR/old-db.cnf"; umask 022
+}
+setup_olddb() {
+    [ -n "${OLD_DB_HOST:-}" ] && [ "$DB_ENGINE" = mariadb ] || return 0
+    step "Alte MySQL ($OLD_DB_USER@$OLD_DB_HOST/$OLD_DB_NAME)"
+    old_db_cnf
+    local err
+    if ! err=$(mysql --defaults-extra-file="$CONF_DIR/old-db.cnf" --connect-timeout=15 -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE()" "$OLD_DB_NAME" 2>&1); then
+        warn "Alte MySQL nicht erreichbar: ${err##*: } – in Plesk beim Datenbank-Benutzer Fernzugriff erlauben (Host $(public_ip) oder beliebig), Port $OLD_DB_PORT beim alten Anbieter offen? Danach: $0 olddb"
+        return 0
+    fi
+    ok "erreichbar – $err Tabellen"
+    mkdir -p /var/lib/ghostnode
+    if [ -f /var/lib/ghostnode/old-db-imported ]; then ok "schon übernommen am $(cat /var/lib/ghostnode/old-db-imported) – neu holen mit: $0 olddb --force"
+    else
+        ( MIG_DB_ONLY=1 MIG_FROM=$OLD_DB_HOST MIG_SRC_PORT=${OLD_DB_PORT:-3306} MIG_SRC_DB=$OLD_DB_NAME MIG_SRC_USER=$OLD_DB_USER MIG_SRC_PASS=$OLD_DB_PASS MIG_DB="" MIG_FILES=""; export MIG_SRC_PASS; cmd_migrate ) \
+            && date '+%d.%m.%Y %H:%M' > /var/lib/ghostnode/old-db-imported \
+            || { warn "Übernahme der alten MySQL fehlgeschlagen – vorheriger Stand ist wiederhergestellt. Erneut: $0 olddb"; return 0; }
+        warn "Ohne die Schlüsseldateien aus Plesk (data/keys) lassen sich verschlüsselt gespeicherte Werte nicht lesen: im Admin „Mit Discord anmelden“ (Client-Secret) neu eintragen und das VRChat-Dienstkonto neu verbinden."
+    fi
+    [ "${OLD_DB_MIRROR:-0}" = 1 ] && ok "Alte MySQL ist ab jetzt Backup-Ziel: jede Nacht (03:17) wird die neue Datenbank dorthin gespiegelt" || ok "Alte MySQL bleibt unverändert (kein Spiegeln)"
+}
+
 setup_hr() {
     step "HypeRate-Weiterleitung ($HR_HOST)"
     if [ "$RUN_MODE" = egg ]; then
@@ -792,6 +834,11 @@ D=/var/backups/ghostnode; T=\$(date +%Y-%m-%d_%H%M); W=\$(mktemp -d)
 mkdir -p "\$D"
 if [ "$(want web && echo 1)" = 1 ]; then
     if [ "$DB_ENGINE" = mariadb ]; then mysqldump --single-transaction --routines "$DB_NAME" | gzip > "\$W/datenbank.sql.gz"; fi
+    # alte MySQL (z. B. Plesk) als zweites Backup-Ziel: Tabellen dort werden mit dem heutigen Stand überschrieben
+    if [ "${OLD_DB_MIRROR:-0}" = 1 ] && [ -r $CONF_DIR/old-db.cnf ]; then
+        gunzip -c "\$W/datenbank.sql.gz" | sed -e '/^\/\*M!999999/d' | mysql --defaults-extra-file=$CONF_DIR/old-db.cnf --connect-timeout=20 "${OLD_DB_NAME:-}" \
+            && echo "Spiegel in alte MySQL ($OLD_DB_HOST): ok" || { echo "Spiegel in alte MySQL ($OLD_DB_HOST) fehlgeschlagen" >&2; SPIEGEL_FEHLER=1; }
+    fi
     tar -czf "\$W/webseite-data.tar.gz" -C "$WEB_DIR" data \$( [ -d "$WEB_DIR/uploads" ] && echo uploads )
 fi
 [ -d /var/lib/mumble-server ] && tar -czf "\$W/mumble.tar.gz" -C /var/lib mumble-server
@@ -800,6 +847,7 @@ tar -czf "\$W/einstellungen.tar.gz" -C / etc/ghostnode
 tar -cf "\$D/ghostnode-\$T.tar" -C "\$W" .
 rm -rf "\$W"
 find "\$D" -name 'ghostnode-*.tar' -mtime +14 -delete
+exit \${SPIEGEL_FEHLER:-0}
 EOF
     chmod 700 /usr/local/sbin/ghostnode-backup
     # Cron-Dienst: jeder Lauf wird protokolliert (/var/log/ghostnode-cron.log, letzter Stand in /var/lib/ghostnode/cron-*.status)
@@ -1175,7 +1223,8 @@ cmd_migrate() {
     pre=$(grep -m1 -oE 'CREATE TABLE (IF NOT EXISTS )?`[A-Za-z0-9_]*users`' "$sql" | sed -E 's/.*`([A-Za-z0-9_]*)users`/\1/' || true)
     grep -m1 -E 'CREATE TABLE (IF NOT EXISTS )?`[A-Za-z0-9_]*users`' "$sql" >/dev/null || die "Das sieht nicht nach der GhostNode-Datenbank aus (keine Tabelle …users)."
     ok "$(grep -c '^CREATE TABLE' "$sql" || true) Tabellen, Präfix „${pre:-–}“, $(du -h "$sql" | cut -f1)"
-    sed -i -E 's/DEFINER=`[^`]*`@`[^`]*`//g; s/^SET @@GLOBAL\.GTID_PURGED.*$//' "$sql"   # Plesk-Benutzer gibt es hier nicht
+    if [ -n "$MIG_FROM" ]; then mkdir -p /var/backups/ghostnode; gzip -c "$sql" > "/var/backups/ghostnode/alte-mysql-$ts.sql.gz"; chmod 600 "/var/backups/ghostnode/alte-mysql-$ts.sql.gz"; ok "Kopie der alten Datenbank: /var/backups/ghostnode/alte-mysql-$ts.sql.gz"; fi
+    sed -i -E 's/DEFINER=`[^`]*`@`[^`]*`//g; s/^SET @@GLOBAL\.GTID_PURGED.*$//; /^\/\*M!999999/d' "$sql"   # Plesk-Benutzer gibt es hier nicht; MariaDB-Sandbox-Zeile
     step "Sicherung vor dem Umzug"
     mkdir -p /var/backups/ghostnode; safety=/var/backups/ghostnode/vor-umzug-$ts
     mkdir -p "$safety"; chmod 700 "$safety"
@@ -1211,7 +1260,7 @@ cmd_migrate() {
         if [ -n "$u" ]; then mkdir -p "$WEB_DIR/uploads"; cp -a "$u/." "$WEB_DIR/uploads/"; ok "uploads/ übernommen ($(find "$u" -type f | wc -l) Dateien)"; fi
         chown -R "$APP_USER:$APP_USER" "$WEB_DIR/data" "$WEB_DIR/uploads" 2>/dev/null || true
         chmod 600 "$cfg"
-    else
+    elif [ -z "${MIG_DB_ONLY:-}" ]; then
         warn "Ohne --files: Schlüssel, JSON-Daten und Bilder aus Plesk fehlen (data/, uploads/) – später mit „migrate --db=… --files=…“ nachholen."
     fi
     svc start apache2
@@ -1239,6 +1288,7 @@ case "$CMD" in
         want mail && setup_mail
         want web  && setup_web
         want db   && setup_db
+        want web  && setup_olddb
         want hr   && setup_hr
         want bot  && setup_bot
         want turn && setup_turn
@@ -1252,9 +1302,17 @@ case "$CMD" in
         summary ;;
     update)
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
+        # Auto-Updater: zuerst dieses Script selbst von GitHub holen, dann mit der neuen Fassung weitermachen
+        self_repo=$(cd "$(dirname "$(readlink -f "$0")")/.." && pwd)
+        if [ -z "${GN_SELF_UPDATED:-}" ] && [ -d "$self_repo/.git" ]; then
+            step "Installer-Script aktualisieren"
+            git -C "$self_repo" fetch -q origin main && git -C "$self_repo" reset -q --hard origin/main && ok "$(git -C "$self_repo" log -1 --format='%h %s')" || warn "Script-Update fehlgeschlagen – weiter mit der vorhandenen Fassung."
+            GN_SELF_UPDATED=1 exec bash "$(readlink -f "$0")" update "${ARGS[@]}"
+        fi
         if want web; then step "Webseite"; git_as -C "$WEB_DIR" pull --ff-only || die "git pull der Webseite fehlgeschlagen."; ok "aktuell: $(git_as -C "$WEB_DIR" log -1 --format='%h %s')"; svc reload apache2 || true; fi
         want hr  && setup_hr
         want bot && setup_bot
+        want cron && setup_cron   # Wächter/Backup/Auto-Update mit dem neuesten Stand
         check_all ;;
     certs)
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
@@ -1272,6 +1330,16 @@ case "$CMD" in
     check)  [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; check_all ;;
     migrate) cmd_migrate ;;
     crons) cmd_crons ;;
+    olddb)
+        [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
+        if [ -z "${OLD_DB_HOST:-}" ] || [[ " ${ARGS[*]} " == *" --neu "* ]]; then
+            YES=0; OLD_DB_HOST=""; ask OLD_DB_HOST "Adresse der alten MySQL" ""; ask OLD_DB_PORT "Port" "3306"; ask OLD_DB_NAME "Datenbank" ""; ask OLD_DB_USER "Benutzer" ""
+            OLD_DB_PASS=""; ask OLD_DB_PASS "Passwort" "" s; ask OLD_DB_MIRROR "Danach als Backup-Ziel nutzen? j/n" "j"
+            case "$OLD_DB_MIRROR" in j|J|ja|y|yes|1) OLD_DB_MIRROR=1 ;; *) OLD_DB_MIRROR=0 ;; esac
+            save_kv "$CONF" "${CONF_VARS[@]}"; save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
+        fi
+        [[ " ${ARGS[*]} " == *" --force "* ]] && rm -f /var/lib/ghostnode/old-db-imported
+        setup_olddb; want cron && setup_cron ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
-    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons)" ;;
+    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons, olddb)" ;;
 esac
