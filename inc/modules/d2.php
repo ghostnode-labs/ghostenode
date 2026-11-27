@@ -19,7 +19,8 @@ function d2_oauth(): ?array {
     if ($id === '' && function_exists('setting')) $id = setting('d2_client_id', '');
     if ($sec === '' && function_exists('setting')) $sec = setting('d2_client_secret', '');
     $key = d2_key();
-    return preg_match('/^\d{1,10}$/', $id) && strlen($sec) >= 16 && $key !== '' ? ['id' => $id, 'secret' => $sec, 'key' => $key] : null;
+    // ohne Secret = Bungie-App vom Typ „Public“ (dann kein Erneuerungs-Token → stündlich neu anmelden)
+    return preg_match('/^\d{1,10}$/', $id) && $key !== '' ? ['id' => $id, 'secret' => strlen($sec) >= 16 ? $sec : '', 'key' => $key] : null;
 }
 
 /** Was fehlt für die Anmeldung? (nur Namen, keine Werte) */
@@ -29,7 +30,6 @@ function d2_oauth_missing(): array {
     $id = (string)getenv('GN_BUNGIE_CLIENT_ID'); if ($id === '' && function_exists('setting')) $id = setting('d2_client_id', '');
     if (!preg_match('/^\d{1,10}$/', $id)) $m[] = 'OAuth-Client-ID (GN_BUNGIE_CLIENT_ID)';
     $sec = (string)getenv('GN_BUNGIE_CLIENT_SECRET'); if ($sec === '' && function_exists('setting')) $sec = setting('d2_client_secret', '');
-    if (strlen($sec) < 16) $m[] = 'OAuth-Client-Secret (GN_BUNGIE_CLIENT_SECRET)';
     return $m;
 }
 

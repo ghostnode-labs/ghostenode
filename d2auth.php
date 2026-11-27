@@ -30,6 +30,8 @@ if ($grant === 'authorization_code') {
     $code = (string)($in['code'] ?? '');
     if (!preg_match('/^[A-Za-z0-9]{8,200}$/', $code)) $out(['error' => 'Ungültiger Code.'], 400);
     $form = ['grant_type' => 'authorization_code', 'code' => $code];
+} elseif ($grant === 'refresh_token' && $cfg['secret'] === '') {
+    $out(['error' => 'Bitte neu anmelden (die Bungie-App ist vom Typ „Public“ – für längere Anmeldung auf „Confidential“ umstellen).'], 400);
 } elseif ($grant === 'refresh_token') {
     $rt = (string)($in['refresh_token'] ?? '');
     if (!preg_match('#^[A-Za-z0-9+/=._-]{8,2000}$#', $rt)) $out(['error' => 'Ungültiges Token.'], 400);
@@ -39,8 +41,9 @@ if ($grant === 'authorization_code') {
 if (!function_exists('curl_init')) $out(['error' => 'Auf dem Server fehlt cURL.'], 500);
 $ch = curl_init('https://www.bungie.net/Platform/App/OAuth/Token/');
 curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_TIMEOUT => 15, CURLOPT_PROTOCOLS => CURLPROTO_HTTPS, CURLOPT_POST => true,
-    CURLOPT_POSTFIELDS => http_build_query($form),
-    CURLOPT_HTTPHEADER => ['Content-Type: application/x-www-form-urlencoded', 'X-API-Key: ' . $cfg['key'], 'Authorization: Basic ' . base64_encode($cfg['id'] . ':' . $cfg['secret']), 'User-Agent: GhostNode-D2']]);
+    CURLOPT_POSTFIELDS => http_build_query($cfg['secret'] === '' ? $form + ['client_id' => $cfg['id']] : $form),
+    CURLOPT_HTTPHEADER => array_merge(['Content-Type: application/x-www-form-urlencoded', 'X-API-Key: ' . $cfg['key'], 'User-Agent: GhostNode-D2'],
+        $cfg['secret'] === '' ? [] : ['Authorization: Basic ' . base64_encode($cfg['id'] . ':' . $cfg['secret'])])]);
 $raw = curl_exec($ch); $code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
 $j = json_decode((string)$raw, true);
 if (!is_array($j) || empty($j['access_token'])) {

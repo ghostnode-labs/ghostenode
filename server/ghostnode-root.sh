@@ -1720,7 +1720,7 @@ case "$CMD" in
         [ -t 0 ] || die "Bitte direkt im Terminal ausführen (Eingabe nötig)."
         echo "Bungie-App für D2 Nexus (bungie.net/en/Application) – Enter = Wert behalten"
         for v in GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET; do
-            case $v in GN_BUNGIE_KEY) lbl="API-Key";; GN_BUNGIE_CLIENT_ID) lbl="OAuth client_id";; *) lbl="OAuth client_secret";; esac
+            case $v in GN_BUNGIE_KEY) lbl="API-Key";; GN_BUNGIE_CLIENT_ID) lbl="OAuth client_id";; *) lbl="OAuth client_secret (nur bei „Confidential“, sonst Enter)";; esac
             [ -n "${!v:-}" ] && st="gesetzt" || st="leer"
             if [ "$v" = GN_BUNGIE_CLIENT_ID ]; then read -r -p "  $lbl ($st): " nv; else read -r -s -p "  $lbl ($st, unsichtbar): " nv; echo; fi
             nv=$(printf '%s' "$nv" | tr -d '[:space:]')
@@ -1728,7 +1728,8 @@ case "$CMD" in
         done
         [[ "${GN_BUNGIE_KEY:-}" =~ ^[A-Fa-f0-9]{32}$ ]] || warn "Der API-Key hat normalerweise 32 Zeichen (0-9, a-f) – bitte prüfen."
         [[ "${GN_BUNGIE_CLIENT_ID:-}" =~ ^[0-9]+$ ]] || warn "Die client_id ist eine Zahl – bitte prüfen."
-        [ "${#GN_BUNGIE_CLIENT_SECRET}" -ge 16 ] || warn "Das client_secret ist zu kurz – bitte prüfen."
+        if [ -z "${GN_BUNGIE_CLIENT_SECRET:-}" ]; then warn "Kein client_secret: geht mit einer Bungie-App vom Typ „Public“ – dann aber stündlich neu anmelden. Besser: Typ „Confidential“, dann erscheint das Secret."
+        elif [ "${#GN_BUNGIE_CLIENT_SECRET}" -lt 16 ]; then warn "Das client_secret ist zu kurz – bitte prüfen."; fi
         save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
         want web && setup_web
         c=$(curl --noproxy '*' -sk --resolve "$DOMAIN:443:127.0.0.1" -o /dev/null -w '%{http_code}' -X POST -H 'X-D2-Client: 0' -d '{}' "https://$DOMAIN/d2auth.php" || true)
