@@ -43,7 +43,7 @@
 #    --yes            keine Rückfragen (Werte aus /etc/ghostnode/setup.conf bzw. Umgebung)
 #    --no-tls         keine Zertifikate holen (Test / DNS noch nicht umgestellt)
 #    --only=a,b       nur diese Teile (web,db,tls,hr,bot,turn,voice,ftp,mail,cron,fw)
-#    --skip=a,b       diese Teile auslassen
+#    --skip=a,b       diese Teile auslassen (music = Musik-Dienst Lavalink für den Bot)
 #
 #  Neben Pterodactyl (Panel + Wings) oder einem anderen nginx: wird automatisch erkannt. Dann bleibt nginx vorne auf 80/443
 #  (Panel unverändert), Apache läuft nur intern auf 127.0.0.1:18080, die Firewall wird nie zurückgesetzt, Wings-Ports bleiben
@@ -148,7 +148,7 @@ save_kv() {   # save_kv DATEI VAR... – Format VAR='wert', lesbar für bash und
 }
 SECRET_VARS=(HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET
              GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM STATUS_WEBHOOK
-             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET OLD_DB_PASS LIVE_SECRET GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET)
+             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET OLD_DB_PASS LIVE_SECRET GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET LAVALINK_PASSWORD)
 CONF_VARS=(ROLE RUN_MODE DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST VOICE_HOST HR_UPSTREAM BOT_UPSTREAM FTP_USER TZ_NAME OLD_DB_HOST OLD_DB_PORT OLD_DB_NAME OLD_DB_USER OLD_DB_MIRROR AUTO_UPDATE)
 
 ask_config() {
@@ -223,7 +223,7 @@ ask_secrets() {
     fi
     if [ -n "${OLD_DB_HOST:-}" ]; then ask OLD_DB_PASS "Passwort der alten MySQL ($OLD_DB_USER@$OLD_DB_HOST)" "" s; fi
     if want voice && [ "$PTERO" = 0 ]; then ask MUMBLE_PASS "Mumble-Serverpasswort (leer = offen für alle)" "" s; fi
-    DB_PASS=${DB_PASS:-$(rand 32)}; TURN_SECRET=${TURN_SECRET:-$(rand 48)}; FTP_PASS=${FTP_PASS:-$(rand 20)}; MUMBLE_SUPW=${MUMBLE_SUPW:-$(rand 24)}; BOT_SSO_SECRET=${BOT_SSO_SECRET:-$(rand 48)}; LIVE_SECRET=${LIVE_SECRET:-$(rand 48)}
+    DB_PASS=${DB_PASS:-$(rand 32)}; TURN_SECRET=${TURN_SECRET:-$(rand 48)}; FTP_PASS=${FTP_PASS:-$(rand 20)}; MUMBLE_SUPW=${MUMBLE_SUPW:-$(rand 24)}; BOT_SSO_SECRET=${BOT_SSO_SECRET:-$(rand 48)}; LAVALINK_PASSWORD=${LAVALINK_PASSWORD:-$(rand 40)}; LIVE_SECRET=${LIVE_SECRET:-$(rand 48)}
     save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
     ok "gespeichert in $SECRETS (nur root lesbar)"
 }
@@ -568,7 +568,7 @@ cmd_bericht() {   # Zustand zum Weitergeben (z. B. an Claude) – ohne Passwört
         echo "MariaDB:    $(mysql --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME'" 2>/dev/null) Tabellen · Präfix ${pre:-–} · Konten: $(mysql --protocol=socket -uroot -N -e "SELECT GROUP_CONCAT(username SEPARATOR ', ') FROM \`$DB_NAME\`.\`${pre}users\`" 2>/dev/null)"
     fi
     echo; echo "--- Dienste"
-    local u; for u in nginx apache2 "php$(php_ver 2>/dev/null)-fpm" mariadb ghostnode-live ghostnode-bot ghostnode-hr coturn mumble-server vsftpd cron fail2ban; do
+    local u; for u in nginx apache2 "php$(php_ver 2>/dev/null)-fpm" mariadb ghostnode-live ghostnode-bot ghostnode-lavalink ghostnode-hr coturn mumble-server vsftpd cron fail2ban; do
         if [ -f "/lib/systemd/system/$u.service" ] || [ -f "/etc/systemd/system/$u.service" ] || [ -x "/etc/init.d/$u" ]; then printf '  %-22s %s\n' "$u" "$(is_active "$u" && echo läuft || echo AUS)"; fi
     done
     echo; echo "--- Geplante Aufgaben"; for u in /var/lib/ghostnode/cron-*.status; do [ -f "$u" ] && { read -r t rc < "$u"; printf '  %-22s %s rc=%s\n' "$(basename "$u" .status | cut -c6-)" "$(date -d "@$t" '+%d.%m. %H:%M')" "$rc"; }; done
@@ -730,7 +730,10 @@ setup_bot() {
     [ -n "$before" ] && [ "$before" != "$after" ] && ok "Version $before → $after" || ok "Version ${after:-?}"
     install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$dir/data"
     local DASHBOARD_URL="https://$BOT_HOST" NEXUS_BASE="https://$DOMAIN" HYPERATE_RELAY="https://$HR_HOST" BOT_DATA="$dir/data" PORT=$BOT_PORT HOST=127.0.0.1
-    save_kv "$CONF_DIR/bot.env" DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET DASHBOARD_URL NEXUS_BASE HYPERATE_RELAY BOT_DATA PORT HOST BOT_SSO_SECRET
+    local LAVALINK_URL=""
+    [ -n "${LAVALINK_PASSWORD:-}" ] || { LAVALINK_PASSWORD=$(rand 40); save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"; }
+    if [[ ",$SKIP," != *",music,"* ]] && setup_lavalink; then LAVALINK_URL="http://127.0.0.1:$LAVALINK_PORT"; fi
+    save_kv "$CONF_DIR/bot.env" DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET DASHBOARD_URL NEXUS_BASE HYPERATE_RELAY BOT_DATA PORT HOST BOT_SSO_SECRET LAVALINK_URL LAVALINK_PASSWORD
     chmod 600 "$CONF_DIR/bot.env"
     need_port "$BOT_PORT" node
     write_unit ghostnode-bot "GhostNode Discord-Bot (VRC Nexus)" "$dir" bot.js "$CONF_DIR/bot.env"
@@ -749,6 +752,100 @@ self_update() {   # Auto-Updater: zuerst dieses Script selbst von GitHub holen, 
         git -C "$self_repo" fetch -q origin main && git -C "$self_repo" reset -q --hard origin/main && ok "$(git -C "$self_repo" log -1 --format='%h %s')" || warn "Script-Update fehlgeschlagen – weiter mit der vorhandenen Fassung."
         GN_SELF_UPDATED=1 exec bash "$(readlink -f "$0")" "$1" "${ARGS[@]}"
     fi
+}
+
+LAVALINK_PORT=${LAVALINK_PORT:-2333}
+gh_latest() {   # gh_latest OWNER/REPO → Tag der neuesten Veröffentlichung
+    curl -fsSL -m 20 -H 'Accept: application/vnd.github+json' "https://api.github.com/repos/$1/releases/latest" 2>/dev/null | python3 -c 'import sys,json
+try: print(json.load(sys.stdin).get("tag_name",""))
+except Exception: print("")' || true
+}
+lavalink_yml() {   # lavalink_yml YOUTUBE-VERSION → application.yml (nur 127.0.0.1)
+    echo "# erzeugt von ghostnode-root.sh – nur auf 127.0.0.1; Passwort steht nur hier und in $CONF_DIR/bot.env"
+    echo "server:"
+    echo "  port: $LAVALINK_PORT"
+    echo "  address: 127.0.0.1"
+    echo "lavalink:"
+    if [ -n "$1" ]; then
+        echo "  plugins:"
+        echo "    - dependency: \"dev.lavalink.youtube:youtube-plugin:$1\""
+        echo "      snapshot: false"
+    fi
+    echo "  server:"
+    echo "    password: \"$LAVALINK_PASSWORD\""
+    echo "    sources:"
+    echo "      youtube: false"
+    echo "      bandcamp: true"
+    echo "      soundcloud: true"
+    echo "      twitch: true"
+    echo "      vimeo: true"
+    echo "      http: true"
+    echo "      local: false"
+    echo "    bufferDurationMs: 400"
+    echo "    frameBufferDurationMs: 5000"
+    echo "    playerUpdateInterval: 5"
+    echo "    soundcloudSearchEnabled: true"
+    echo "plugins:"
+    echo "  youtube:"
+    echo "    enabled: true"
+    echo "    allowSearch: true"
+    echo "    allowDirectVideoIds: true"
+    echo "    allowDirectPlaylistIds: true"
+    echo "logging:"
+    echo "  file:"
+    echo "    path: ./logs/"
+    echo "  level:"
+    echo "    root: WARN"
+    echo "    lavalink: INFO"
+}
+setup_lavalink() {   # Musik-Dienst für den Bot (Lavalink ≥ 4.2 mit DAVE – Discord verlangt Ende-zu-Ende-Verschlüsselung in Sprachkanälen)
+    step "Musik-Dienst (Lavalink)"
+    if [ "$RUN_MODE" != systemd ] || [ "$HAS_SYSTEMD" != 1 ]; then warn "Musik braucht systemd (Lavalink als eigener Dienst) – übersprungen."; return 1; fi
+    local glibc; glibc=$(ldd --version 2>/dev/null | head -1 | grep -oE '[0-9]+\.[0-9]+$' || echo 0.0)
+    if ! python3 -c "import sys; a,b=map(int,'$glibc'.split('.')); sys.exit(0 if (a,b)>=(2,35) else 1)" 2>/dev/null; then
+        warn "glibc $glibc < 2.35 – die Discord-Verschlüsselung (DAVE) braucht Ubuntu 22.04 / Debian 12 oder neuer. Musik übersprungen."; return 1
+    fi
+    if ! command -v java >/dev/null 2>&1 || ! java -version 2>&1 | grep -qE 'version "(1[7-9]|2[0-9])'; then
+        install_quiet openjdk-21-jre-headless || install_quiet openjdk-17-jre-headless || { warn "Java 17+ ließ sich nicht installieren – Musik übersprungen."; return 1; }
+    fi
+    local dir=/opt/ghostnode/lavalink ver yt cur
+    install -d -o "$APP_USER" -g "$APP_USER" "$dir" "$dir/plugins" "$dir/logs"
+    ver=$(gh_latest lavalink-devs/Lavalink); yt=$(gh_latest lavalink-devs/youtube-source)
+    # Ausweichweg ohne GitHub-API (Rate-Limit): Plugin-Version aus dem Maven-Verzeichnis von Lavalink
+    [ -n "$yt" ] || yt=$(curl -fsSL -m 20 https://maven.lavalink.dev/releases/dev/lavalink/youtube/youtube-plugin/maven-metadata.xml 2>/dev/null | sed -n 's:.*<release>\(.*\)</release>.*:\1:p' | head -1)
+    cur=$(cat "$dir/VERSION" 2>/dev/null || true)
+    if [ -z "$ver" ] && [ ! -s "$dir/Lavalink.jar" ]; then   # API nicht erreichbar, noch nichts da → direkt die neueste Datei
+        curl -fsSL -m 300 -o "$dir/Lavalink.jar.new" https://github.com/lavalink-devs/Lavalink/releases/latest/download/Lavalink.jar \
+            && mv -f "$dir/Lavalink.jar.new" "$dir/Lavalink.jar" && echo "neueste" > "$dir/VERSION" && ok "Lavalink (neueste) geladen" || rm -f "$dir/Lavalink.jar.new"
+    fi
+    if [ -n "$ver" ] && { [ "$ver" != "$cur" ] || [ ! -s "$dir/Lavalink.jar" ]; }; then
+        if curl -fsSL -m 300 -o "$dir/Lavalink.jar.new" "https://github.com/lavalink-devs/Lavalink/releases/download/$ver/Lavalink.jar"; then
+            mv -f "$dir/Lavalink.jar.new" "$dir/Lavalink.jar"; echo "$ver" > "$dir/VERSION"; ok "Lavalink $ver geladen"
+        else rm -f "$dir/Lavalink.jar.new"; warn "Lavalink $ver nicht ladbar – vorhandene Version bleibt."; fi
+    fi
+    [ -s "$dir/Lavalink.jar" ] || { warn "Lavalink.jar fehlt (GitHub nicht erreichbar?) – Musik übersprungen."; return 1; }
+    case "$(cat "$dir/VERSION" 2>/dev/null)" in 3.*|4.0.*|4.1.*) warn "Lavalink $(cat "$dir/VERSION") kann noch kein DAVE – Musik in Sprachkanälen geht erst ab 4.2.";; esac
+    [ -n "$yt" ] || yt=$(sed -n 's/.*youtube-plugin:\([^"]*\)".*/\1/p' "$dir/application.yml" 2>/dev/null | head -1)
+    [ -n "$yt" ] || warn "YouTube-Erweiterung: Version nicht ermittelbar – Suche läuft dann über SoundCloud."
+    ( umask 077; lavalink_yml "$yt" > "$dir/application.yml" )
+    chown -R "$APP_USER:$APP_USER" "$dir"; chmod 600 "$dir/application.yml"
+    {
+        echo "# erzeugt von ghostnode-root.sh – Musik-Dienst für den GhostNode-Bot (nur 127.0.0.1)"
+        echo "[Unit]"; echo "Description=GhostNode Musik (Lavalink)"; echo "After=network-online.target"; echo "Wants=network-online.target"; echo
+        echo "[Service]"; echo "User=$APP_USER"; echo "WorkingDirectory=$dir"
+        echo "ExecStart=$(command -v java || echo /usr/bin/java) -Xms128m -Xmx${LAVALINK_MEM:-512m} -jar Lavalink.jar"
+        echo "Restart=always"; echo "RestartSec=10"; echo "NoNewPrivileges=true"; echo "ProtectSystem=strict"; echo "ProtectHome=true"; echo "ReadWritePaths=$dir"
+        echo "PrivateTmp=true"; echo "PrivateDevices=true"; echo "ProtectKernelTunables=true"; echo "ProtectControlGroups=true"; echo "RestrictSUIDSGID=true"; echo "LockPersonality=true"; echo
+        echo "[Install]"; echo "WantedBy=multi-user.target"
+    } > /etc/systemd/system/ghostnode-lavalink.service
+    systemctl daemon-reload
+    need_port "$LAVALINK_PORT" java
+    svc enable ghostnode-lavalink; svc restart ghostnode-lavalink
+    local i c=000
+    for i in $(seq 1 45); do c=$(curl --noproxy '*' -s -o /dev/null -m 3 -w '%{http_code}' -H "Authorization: $LAVALINK_PASSWORD" "http://127.0.0.1:$LAVALINK_PORT/version" 2>/dev/null || true); [ "$c" = 200 ] && break; sleep 2; done
+    if [ "$c" = 200 ]; then ok "Lavalink $(cat "$dir/VERSION") läuft auf 127.0.0.1:$LAVALINK_PORT${yt:+ (YouTube-Erweiterung $yt)}"
+    else warn "Lavalink antwortet noch nicht (lädt beim ersten Start Erweiterungen) – später: journalctl -u ghostnode-lavalink -n 40"; fi
+    return 0
 }
 
 bot_zip_update() {   # bot_zip_update ORDNER – neueste Release-ZIP von GitHub einspielen (data/, .env und bot-state.json bleiben)
@@ -784,6 +881,16 @@ bot_check() {   # nach dem Neustart: läuft der Bot, ist er mit Discord verbunde
     [ "$okk" = 1 ] && ok "Bot $v ist mit Discord verbunden" || warn "Bot $v läuft, ist aber (noch) nicht mit Discord verbunden – Token prüfen ($0 secrets) oder kurz warten."
     local c; c=$(curl --noproxy '*' -s -o /dev/null -m 5 -w '%{http_code}' "http://127.0.0.1:$BOT_PORT/api/me" 2>/dev/null || true)
     [ "${c:-000}" = 401 ] && ok "Dashboard antwortet (Anmeldung nötig, wie erwartet)" || warn "Dashboard /api/me: HTTP ${c:-000}"
+    local mu; mu=$(curl --noproxy '*' -s -m 3 "http://127.0.0.1:$BOT_PORT/health" 2>/dev/null | python3 -c 'import sys,json
+try:
+    m=json.load(sys.stdin).get("music") or {}
+    print("an" if m.get("online") else ("verbindet" if m.get("enabled") else "aus"))
+except Exception: print("?")' 2>/dev/null || echo "?")
+    case "$mu" in
+        an) ok "Musik: Bot ist mit Lavalink verbunden" ;;
+        verbindet) warn "Musik: Bot verbindet sich noch mit Lavalink (beim ersten Start bis zu 1 Minute)" ;;
+        aus) [[ ",$SKIP," == *",music,"* ]] || warn "Musik ist aus (Lavalink nicht eingerichtet)" ;;
+    esac
 }
 
 write_unit() {   # write_unit NAME BESCHREIBUNG VERZEICHNIS DATEI ENV
