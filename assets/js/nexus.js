@@ -308,8 +308,9 @@
         return '<span class="vx-loc">🌐 <a href="#" data-world="' + esc(l.world) + '">' + esc(l.world_name || 'Welt wird geladen …') + '</a> <small>' + esc(l.access) + ' · ' + esc(l.region) + '</small></span>';
     };
     function friendCard(f) {
-        const compact = $('#compactView').checked;
-        return '<div class="vx-friend st-' + f.state + (f.favorite ? ' fav' : '') + (compact ? ' compact' : '') + '" data-user="' + esc(f.id) + '" tabindex="0" role="button">'
+        const compact = $('#compactView').checked, bv = $('#bannerView'), bp = (!bv || bv.checked) && f.banner ? pic(f.banner) : '';   // 6.3: Profilbanner
+        return '<div class="vx-friend st-' + f.state + (f.favorite ? ' fav' : '') + (compact ? ' compact' : '') + (bp ? ' fc-ban' : '') + '" data-user="' + esc(f.id) + '" tabindex="0" role="button"'
+            + (bp ? ' style="--fb:url(\'' + esc(bp.replace(/['"()\\\s]/g, encodeURIComponent)) + '\')"' : '') + '>'
             + img(f.image, 'vx-av', f.name)
             + '<span class="vx-f-main"><span class="vx-f-name">' + statusDot(f.state === 'offline' ? 'offline' : f.status) + '<b style="color:' + esc(f.trust[1]) + '">' + esc(f.name) + '</b>' + (f.favorite ? ' ⭐' : '') + (f.fav_group ? ' <span class="vx-vfav" title="VRChat-Favorit: ' + esc((state.fav_groups || {})[f.fav_group] || f.fav_group) + '">♥</span>' : '') + (f.pronouns ? ' <span class="vx-pron" data-nogender>' + esc(f.pronouns) + '</span>' : '') + '</span>'
             + (!compact && f.status_desc ? '<span class="vx-f-sd">' + esc(f.status_desc) + '</span>' : '')
@@ -372,10 +373,10 @@
         if (!state.friends.length) html = '<div class="vx-empty">Noch keine Freunde geladen – oben auf „⟳ Aktualisieren“ klicken.</div>';
         $('#friendsBox').innerHTML = html;
     }
-    const FILTERS = ['#friendSearch', '#friendSort', '#friendPlatform', '#friendTrust', '#showOffline', '#onlyNotes', '#compactView'];
+    const FILTERS = ['#friendSearch', '#friendSort', '#friendPlatform', '#friendTrust', '#showOffline', '#onlyNotes', '#compactView', '#bannerView'];
     FILTERS.forEach(s => {
         const el = $(s);
-        if (el.type === 'checkbox') el.checked = store.get('f' + s, false); else if (el.tagName === 'SELECT') el.value = store.get('f' + s, el.value);
+        if (el.type === 'checkbox') el.checked = store.get('f' + s, s === '#bannerView'); else if (el.tagName === 'SELECT') el.value = store.get('f' + s, el.value);
         el.addEventListener('input', () => { if (el.type === 'checkbox' || el.tagName === 'SELECT') store.set('f' + s, el.type === 'checkbox' ? el.checked : el.value); renderFriends(); });
     });
 

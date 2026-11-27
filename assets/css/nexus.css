@@ -634,3 +634,13 @@ span.vx-card-img { display: flex; align-items: center; justify-content: center; 
 .vx-badge.sm { font-size: 0.66rem; padding: 0 5px; }
 .vx-reroll { margin: 4px 0; }
 .vx-expired { margin: 8px 0 12px; padding: 8px 12px; border-radius: 6px; border: 1px solid rgba(255, 195, 92, .5); background: rgba(255, 195, 92, .1); color: #ffc35c; font-size: .92em; }
+
+/* 6.3: Profilbanner (großes VRChat-Profilbild) als Hintergrund der Freundes-Karte */
+.vx-friend.fc-ban { isolation: isolate; overflow: hidden; min-height: 86px; }
+.vx-friend.fc-ban::before { content: ''; position: absolute; inset: 0; z-index: -1; background: var(--fb) center 30% / cover no-repeat; transition: transform .4s; }
+.vx-friend.fc-ban::after { content: ''; position: absolute; inset: 0; z-index: -1; background: linear-gradient(100deg, rgba(10, 14, 24, .8) 0%, rgba(10, 14, 24, .45) 45%, rgba(10, 14, 24, .18) 100%); }
+.vx-friend.fc-ban:hover::before { transform: scale(1.04); }
+.vx-friend.fc-ban .vx-f-name b { background: rgba(0, 0, 0, .42); padding: 1px 8px; border-radius: 6px; }
+.vx-friend.fc-ban .vx-f-main, .vx-friend.fc-ban .vx-f-since { text-shadow: 0 1px 3px rgba(0, 0, 0, .9), 0 0 8px rgba(0, 0, 0, .6); }
+.vx-friend.fc-ban .vx-av { box-shadow: 0 0 0 2px rgba(0, 0, 0, .35), 0 4px 14px rgba(0, 0, 0, .5); }
+.vx-friend.fc-ban.st-offline { opacity: .7; }

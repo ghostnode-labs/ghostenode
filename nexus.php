@@ -1224,6 +1224,7 @@ session_write_close();
             <label class="vx-auto"><input type="checkbox" id="showOffline"> Offline zeigen</label>
             <label class="vx-auto"><input type="checkbox" id="onlyNotes"> nur mit Notiz</label>
             <label class="vx-auto"><input type="checkbox" id="compactView"> kompakt</label>
+            <label class="vx-auto" title="Großes VRChat-Profilbild (VRC+) als Hintergrund der Karte"><input type="checkbox" id="bannerView" checked> Profilbanner</label>
             <button type="button" class="btn btn-sm" id="randomFriend" title="Zufälligen Freund anzeigen, der gerade im Spiel ist">🎲 Zufallsfreund</button>
             <a class="btn btn-sm" href="nexus.php?export=friends" title="Freundesliste als CSV (Excel)">⬇ CSV</a>
         </div>

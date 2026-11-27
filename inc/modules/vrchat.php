@@ -316,6 +316,10 @@ function vrc_migrate(PDO $db): void {
         PRAGMA user_version = 18;
     ");
     }
+    if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 19) {   // 6.3: Profilbanner der Freunde (großes VRChat-Profilbild)
+        $db->exec("CREATE TABLE IF NOT EXISTS friend_banners (user_id INTEGER NOT NULL, vrc_id TEXT NOT NULL, banner TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, vrc_id));
+                   PRAGMA user_version = 19;");
+    }
 }
 
 // ---------- Verschlüsselung der Sitzungs-Cookies ----------
@@ -597,6 +601,7 @@ function vrc_sync(int $uid, bool $force = false): array {
     $feed = $db->prepare('INSERT INTO feed (user_id, ts, type, vrc_id, display_name, old, new) VALUES (?, ?, ?, ?, ?, ?, ?)');
     $up = $db->prepare('INSERT OR REPLACE INTO friends (user_id, vrc_id, display_name, state, status, status_desc, location, platform, image, avatar_thumb, tags, bio, last_login, since, updated, fav_group, friend_since, pronouns)
                         VALUES (:u, :id, :name, :state, :status, :sd, :loc, :pf, :img, :av, :tags, :bio, :ll, :since, :upd, :fg, :fs, :pr)');
+    $banUp = $db->prepare('INSERT OR REPLACE INTO friend_banners (user_id, vrc_id, banner) VALUES (?, ?, ?)');   // 6.3
     $log = function ($type, $id, $name, $o = '', $n = '') use ($feed, $uid, $now, $first) { if (!$first) $feed->execute([$uid, $now, $type, $id, $name, (string)$o, (string)$n]); };
     $worlds = [];
     $db->beginTransaction();
@@ -637,6 +642,8 @@ function vrc_sync(int $uid, bool $force = false): array {
         if ($state === 'online') { $l = vrc_location($loc); if (!empty($l['world'])) $worlds[] = $l['world']; }
         $up->execute(['u' => $uid, 'id' => $id, 'since' => $since, 'upd' => $now, 'fg' => $o['fav_group'] ?? '', 'fs' => $o ? (int)$o['friend_since'] : ($first ? 0 : $now),
                       'pr' => mb_substr((string)($f['pronouns'] ?? ($o['pronouns'] ?? '')), 0, 32)] + $row);
+        $pp = (string)($f['profilePicOverride'] ?? '');
+        $banUp->execute([$uid, $id, preg_match('#^https://#', $pp) ? $pp : '']);
     }
     // Freunde, die nicht mitgeladen wurden, aber laut /auth/user offline sind
     foreach ($old as $id => $o) {
@@ -701,7 +708,7 @@ function vrc_sync_favorites(array &$acc): void {
 
 /** Freundesliste für die Anzeige */
 function vrc_friend_list(int $uid): array {
-    $st = vrc_db()->prepare('SELECT f.*, n.note, n.favorite, n.tags AS ltags, n.watch FROM friends f LEFT JOIN notes n ON n.user_id = f.user_id AND n.vrc_id = f.vrc_id WHERE f.user_id = ? ORDER BY f.display_name COLLATE NOCASE');
+    $st = vrc_db()->prepare('SELECT f.*, n.note, n.favorite, n.tags AS ltags, n.watch, b.banner FROM friends f LEFT JOIN notes n ON n.user_id = f.user_id AND n.vrc_id = f.vrc_id LEFT JOIN friend_banners b ON b.user_id = f.user_id AND b.vrc_id = f.vrc_id WHERE f.user_id = ? ORDER BY f.display_name COLLATE NOCASE');
     $st->execute([$uid]);
     $rows = $st->fetchAll();
     $worlds = vrc_worlds(array_map(function ($r) { return vrc_location($r['location'])['world'] ?? ''; }, $rows));
@@ -711,7 +718,7 @@ function vrc_friend_list(int $uid): array {
         if (!empty($loc['world'])) $loc['world_thumb'] = $worlds[$loc['world']]['thumb'] ?? '';
         $tags = $r['tags'] !== '' ? explode(' ', $r['tags']) : [];
         return ['id' => $r['vrc_id'], 'name' => $r['display_name'], 'state' => $r['state'], 'status' => $r['status'], 'status_desc' => $r['status_desc'],
-                'loc' => $loc, 'platform' => VRC_PLATFORM[$r['platform']] ?? $r['platform'], 'image' => $r['image'], 'trust' => vrc_trust($tags),
+                'loc' => $loc, 'platform' => VRC_PLATFORM[$r['platform']] ?? $r['platform'], 'image' => $r['image'], 'banner' => (string)($r['banner'] ?? ''), 'trust' => vrc_trust($tags),
                 'since' => (int)$r['since'], 'note' => (string)$r['note'], 'favorite' => (bool)$r['favorite'], 'last_login' => $r['last_login'],
                 'pf' => $r['platform'], 'fav_group' => $r['fav_group'], 'friend_since' => (int)$r['friend_since'], 'status_key' => $r['status'],
                 'lists' => array_values(array_filter(array_map('trim', explode(',', (string)$r['ltags'])), 'strlen')), 'watch' => (bool)$r['watch'], 'pronouns' => (string)($r['pronouns'] ?? '')];
