@@ -193,7 +193,7 @@ $rm_default = [
     // Android
     'Homescreen-Widgets: Freunde online, Puls, nächstes Event' => 'done', 'Nexus-Knöpfe als Schnellzugriff und Kachel in den Schnelleinstellungen' => 'wip',
     // Events & Social
-    'Event-Planer mit VRChat-Gruppen-Events, Zusagen und Erinnerungen' => 'wip', 'Gemeinsame Instanz-Einladungen für Freundesgruppen' => 'done',
+    'Event-Planer mit VRChat-Gruppen-Events, Zusagen und Erinnerungen' => 'done', 'Gemeinsame Instanz-Einladungen für Freundesgruppen' => 'done',
     'Treffen-Rückblick: wer, wo, wie lange – als Karte und Zeitachse' => 'done',
     // Creator & OSC
     'Avatar-Parameter-Presets: Outfits und Zustände speichern und laden' => 'done', 'OSC-Szenen: mehrere Parameter, Chatbox und Licht in einem Knopf' => 'done',
@@ -270,7 +270,7 @@ $rm_default = [
     'Bessere Hilfe & Erklärungen direkt im 18+-Bereich' => 'done',
     // 7.0.0
     'Clubs im Client: eigener Feed, Chat, Mitgliederliste und Rollen' => 'wip',
-    'Club-Kalender im Client mit Erinnerung auf Handy und Uhr' => 'wip',
+    'Club-Kalender im Client mit Erinnerung auf Handy und Uhr' => 'done',
     'Clubs & Gruppen mit eigenem Feed, Regeln und Moderatoren' => 'done',
     'Event-Seiten mit Anmeldung, Warteliste und Kalender-Abo' => 'done',
     'Öffentlicher Event-Kalender aller Clubs mit Filter (Sprache, Uhrzeit, Thema)' => 'done',
@@ -281,8 +281,15 @@ $rm_default = [
     'Club-Archiv: frühere Events mit Fotos und Teilnehmerzahl' => 'done',
     // 7.0.1
     'Handy-Widgets 2.0 (Puls, Freunde, Schnellaktionen)' => 'done',
+    // 7.1.0
+    'Event-Planer mit Zusagen, Erinnerungen und gemeinsamer Instanz' => 'done',
+    'Freundes-Gruppen: gemeinsam einer Instanz beitreten, Sammel-Einladung mit einem Klick' => 'done',
+    'Gruppen-Umfragen direkt in der Chatbox' => 'done',
+    'Freundschafts-Jubiläen und Geburtstage mit Erinnerung' => 'done',
+    'Spiele & Mini-Games für Treffen (Quiz, Würfel, Bingo)' => 'done',
+    'Event-Modus: Status, Chatbox und Overlay automatisch fürs Event' => 'wip',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0', '7.0.1'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0', '7.0.1', '7.1.0'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren'];
 
 // =====================================================================================================
