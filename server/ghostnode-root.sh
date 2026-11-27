@@ -448,7 +448,7 @@ EOF
 }
 
 # nginx als Reverse Proxy vorne: ein Server-Block je Name, Ziel = interner Port (Apache, Bot, HypeRate, Panel-Zuweisung)
-nginx_site() {   # nginx_site NAME "HOSTS" PORT web|sse|plain|redirect
+nginx_site() {   # nginx_site NAME "HOSTS" PORT web|sse|plain|redirect – schreibt HTTP + (mit Zertifikat) HTTPS selbst
     local name=$1 hosts=$2 port=$3 kind=$4 f=/etc/nginx/sites-available/$1.conf up
     up=$port; [[ "$up" == *:* ]] || up="127.0.0.1:$up"
     command -v nginx >/dev/null || { apt-get install -y -qq nginx >/dev/null; rm -f /etc/nginx/sites-enabled/default; }
@@ -461,40 +461,61 @@ nginx_site() {   # nginx_site NAME "HOSTS" PORT web|sse|plain|redirect
         ln -sf "$dflt" /etc/nginx/sites-enabled/00-ghostnode-default-tls.conf
         nginx -t >/dev/null 2>&1 || rm -f /etc/nginx/sites-enabled/00-ghostnode-default-tls.conf "$dflt"   # zu altes nginx → weglassen
     fi
-    {
-        echo "# erzeugt von ghostnode-root.sh – GhostNode neben anderen nginx-Seiten (z. B. Pterodactyl-Panel)"
-        echo "server {"
-        echo "    listen 80;"; [ -s /proc/net/if_inet6 ] && echo "    listen [::]:80;"
-        echo "    server_name $hosts;"
-        if [ "$kind" = redirect ]; then echo "    return 302 https://$DOMAIN\$request_uri;"; echo "}"
-        else
-            echo "    access_log /var/log/nginx/$name.access.log;"; echo "    error_log /var/log/nginx/$name.error.log;"
-            echo "    client_max_body_size 70m;"
-            if [ "$kind" = web ]; then   # Live-Dienst (WebSocket) auf derselben Domain
-                echo "    location /live/ {"
-                echo "        proxy_pass http://127.0.0.1:$LIVE_PORT;"
-                echo "        proxy_http_version 1.1;"
-                echo "        proxy_set_header Upgrade \$http_upgrade;"
-                echo "        proxy_set_header Connection \"upgrade\";"
-                echo "        proxy_set_header Host \$host;"
-                echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
-                echo "        proxy_read_timeout 3600s;"
-                echo "        proxy_send_timeout 3600s;"
-                echo "    }"
-            fi
-            echo "    location / {"
-            echo "        proxy_pass http://$up;"
+    # merken, damit „certs“ alle Blöcke mit HTTPS neu schreiben kann
+    install -d -m 0750 "$CONF_DIR"; touch "$CONF_DIR/nginx-sites"
+    grep -v "^$name|" "$CONF_DIR/nginx-sites" > "$CONF_DIR/nginx-sites.tmp" || true
+    printf '%s|%s|%s|%s\n' "$name" "$hosts" "$port" "$kind" >> "$CONF_DIR/nginx-sites.tmp"; mv "$CONF_DIR/nginx-sites.tmp" "$CONF_DIR/nginx-sites"
+    install -d -m 0755 /var/www/letsencrypt
+    local cert=/etc/letsencrypt/live/ghostnode v6=""; [ -s /proc/net/if_inet6 ] && v6=1
+    local tls=""; [ -s "$cert/fullchain.pem" ] && [ -s "$cert/privkey.pem" ] && tls=1
+    body() {   # Inhalt eines Server-Blocks (gleich für HTTP ohne Zertifikat und HTTPS)
+        if [ "$kind" = redirect ]; then echo "    location / { return 302 https://$DOMAIN\$request_uri; }"; return; fi
+        echo "    access_log /var/log/nginx/$name.access.log;"; echo "    error_log /var/log/nginx/$name.error.log;"
+        echo "    client_max_body_size 70m;"
+        if [ "$kind" = web ]; then   # Live-Dienst (WebSocket) auf derselben Domain
+            echo "    location /live/ {"
+            echo "        proxy_pass http://127.0.0.1:$LIVE_PORT;"
             echo "        proxy_http_version 1.1;"
+            echo "        proxy_set_header Upgrade \$http_upgrade;"
+            echo "        proxy_set_header Connection \"upgrade\";"
             echo "        proxy_set_header Host \$host;"
-            echo "        proxy_set_header X-Real-IP \$remote_addr;"
             echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
-            echo "        proxy_set_header X-Forwarded-Proto \$scheme;"
-            echo "        proxy_set_header Connection \"\";"
-            if [ "$kind" = sse ]; then echo "        proxy_buffering off;"; echo "        proxy_cache off;"; echo "        proxy_read_timeout 3600s;"; echo "        gzip off;"
-            else echo "        proxy_read_timeout 120s;"; fi
-            echo "    }"; echo "}"
+            echo "        proxy_read_timeout 3600s;"
+            echo "        proxy_send_timeout 3600s;"
+            echo "    }"
+        fi
+        echo "    location / {"
+        echo "        proxy_pass http://$up;"
+        echo "        proxy_http_version 1.1;"
+        echo "        proxy_set_header Host \$host;"
+        echo "        proxy_set_header X-Real-IP \$remote_addr;"
+        echo "        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;"
+        echo "        proxy_set_header X-Forwarded-Proto \$scheme;"
+        echo "        proxy_set_header Connection \"\";"
+        if [ "$kind" = sse ]; then echo "        proxy_buffering off;"; echo "        proxy_cache off;"; echo "        proxy_read_timeout 3600s;"; echo "        gzip off;"
+        else echo "        proxy_read_timeout 120s;"; fi
+        echo "    }"
+    }
+    {
+        echo "# erzeugt von ghostnode-root.sh – HTTP$([ -n "$tls" ] && echo ' → HTTPS') für: $hosts (nicht von Hand ändern, wird bei install/certs neu geschrieben)"
+        echo "server {"
+        echo "    listen 80;"; [ -n "$v6" ] && echo "    listen [::]:80;"
+        echo "    server_name $hosts;"
+        echo "    location /.well-known/acme-challenge/ { root /var/www/letsencrypt; }"
+        if [ -n "$tls" ]; then echo "    location / { return 301 https://\$host\$request_uri; }"; else body; fi
+        echo "}"
+        if [ -n "$tls" ]; then
+            echo "server {"
+            echo "    listen 443 ssl;"; [ -n "$v6" ] && echo "    listen [::]:443 ssl;"
+            echo "    server_name $hosts;"
+            echo "    ssl_certificate $cert/fullchain.pem;"; echo "    ssl_certificate_key $cert/privkey.pem;"
+            echo "    ssl_protocols TLSv1.2 TLSv1.3;"; echo "    ssl_session_cache shared:GhostNodeSSL:10m;"; echo "    ssl_session_timeout 1d;"
+            echo "    add_header Strict-Transport-Security \"max-age=31536000\" always;"
+            body
+            echo "}"
         fi
     } > "$f"
+    unset -f body
     ln -sf "$f" "/etc/nginx/sites-enabled/$name.conf"
     if ! nginx -t >/dev/null 2>&1; then
         # sofort zurücknehmen – nginx (und damit z. B. das Pterodactyl-Panel) läuft mit der alten Konfiguration weiter
@@ -504,7 +525,23 @@ nginx_site() {   # nginx_site NAME "HOSTS" PORT web|sse|plain|redirect
     fi
     if is_active nginx; then svc reload nginx 2>/dev/null || svc restart nginx; else svc enable nginx 2>/dev/null || true; svc restart nginx; fi   # z. B. frisch installiert, während Apache noch auf 80 lag
 }
+nginx_refresh() {   # alle gemerkten Blöcke neu schreiben (z. B. nach neuem Zertifikat → HTTPS überall)
+    [ -f "$CONF_DIR/nginx-sites" ] || return 0
+    local n h p k
+    while IFS='|' read -r n h p k; do [ -n "$n" ] && [ -f "/etc/nginx/sites-available/$n.conf" ] && nginx_site "$n" "$h" "$p" "$k"; done < <(cat "$CONF_DIR/nginx-sites")
+    return 0
+}
 
+write_db_cfg() {   # write_db_cfg PRÄFIX – data/config.php auf die lokale MariaDB
+    local cfg="$WEB_DIR/data/config.php" j
+    j=$(DB_NAME="$DB_NAME" DB_USER="$DB_USER" DB_PASS="$DB_PASS" PRE="$1" php -r 'echo json_encode(["driver"=>"mysql","host"=>"localhost","port"=>3306,"name"=>getenv("DB_NAME"),"user"=>getenv("DB_USER"),"pass"=>getenv("DB_PASS"),"prefix"=>getenv("PRE"),"socket"=>"/run/mysqld/mysqld.sock"], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);')
+    install -d -o "$APP_USER" -g "$APP_USER" "$WEB_DIR/data"
+    printf '<?php http_response_code(404); exit; ?>\n%s' "$j" > "$cfg"
+    chown "$APP_USER:$APP_USER" "$cfg"; chmod 600 "$cfg"
+}
+sqlite_users() {   # Anzahl Benutzer in den SQLite-Dateien der Webseite (0 = leer/frisch)
+    php -r '$n = 0; foreach (glob($argv[1] . "/data/{,db/}*.{sqlite,db}", GLOB_BRACE) ?: [] as $f) { try { $p = new PDO("sqlite:" . $f); $n += (int)$p->query("SELECT COUNT(*) FROM users")->fetchColumn(); } catch (Throwable $e) {} } echo $n;' "$WEB_DIR" 2>/dev/null || echo 0
+}
 setup_db() {
     step "Datenbank ($DB_ENGINE)"
     local cfg="$WEB_DIR/data/config.php"
@@ -526,12 +563,19 @@ GRANT ALL PRIVILEGES ON \`$DB_NAME\`.* TO '$DB_USER'@'localhost';
 FLUSH PRIVILEGES;
 EOF
     # Zugang für die Webseite – gleiches Format wie Admin → Datenbank (data/config.php)
-    if [ -f "$cfg" ] && ! grep -q '"driver": "mysql"' "$cfg"; then
-        warn "data/config.php nutzt schon SQLite – nicht überschrieben. Umzug zu MariaDB in der Seite: Admin → Datenbank (Zugang steht in $CRED)."
+    if [ -f "$cfg" ] && ! grep -q '"driver": *"mysql"' "$cfg"; then
+        # SQLite-Einstellung vorhanden (z. B. weil die Seite vor der Datenbank aufgerufen wurde): umstellen, wenn dort noch nichts
+        # Wichtiges liegt oder die alte MySQL übernommen wurde – sonst würde die Seite die MariaDB nie benutzen
+        local n; n=$(sqlite_users)
+        if [ -f /var/lib/ghostnode/old-db-imported ] || [ "$n" = 0 ]; then
+            cp -a "$cfg" "$cfg.sqlite-$(date +%Y%m%d-%H%M%S)"; write_db_cfg gn_
+            ok "Webseite von SQLite auf MariaDB umgestellt$([ "$n" != 0 ] && echo " (SQLite hatte $n Benutzer – MariaDB mit der übernommenen alten MySQL ist maßgeblich)")"
+        else
+            warn "data/config.php nutzt SQLite mit $n Benutzer(n) – nicht überschrieben. Zu MariaDB umziehen: Admin → Datenbank (Zugang steht in $CRED)."
+        fi
     else
-        DB_JSON=$(DB_NAME="$DB_NAME" DB_USER="$DB_USER" DB_PASS="$DB_PASS" php -r 'echo json_encode(["driver"=>"mysql","host"=>"localhost","port"=>3306,"name"=>getenv("DB_NAME"),"user"=>getenv("DB_USER"),"pass"=>getenv("DB_PASS"),"prefix"=>"gn_","socket"=>"/run/mysqld/mysqld.sock"], JSON_PRETTY_PRINT|JSON_UNESCAPED_SLASHES);')
-        printf '<?php http_response_code(404); exit; ?>\n%s' "$DB_JSON" > "$cfg"
-        chown "$APP_USER:$APP_USER" "$cfg"; chmod 600 "$cfg"
+        local pre=gn_; [ -f "$cfg" ] && pre=$(grep -o '"prefix": *"[A-Za-z0-9_]*"' "$cfg" | sed -E 's/.*"([A-Za-z0-9_]*)"$/\1/')
+        write_db_cfg "${pre:-gn_}"
     fi
     ok "MariaDB: Datenbank „$DB_NAME“, Benutzer „$DB_USER“ (nur lokal)"
 }
@@ -1147,7 +1191,7 @@ setup_tls() {
     step "Zertifikate (Let's Encrypt)"
     [ "$NO_TLS" = 1 ] && { warn "--no-tls: keine Zertifikate. Später: $0 certs"; return; }
     [ -n "${LE_EMAIL:-}" ] || { warn "Keine E-Mail für Let's Encrypt angegeben – später: $0 certs"; return; }
-    if [ "$FRONT" = nginx ]; then apt-get install -y -qq certbot python3-certbot-nginx >/dev/null; else apt-get install -y -qq certbot python3-certbot-apache >/dev/null; fi
+    if [ "$FRONT" = nginx ]; then apt-get install -y -qq certbot >/dev/null; else apt-get install -y -qq certbot python3-certbot-apache >/dev/null; fi
     if [ "$FRONT" = nginx ] && want web && [ ! -f /etc/nginx/sites-available/ghostnode.conf ]; then
         warn "Die Webseite ist in nginx noch nicht eingerichtet – Zertifikate erst danach (sonst landen alle Namen in einem falschen Block). Zuerst: $0 install"; return 0
     fi
@@ -1165,7 +1209,15 @@ setup_tls() {
             a2ensite -q ghostnode-turn >/dev/null; svc reload apache2
         fi
     fi
-    certbot "--$FRONT" --non-interactive --agree-tos -m "$LE_EMAIL" --redirect --expand --cert-name ghostnode "${names[@]}" >/dev/null
+    if [ "$FRONT" = nginx ]; then
+        # nur das Zertifikat holen (Webroot) – die HTTPS-Blöcke schreibt das Script selbst, für jeden Namen
+        install -d -m 0755 /var/www/letsencrypt
+        local out; out=$(certbot certonly --webroot -w /var/www/letsencrypt --non-interactive --agree-tos -m "$LE_EMAIL" --expand --keep-until-expiring --cert-name ghostnode "${names[@]}" 2>&1) \
+            || { echo "$out" | tail -8 | sed 's/^/    /'; die "Zertifikat konnte nicht geholt werden – DNS aller Namen auf diesen Server? Port 80 offen?"; }
+        nginx_refresh
+    else
+        certbot --apache --non-interactive --agree-tos -m "$LE_EMAIL" --redirect --expand --cert-name ghostnode "${names[@]}" >/dev/null
+    fi
     # Kopie für coturn und vsftpd (eigene Benutzer) – wird bei jeder Verlängerung erneuert
     cat > /etc/letsencrypt/renewal-hooks/deploy/ghostnode.sh <<'EOF'
 #!/bin/sh
@@ -1205,8 +1257,8 @@ write_credentials() {
 # ---------------------------------------------------------------- Prüfung
 # lokale Anfrage an einen Namen – über HTTPS, sobald es ein Zertifikat gibt (sonst würde nur die Umleitung geprüft)
 lcurl() { local host=$1 path=$2; shift 2
-    if [ -d /etc/letsencrypt/live/ghostnode ]; then curl -s -k --max-time 10 --resolve "$host:443:127.0.0.1" "$@" "https://$host$path"
-    else curl -s --max-time 10 -H "Host: $host" "$@" "http://127.0.0.1$path"; fi; }
+    if [ -d /etc/letsencrypt/live/ghostnode ]; then curl --noproxy "*" -s -k --max-time 10 --resolve "$host:443:127.0.0.1" "$@" "https://$host$path"
+    else curl --noproxy "*" -s --max-time 10 -H "Host: $host" "$@" "http://127.0.0.1$path"; fi; }
 http_code() { local c; c=$(lcurl "$1" "$2" -o /dev/null -w '%{http_code}' 2>/dev/null) || true; echo "${c:-000}"; }
 check_all() {
     step "Prüfung"
@@ -1215,16 +1267,18 @@ check_all() {
         local h u r
         for h in $(want web && echo "$DOMAIN") "$HR_HOST" "$BOT_HOST"; do
             [ -n "$h" ] || continue
-            r=$(curl -s -m 8 -o /dev/null -w '%{http_code} %{redirect_url}' --resolve "$h:443:127.0.0.1" "https://$h/" 2>/dev/null) || true
-            u=${r#* }
+            r=$(curl --noproxy '*' -sk -m 8 -o /dev/null -w '%{http_code} %{redirect_url}' --resolve "$h:443:127.0.0.1" "https://$h/" 2>/dev/null) || true
+            u=${r#* }; r=${r:-000}
             if [[ "$r" =~ ^30 ]] && [ "${u%/}" = "https://$h" ]; then fail "https://$h leitet auf sich selbst um (Schleife) – Reparatur: $0 install --yes && $0 certs"
+            elif [[ "$r" =~ ^000 ]]; then fail "https://$h antwortet nicht (kein HTTPS-Block für diesen Namen?) – Reparatur: $0 install --yes && $0 certs"
             else ok "https://$h → ${r%% *}"; fi
         done
     fi
     if want web && [ "$RUN_MODE" = systemd ] && [ -f /opt/ghostnode/live/live.js ]; then
         local lc; lc=$(curl -s -m 8 "http://127.0.0.1:$LIVE_PORT/live/health" 2>/dev/null) || true
         [[ "$lc" == *'"ghostnode-live"'* ]] && ok "Live-Dienst antwortet (Fernsteuerung in Echtzeit)" || fail "Live-Dienst antwortet nicht (journalctl -u ghostnode-live)"
-        lc=$(curl -s -m 8 -H "Host: $DOMAIN" "http://127.0.0.1/live/health" 2>/dev/null) || true
+        if [ -s /etc/letsencrypt/live/ghostnode/fullchain.pem ]; then lc=$(curl --noproxy '*' -sk -m 8 --resolve "$DOMAIN:443:127.0.0.1" "https://$DOMAIN/live/health" 2>/dev/null) || true
+        else lc=$(curl --noproxy '*' -s -m 8 -H "Host: $DOMAIN" "http://127.0.0.1/live/health" 2>/dev/null) || true; fi
         [[ "$lc" == *'"ghostnode-live"'* ]] && ok "nginx leitet /live/ weiter" || fail "nginx leitet /live/ nicht weiter"
     fi
     local PV; PV=$(php_ver 2>/dev/null || echo "?")
@@ -1251,7 +1305,7 @@ check_all() {
         if want web; then
             [ "$(port_owner "$BACKEND_PORT")" = apache2 ] && ok "Apache nur intern auf 127.0.0.1:$BACKEND_PORT" || fail "Apache lauscht nicht auf 127.0.0.1:$BACKEND_PORT"
             c=$(curl -s -o /dev/null -w '%{http_code}' --max-time 8 -H "Host: $DOMAIN" "http://127.0.0.1/status.php?api=1" 2>/dev/null) || true; c=${c:-000}
-            [ "$c" = 200 ] && ok "Webseite über nginx erreichbar" || fail "Webseite über nginx → $c"
+            [[ "$c" =~ ^(200|301|308)$ ]] && ok "Webseite über nginx erreichbar ($c$([[ "$c" =~ ^30 ]] && echo ' → HTTPS'))" || fail "Webseite über nginx → $c"
         fi
     fi
     if [ "$PTERO" = 1 ]; then
@@ -1429,9 +1483,8 @@ cmd_migrate() {
         die "Umzug abgebrochen, alter Stand wiederhergestellt. Export prüfen (vollständig? richtige Datenbank?)."
     fi
     ok "$(mysql --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME'") Tabellen importiert"
-    if [ -n "$pre" ] && [ -f "$cfg" ]; then
-        sed -i -E "s/\"prefix\": *\"[A-Za-z0-9_]*\"/\"prefix\": \"$pre\"/" "$cfg"; ok "Tabellen-Präfix „$pre“ in data/config.php"
-    fi
+    if [ -f "$cfg" ] && ! grep -q '"driver": *"mysql"' "$cfg"; then cp -a "$cfg" "$cfg.sqlite-$ts"; fi
+    write_db_cfg "${pre:-gn_}"; ok "Webseite nutzt MariaDB („$DB_NAME“, Präfix „${pre:-gn_}“)"
     if [ -n "$MIG_FILES" ]; then
         step "Dateien übernehmen (data/, uploads/)"
         local x="$work/dateien" d u
