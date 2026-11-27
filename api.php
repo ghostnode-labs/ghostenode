@@ -158,6 +158,9 @@ const { items } = await r.json();</pre>
 <h2 id="client">🖥 Client-API · Verbinden</h2>
 <p>Läuft in <b>VRC Nexus für Windows</b> (ab 5.4.1). Einschalten unter <b>Einstellungen → Integrationen → Stream-Deck-Schnittstelle</b>; dort stehen auch Port (Standard siehe App) und <b>Zugangsschlüssel</b>. Erreichbar nur vom eigenen PC:</p>
 <pre>ws://127.0.0.1:&lt;Port&gt;/ws?token=&lt;Zugangsschlüssel&gt;</pre>
+<p><b>Ab 6.3: App-Schlüssel mit Rechten.</b> Unter <b>Werkzeuge → Stream Deck → App-Schlüssel</b> bekommt jede App einen eigenen Schlüssel (<code>nxa_…</code>) mit einer Stufe:
+<b>📖 nur lesen</b> (state, Ereignisse) · <b>💬 Chatbox &amp; Status</b> (+ chatbox, typing, status, rotator, preset, tts) · <b>🎚 Avatar &amp; OSC</b> (+ param, toggle, input, camera, avatar, avpreset) · <b>🔓 alles</b>.
+Die Antwort auf <code>auth</code> nennt die Stufe (<code>scope</code>); verbotene Aktionen antworten mit einem Fehler. Der Hauptschlüssel darf weiterhin alles.</p>
 <p>Jede Nachricht ist JSON. Anfragen haben eine <code>id</code>, die Antwort kommt mit derselben <code>id</code>: <code>{"id":1,"ok":true,"result":…}</code> oder <code>{"id":1,"ok":false,"error":"…"}</code>. Ereignisse haben keine <code>id</code>, sondern <code>event</code>.</p>
 <p>Schutz: nur <code>127.0.0.1</code>, Verbindungen aus Webseiten im Browser (mit <code>Origin</code>) werden abgewiesen, falscher Schlüssel beendet die Verbindung, höchstens 8 Verbindungen, 64 KB je Nachricht, 30 Befehle pro Sekunde. Im Privat-Modus werden Chatbox und Medien nicht gesendet.</p>
 
