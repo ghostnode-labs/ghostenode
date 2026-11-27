@@ -365,8 +365,10 @@ $rm_default = [
     'Föderation: mehrere Nexus-Server tauschen Profile und Clubs aus' => 'done',
     // 8.0.9
     'Notfall-Stopp auf allen Geräten gleichzeitig' => 'done',
+    // 8.0.10
+    'Automatische Pausen nach Zeit oder Puls' => 'done',
 ];
-$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0', '7.0.1', '7.1.0', '7.1.1', '7.2.0', '7.2.2', '7.3.0', '7.3.2', '8.0.0', '8.0.1', '8.0.2', '8.0.3', '8.0.4', '8.0.5', '8.0.9'];   // bei jedem Release ergänzen
+$released5 = ['5.0.0', '5.1.0', '5.1.1', '5.2.0', '5.2.1', '5.2.2', '5.2.3', '5.2.4', '5.2.5', '5.3.0', '5.4.0', '5.4.1', '5.5.0', '5.6.0', '6.0.0', '6.1.0', '6.2.0', '6.3.0', '6.3.1', '6.3.2', '6.4.0', '6.5.0', '6.7.0', '7.0.0', '7.0.1', '7.1.0', '7.1.1', '7.2.0', '7.2.2', '7.3.0', '7.3.2', '8.0.0', '8.0.1', '8.0.2', '8.0.3', '8.0.4', '8.0.5', '8.0.9', '8.0.10'];   // bei jedem Release ergänzen
 $ideas_done = ['Wallpaper Engine: Wallpaper je Welt oder Uhrzeit', 'Twitch/YouTube-Chat in die VRChat-Chatbox', 'Spotify/Musik-Steuerung aus dem VR-Overlay', 'Avatar-Galerie mit Tags und Suche', 'Gruppen-Statistiken für Moderatoren', 'Themes-Marktplatz für die Oberfläche', 'Steam Deck als zweiter Bildschirm'];
 
 // =====================================================================================================
