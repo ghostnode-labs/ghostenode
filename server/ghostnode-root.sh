@@ -28,6 +28,7 @@
 #    bash ghostnode-root.sh check              alles prüfen (Dienste, Seiten, PHP-Erweiterungen, Zertifikate)
 #    bash ghostnode-root.sh backup             Server-Backup jetzt (Datenbank, data/, Bot-Daten, Einstellungen)
 #    bash ghostnode-root.sh login …            Notfall-Zugang zur Webseite: liste | entsperren | passwort BENUTZER | 2fa-aus BENUTZER | aktivieren BENUTZER
+#    bash ghostnode-root.sh usedb              Webseite auf die MariaDB umschalten (zeigt vorher die Konten dort)
 #    bash ghostnode-root.sh olddb              alte MySQL (z. B. Plesk) übernehmen bzw. erneut holen (--force), Zugang ändern (--neu)
 #    bash ghostnode-root.sh crons              geplante Aufgaben (Webseite, Wächter, Backup, Auto-Update) mit letztem Ergebnis
 #    bash ghostnode-root.sh migrate …          Umzug von Plesk: MySQL-Datenbank + data/ + uploads/ (richtet die Webseite hier ein)
@@ -540,6 +541,29 @@ write_db_cfg() {   # write_db_cfg PRÄFIX – data/config.php auf die lokale Mar
     printf '<?php http_response_code(404); exit; ?>\n%s' "$j" > "$cfg"
     chown "$APP_USER:$APP_USER" "$cfg"; chmod 600 "$cfg"
 }
+mariadb_prefix() {   # Präfix der GhostNode-Tabellen in der MariaDB (z. B. gn_) – dort, wo roles, users und settings zusammen liegen
+    mysql --protocol=socket -uroot -N -e "SELECT LEFT(r.table_name, LENGTH(r.table_name) - 5) FROM information_schema.tables r
+        JOIN information_schema.tables u ON u.table_schema = r.table_schema AND u.table_name = CONCAT(LEFT(r.table_name, LENGTH(r.table_name) - 5), 'users')
+        JOIN information_schema.tables s ON s.table_schema = r.table_schema AND s.table_name = CONCAT(LEFT(r.table_name, LENGTH(r.table_name) - 5), 'settings')
+        WHERE r.table_schema = '$DB_NAME' AND r.table_name LIKE '%roles' ORDER BY LENGTH(r.table_name) LIMIT 1" 2>/dev/null || true
+}
+cmd_usedb() {   # Webseite auf die lokale MariaDB umschalten (z. B. nach Übernahme der alten MySQL)
+    step "Webseite auf MariaDB umschalten"
+    want web && [ "$DB_ENGINE" = mariadb ] || die "Nur mit Rolle „alles“ und MariaDB."
+    local pre n cfg="$WEB_DIR/data/config.php"
+    pre=$(mariadb_prefix)
+    n=$(mysql --protocol=socket -uroot -N -e "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='$DB_NAME'" 2>/dev/null || echo 0)
+    [ "${n:-0}" -gt 0 ] && [ -n "$pre$(mysql --protocol=socket -uroot -N -e "SHOW TABLES IN \`$DB_NAME\` LIKE 'users'" 2>/dev/null)" ] || die "In MariaDB „$DB_NAME“ liegt noch keine GhostNode-Datenbank – zuerst: $0 olddb"
+    ok "MariaDB „$DB_NAME“: $n Tabellen, Präfix „${pre:-–}“"
+    echo "  Konten dort:"; mysql --protocol=socket -uroot -N -e "SELECT CONCAT('    ', username, IF(last_login IS NULL, '', CONCAT('  (zuletzt ', last_login, ')'))) FROM \`$DB_NAME\`.\`${pre}users\` ORDER BY username" 2>/dev/null | head -20
+    if [ -f "$cfg" ] && grep -q '"driver": *"mysql"' "$cfg" && grep -q "\"prefix\": *\"$pre\"" "$cfg"; then ok "Webseite nutzt MariaDB bereits"; return 0; fi
+    if [ "$YES" != 1 ] && [ -t 0 ]; then read -r -p "  Webseite jetzt auf diese Daten umschalten? (SQLite-Stand wird gesichert) [j/N] " a; [[ "$a" =~ ^[jJyY] ]] || { warn "abgebrochen"; return 0; }; fi
+    [ -f "$cfg" ] && cp -a "$cfg" "$cfg.vor-umschalten-$(date +%Y%m%d-%H%M%S)"
+    write_db_cfg "$pre"
+    svc reload "php$(php_ver)-fpm" 2>/dev/null || true
+    ok "Webseite nutzt jetzt MariaDB (Präfix „$pre“) – alte Einstellung gesichert als data/config.php.vor-umschalten-…"
+    echo "  Anmelden mit deinem alten Konto (Passwort vergessen? $0 login passwort BENUTZER)"
+}
 sqlite_users() {   # Anzahl Benutzer in den SQLite-Dateien der Webseite (0 = leer/frisch)
     php -r '$n = 0; foreach (glob($argv[1] . "/data/{,db/}*.{sqlite,db}", GLOB_BRACE) ?: [] as $f) { try { $p = new PDO("sqlite:" . $f); $n += (int)$p->query("SELECT COUNT(*) FROM users")->fetchColumn(); } catch (Throwable $e) {} } echo $n;' "$WEB_DIR" 2>/dev/null || echo 0
 }
@@ -569,7 +593,7 @@ EOF
         # Wichtiges liegt oder die alte MySQL übernommen wurde – sonst würde die Seite die MariaDB nie benutzen
         local n; n=$(sqlite_users)
         if [ -f /var/lib/ghostnode/old-db-imported ] || [ "$n" = 0 ]; then
-            cp -a "$cfg" "$cfg.sqlite-$(date +%Y%m%d-%H%M%S)"; write_db_cfg gn_
+            cp -a "$cfg" "$cfg.sqlite-$(date +%Y%m%d-%H%M%S)"; local p2; p2=$(mariadb_prefix); write_db_cfg "${p2:-gn_}"
             ok "Webseite von SQLite auf MariaDB umgestellt$([ "$n" != 0 ] && echo " (SQLite hatte $n Benutzer – MariaDB mit der übernommenen alten MySQL ist maßgeblich)")"
         else
             warn "data/config.php nutzt SQLite mit $n Benutzer(n) – nicht überschrieben. Zu MariaDB umziehen: Admin → Datenbank (Zugang steht in $CRED)."
@@ -1571,9 +1595,10 @@ case "$CMD" in
         save_kv "$SECRETS" "${SECRET_VARS[@]}"
         want mail && setup_mail; want web && setup_web; want hr && setup_hr; want bot && setup_bot
         check_all || true ;;
-    check)  [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; check_all ;;
+    check)  [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; check_all || exit 1 ;;
     migrate) cmd_migrate ;;
     crons) cmd_crons ;;
+    usedb) [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; cmd_usedb ;;
     login)   # Notfall-Zugang zur Webseite über SSH (Sperre aufheben, Passwort, Zwei-Faktor)
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
         want web || die "Die Webseite läuft nicht auf diesem Server (Rolle „dienste“)."
@@ -1591,5 +1616,5 @@ case "$CMD" in
         [[ " ${ARGS[*]} " == *" --force "* ]] && rm -f /var/lib/ghostnode/old-db-imported
         setup_olddb; want cron && setup_cron ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
-    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons, olddb, login)" ;;
+    *) die "Unbekannter Befehl: $CMD (install, update, certs, secrets, check, backup, migrate, crons, olddb, login, usedb)" ;;
 esac
