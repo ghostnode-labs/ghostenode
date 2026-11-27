@@ -34,6 +34,7 @@ const PAGE_DEFAULTS = [
     'budget.php'           => ['Budget', '💶', 'Monatsbudget mit Diagrammen, Limits, Sparzielen, Abos & Bank-Sync', 'Finanzen', 'users'],
     'con.php'              => ['Con-Rechner', '🎪', 'Budget & Planung für Conventions', 'Finanzen', 'users'],
     'nexus.php'            => ['VRC Nexus', '🥽', 'VRChat-Zentrale: Freunde, Verlauf, Statistik, Welten, Avatare & Gruppen – Direkt-Zugriff per Zwischenablage', 'Community', 'users'],
+    'botdash.php'          => ['Bot-Dashboard', '🎛️', 'GhostNode-Discord-Bot einstellen (Begrüßung, Rollen, Level, AutoMod, Befehle) – Anmeldung mit deinem GhostNode-Konto', 'Community', 'users'],
     'discord.php'          => ['Discord-Zentrale', '🤖', 'Discord-Server über deinen Bot: Slash-Befehle, Rollen-Knöpfe, Umfragen, Automatik, Mitglieder & Moderation', 'Community', 'users'],
     'poster.php'           => ['VRChat-Poster', '🖼️', 'Feste Bild-Adressen für VRChat-Welten: Bild tauschen per Upload, Bildlink oder FTP – Rotation, Zeitplan, Rechte', 'Community', 'public'],
     'market.php'           => ['Plugin-Marktplatz', '🧩', 'Plugins für VRC Nexus finden, prüfen und installieren – oder eigene einreichen', 'Community', 'public'],
