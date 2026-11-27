@@ -72,6 +72,7 @@ bash /root/ghostenode/server/ghostnode-root.sh check
 
 - `https://ghostnode-labs.dev/admin.php`: anmelden wie bisher, die Benutzer kommen aus der alten Datenbank
 - Admin → **🖥 Server**: das Server-Dashboard mit Dienste-Status, Neustart-Knöpfen, Backup, Update, Zertifikat und Protokoll
+  - außerdem: SSH-Schlüssel verwalten, Passwort-Login abschalten, gesperrte IPs (fail2ban) freigeben, Firewall-Status, Protokolle je Dienst, System-Updates und Server-Neustart
 - Weil keine Dateien aus Plesk übernommen werden, im Admin **neu eintragen**:
   - „Mit Discord anmelden“ → Client-Secret (oder beim Installer als Discord-Client-ID/-Secret angeben)
   - VRC Nexus → Dienst-Konto neu verbinden

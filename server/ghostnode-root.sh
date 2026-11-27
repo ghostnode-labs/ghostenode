@@ -996,6 +996,7 @@ t0=$(date +%s); out=$("$@" 2>&1); rc=$?
 echo "$(date '+%F %T') $n rc=$rc $(( $(date +%s) - t0 ))s" >> "$L"
 [ "$rc" -ne 0 ] && printf '%s\n' "$out" | tail -5 | sed 's/^/    /' >> "$L"
 echo "$(date +%s) $rc" > "$S/cron-$n.status"
+[ -n "$GN_ECHO" ] && printf '%s\n' "$out"   # Aufträge aus dem Admin-Panel zeigen die Ausgabe an
 exit "$rc"
 EOF2
     chmod 755 /usr/local/sbin/ghostnode-run
@@ -1049,7 +1050,7 @@ ROOT_SCRIPT = "$(readlink -f "$0")"
 APP_GROUP = "$APP_USER"
 EOF2
     cat >> /usr/local/sbin/ghostnode-agent <<'EOF2'
-import json, os, re, time, shutil, subprocess, glob, fcntl, grp, socket
+import json, os, re, sys, time, shutil, subprocess, glob, fcntl, grp, socket
 S = '/var/lib/ghostnode'; REQ = S + '/requests'; RES = S + '/results'
 SERVICES = ['nginx', 'apache2', 'php-fpm', 'mariadb', 'ghostnode-live', 'ghostnode-bot', 'ghostnode-hr', 'coturn', 'mumble-server', 'vsftpd', 'cron', 'fail2ban']
 ACTIONS = {'backup': ([ '/usr/local/sbin/ghostnode-backup'], 900), 'update': (['bash', ROOT_SCRIPT, 'update', '--yes'], 1800),
@@ -1088,6 +1089,43 @@ def gitv(d):
     if rc: return None
     h, t, m = (o.strip().split('|', 2) + ['', ''])[:3]
     return {'hash': h, 'date': t, 'msg': m[:120]}
+AK = '/root/.ssh/authorized_keys'
+KEYRE = re.compile(r'^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com) [A-Za-z0-9+/=]{40,1000}( [\x20-\x7e]{0,100})?$')
+def keys():
+    out = []
+    try: lines = open(AK).read().splitlines()
+    except Exception: return out
+    for l in lines:
+        l = l.strip()
+        if not l or l.startswith('#'): continue
+        tmp = S + '/.k'; open(tmp, 'w').write(l + '\n'); rc, o = sh(['ssh-keygen', '-lf', tmp], 10); os.unlink(tmp)
+        p = o.split()
+        if rc == 0 and len(p) >= 2: out.append({'bits': p[0], 'fp': p[1], 'comment': ' '.join(p[2:-1])[:80], 'type': p[-1].strip('()')})
+    return out
+def sshd_opt(name):
+    rc, o = sh(['sshd', '-T'], 10)
+    for l in o.splitlines():
+        k, _, v = l.partition(' ')
+        if k == name: return v.strip()
+    return ''
+def ssh_info():
+    unit = 'ssh' if os.path.exists('/lib/systemd/system/ssh.service') else 'sshd'
+    info = {'active': active(unit) if exists(unit) else False, 'port': sshd_opt('port'), 'password': sshd_opt('passwordauthentication'),
+            'root': sshd_opt('permitrootlogin'), 'keys': keys(), 'logins': [], 'failed_24h': None}
+    rc, o = sh(['last', '-n', '12', '-i', '-w'], 10)
+    info['logins'] = [l for l in o.splitlines() if l.strip() and not l.startswith('wtmp')][:12]
+    rc, o = sh(['journalctl', '-u', unit, '--since', '-24h', '--no-pager', '-o', 'cat'], 20)
+    if rc == 0: info['failed_24h'] = len([l for l in o.splitlines() if 'Failed password' in l or 'Invalid user' in l])
+    return info
+def f2b_info():
+    rc, o = sh(['fail2ban-client', 'status'], 10)
+    if rc: return []
+    m = re.search(r'Jail list:\s*(.*)', o); out = []
+    for j in [x.strip() for x in (m.group(1) if m else '').split(',') if x.strip()]:
+        rc, o2 = sh(['fail2ban-client', 'status', j], 10)
+        b = re.search(r'Banned IP list:\s*(.*)', o2); t = re.search(r'Total banned:\s*(\d+)', o2)
+        out.append({'jail': j, 'banned': (b.group(1).split() if b else [])[:50], 'total': int(t.group(1)) if t else 0})
+    return out
 def status():
     c = conf(); now = int(time.time())
     mem = {}
@@ -1129,9 +1167,64 @@ def status():
     try: out['cronlog'] = open('/var/log/ghostnode-cron.log').read().splitlines()[-25:]
     except Exception: out['cronlog'] = []
     out['reboot_required'] = os.path.exists('/var/run/reboot-required')
+    try: out['ssh'] = ssh_info()
+    except Exception as e: out['ssh'] = {'error': str(e)[:200]}
+    try: out['f2b'] = f2b_info()
+    except Exception: out['f2b'] = []
+    rc, o = sh(['ufw', 'status'], 10)
+    out['ufw'] = o.strip().splitlines()[:40] if rc == 0 else []
     tmp = S + '/status.json.tmp'
     with open(tmp, 'w') as f: json.dump(out, f)
     os.chmod(tmp, 0o640); os.chown(tmp, 0, grp.getgrnam(APP_GROUP).gr_gid); os.replace(tmp, S + '/status.json')
+IPRE = re.compile(r'^([0-9]{1,3}\.){3}[0-9]{1,3}$|^[0-9a-fA-F:]{2,39}$')
+def special_action(act, arg):
+    # nur diese Aufträge mit Argument – jedes Argument wird streng geprüft, nie an eine Shell gegeben
+    if act == 'ssh_key_add':
+        if not KEYRE.match(arg.strip()): return (['sh', '-c', 'echo "Ungültiger SSH-Schlüssel (erwartet: ssh-ed25519 AAAA… Name)"; exit 1'], 10)
+        return ([sys.executable, __file__, '--key-add', arg.strip()], 30)
+    if act == 'ssh_key_del':
+        if not re.fullmatch(r'SHA256:[A-Za-z0-9+/]{43}', arg): return (['sh', '-c', 'echo "Ungültiger Fingerabdruck"; exit 1'], 10)
+        return ([sys.executable, __file__, '--key-del', arg], 30)
+    if act == 'ssh_password':
+        if arg not in ('on', 'off'): return (['sh', '-c', 'exit 1'], 5)
+        return ([sys.executable, __file__, '--ssh-password', arg], 60)
+    if act == 'f2b_unban':
+        if not IPRE.match(arg): return (['sh', '-c', 'echo "Ungültige IP"; exit 1'], 5)
+        return (['fail2ban-client', 'unban', arg], 30)
+    if act == 'logs':
+        if arg not in SERVICES: return (['sh', '-c', 'echo "Unbekannter Dienst"; exit 1'], 5)
+        if arg == 'apache2': return (['tail', '-n', '80', '/var/log/apache2/ghostnode-error.log'], 20)
+        return (['journalctl', '-u', unit(arg), '-n', '80', '--no-pager', '-o', 'short-iso'], 30)
+    if act == 'apt_upgrade': return (['sh', '-c', 'export DEBIAN_FRONTEND=noninteractive; apt-get update -q && apt-get -y -q -o Dpkg::Options::=--force-confold upgrade'], 1800)
+    if act == 'reboot': return (['shutdown', '-r', '+1', 'GhostNode: Neustart aus dem Admin-Panel'], 30)
+    return None
+def key_add(line):
+    os.makedirs('/root/.ssh', mode=0o700, exist_ok=True)
+    have = open(AK).read() if os.path.exists(AK) else ''
+    if line.split()[1] in have: print('Schlüssel ist schon eingetragen.'); return 0
+    with open(AK, 'a') as f: f.write(('' if not have or have.endswith('\n') else '\n') + line + '\n')
+    os.chmod(AK, 0o600); print('✔ SSH-Schlüssel hinzugefügt.'); return 0
+def key_del(fp):
+    if not os.path.exists(AK): print('Keine Schlüssel.'); return 1
+    keep, gone = [], 0
+    for l in open(AK).read().splitlines():
+        tmp = S + '/.k'; open(tmp, 'w').write(l + '\n'); rc, o = sh(['ssh-keygen', '-lf', tmp], 10); os.unlink(tmp)
+        if rc == 0 and fp in o.split(): gone += 1; continue
+        keep.append(l)
+    if not gone: print('Schlüssel nicht gefunden.'); return 1
+    if not [l for l in keep if KEYRE.match(l.strip())] and sshd_opt('passwordauthentication') == 'no':
+        print('Abgelehnt: das ist der letzte Schlüssel und Passwort-Login ist aus – du würdest dich aussperren.'); return 1
+    open(AK, 'w').write('\n'.join(keep) + ('\n' if keep else '')); print('✔ SSH-Schlüssel entfernt.'); return 0
+def ssh_password(mode):
+    if mode == 'off' and not [k for k in keys()]:
+        print('Abgelehnt: erst einen SSH-Schlüssel hinterlegen – sonst sperrst du dich aus.'); return 1
+    d = '/etc/ssh/sshd_config.d'; os.makedirs(d, exist_ok=True); f = d + '/10-ghostnode.conf'
+    open(f, 'w').write('# erzeugt von ghostnode-agent (Admin → Server)\nPasswordAuthentication %s\nKbdInteractiveAuthentication no\n' % ('yes' if mode == 'on' else 'no'))
+    rc, o = sh(['sshd', '-t'], 10)
+    if rc: os.unlink(f); print('sshd-Konfiguration fehlerhaft – zurückgenommen: ' + o[-300:]); return 1
+    unitn = 'ssh' if os.path.exists('/lib/systemd/system/ssh.service') else 'sshd'
+    sh(['systemctl', 'reload', unitn], 20)
+    print('✔ Passwort-Login per SSH ist jetzt ' + ('an' if mode == 'on' else 'aus (nur noch mit Schlüssel)') + '.'); return 0
 def requests():
     lock = open('/run/ghostnode-agent.lock', 'w')
     try: fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -1141,22 +1234,27 @@ def requests():
         try: r = json.load(open(f))
         except Exception: os.unlink(f); continue
         os.unlink(f)
-        rid, act, by = str(r.get('id', '')), str(r.get('action', '')), str(r.get('by', ''))[:60]
+        rid, act, by, arg = str(r.get('id', '')), str(r.get('action', '')), str(r.get('by', ''))[:60], str(r.get('arg', ''))[:1200]
         if not re.fullmatch(r'[0-9a-f]{16}', rid) or time.time() - float(r.get('ts', 0)) > 900: continue
-        if act.startswith('restart:') and act[8:] in SERVICES: cmd, t = ['systemctl', 'restart', unit(act[8:])] if os.path.isdir('/run/systemd/system') else ['service', unit(act[8:]), 'restart'], 120
+        special = special_action(act, arg)
+        if special is not None: cmd, t = special
+        elif act.startswith('restart:') and act[8:] in SERVICES: cmd, t = ['systemctl', 'restart', unit(act[8:])] if os.path.isdir('/run/systemd/system') else ['service', unit(act[8:]), 'restart'], 120
         elif act in ACTIONS: cmd, t = ACTIONS[act]
         else: continue
         res = RES + '/' + rid + '.json'
         def write(d):
             with open(res + '.tmp', 'w') as fh: json.dump(d, fh)
             os.chmod(res + '.tmp', 0o640); os.chown(res + '.tmp', 0, gid); os.replace(res + '.tmp', res)
-        d = {'id': rid, 'action': act, 'by': by, 'started': int(time.time()), 'state': 'läuft'}; write(d)
-        rc, o = sh(['/usr/local/sbin/ghostnode-run', 'web-' + act.replace(':', '-')] + cmd, t)
+        d = {'id': rid, 'action': act, 'arg': ' '.join(arg.split()[2:])[:100] if act == 'ssh_key_add' else arg[:100], 'by': by, 'started': int(time.time()), 'state': 'läuft'}; write(d)
+        rc, o = sh(['env', 'GN_ECHO=1', '/usr/local/sbin/ghostnode-run', 'web-' + act.replace(':', '-')] + cmd, t)
         o = re.sub(r'\x1b\[[0-9;]*m', '', o)
         d.update({'finished': int(time.time()), 'rc': rc, 'state': 'ok' if rc == 0 else 'Fehler', 'out': '\n'.join(o.splitlines()[-60:])}); write(d)
     for f in glob.glob(RES + '/*.json'):
         if time.time() - os.path.getmtime(f) > 7 * 86400: os.unlink(f)
 if __name__ == '__main__':
+    if len(sys.argv) == 3 and sys.argv[1] == '--key-add': sys.exit(key_add(sys.argv[2]))
+    if len(sys.argv) == 3 and sys.argv[1] == '--key-del': sys.exit(key_del(sys.argv[2]))
+    if len(sys.argv) == 3 and sys.argv[1] == '--ssh-password': sys.exit(ssh_password(sys.argv[2]))
     try: status()
     except Exception as e: open(S + '/agent-error.log', 'a').write(time.strftime('%F %T ') + repr(e) + '\n')
     requests()

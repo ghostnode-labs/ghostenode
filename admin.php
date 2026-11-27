@@ -1237,10 +1237,22 @@ function bytes(int $b): string {
 <!-- ======================= Admin-Zentrale ======================= -->
 <div class="shell">
     <aside class="side">
-        <a href="index.php" class="brand"><span class="brand-logo">◈</span><span>GHOST<b>NODE</b><small>Admin Core</small></span></a>
+        <a href="index.php" class="brand ad-brand"><span>GHOST<b>NODE</b></span><small>Admin</small></a>
         <nav>
-            <?php foreach ($TABS as $k => [$ic, $label]): ?>
+            <?php
+            // 8.2.1: Seitenleiste in Gruppen wie im Nexus-Client
+            $groups = ['Start' => ['overview'], 'Benutzer & Zugang' => ['users', 'roles', 'invites', 'sessions', 'security'],
+                'Inhalte' => ['pages', 'posters'], 'VRC Nexus' => array_keys(NX_ADMIN_TABS),
+                'Server & System' => ['server', 'system', 'database', 'audit'], 'Konto' => ['account']];
+            $placed = array_merge(...array_values($groups));
+            $groups['Weitere'] = array_values(array_diff(array_keys($TABS), $placed));
+            foreach ($groups as $gname => $keys):
+                $keys = array_values(array_filter($keys, fn($k) => isset($TABS[$k])));
+                if (!$keys) continue; ?>
+                <div class="ad-sec"><?php echo e($gname); ?></div>
+                <?php foreach ($keys as $k): [$ic, $label] = $TABS[$k]; ?>
                 <a href="admin.php?tab=<?php echo $k; ?>" class="<?php echo $tab === $k ? 'active' : ''; ?><?php echo ($must_pw || $must_2fa) && $k !== 'account' ? ' locked' : ''; ?>"><span class="ni"><?php echo $ic; ?></span><?php echo e($label); ?></a>
+                <?php endforeach; ?>
             <?php endforeach; ?>
         </nav>
         <div class="side-foot">
