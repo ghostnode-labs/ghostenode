@@ -32,6 +32,7 @@
 #        --db=/root/plesk-dump.zip            Datenbank-Export aus Plesk (.sql, .sql.gz oder .zip)
 #        --from=HOST --src-db=NAME --src-user=BENUTZER [--src-port=3306]   … oder direkt von der Plesk-MySQL (Passwort wird gefragt)
 #        --files=/root/httpdocs.zip           Zip/Tar des Plesk-Webordners (oder nur data/ + uploads/)
+#        nur --files (+ --from=PLESK-IP): Datenbank-Zugang wird aus data/config.php im Archiv gelesen und direkt geholt
 #  Optionen:
 #    --yes            keine Rückfragen (Werte aus /etc/ghostnode/setup.conf bzw. Umgebung)
 #    --no-tls         keine Zertifikate holen (Test / DNS noch nicht umgestellt)
@@ -1124,8 +1125,36 @@ mig_sql() {   # Datenbank-Export → $1 (reines SQL)
         *) cp "$MIG_DB" "$out" ;;
     esac
 }
+mig_src_from_archive() {   # Plesk-Datenbankzugang aus data/config.php im Datei-Archiv lesen → MIG_SRC_*
+    local j
+    j=$(python3 - "$MIG_FILES" <<'PY'
+import sys, zipfile, tarfile, json, re
+src = sys.argv[1]; raw = None
+def pick(names): return next((n for n in names if re.search(r'(^|/)data/config\.php$', n)), None)
+if zipfile.is_zipfile(src):
+    z = zipfile.ZipFile(src); n = pick(z.namelist()); raw = z.read(n) if n else None
+else:
+    t = tarfile.open(src); n = pick(t.getnames()); raw = t.extractfile(n).read() if n else None
+if not raw: sys.exit(2)
+txt = raw.decode('utf-8', 'replace'); i = txt.find('{')
+c = json.loads(txt[i:]) if i >= 0 else {}
+if c.get('driver') != 'mysql': sys.exit(3)
+print('\t'.join(str(c.get(k, '')) for k in ('host', 'port', 'name', 'user', 'pass', 'prefix')))
+PY
+) || case $? in 2) die "Kein Datenbank-Export angegeben und keine data/config.php im Archiv – bitte --db=/root/export.zip angeben." ;;
+                 3) die "Die Webseite auf Plesk nutzt SQLite, nicht MySQL – dann reicht --files (die Datenbank liegt in data/)." ;;
+                 *) die "data/config.php im Archiv nicht lesbar." ;; esac
+    local h p
+    IFS=$'\t' read -r h p MIG_SRC_DB MIG_SRC_USER MIG_SRC_PASS _ <<< "$j"
+    MIG_SRC_PORT=${p:-3306}; export MIG_SRC_PASS
+    if [ -z "$MIG_FROM" ]; then
+        case "$h" in localhost|127.0.0.1|::1|"") die "Die Plesk-Datenbank lauscht dort nur lokal ($h). Adresse des Plesk-Servers mit --from=… angeben (z. B. --from=45.81.232.18) und in Plesk beim Datenbank-Benutzer Fernzugriff erlauben." ;; esac
+        MIG_FROM=$h
+    fi
+    ok "Plesk-Datenbank aus data/config.php: $MIG_SRC_USER@$MIG_FROM:$MIG_SRC_PORT/$MIG_SRC_DB"
+}
 cmd_migrate() {
-    [ -n "$MIG_DB$MIG_FROM" ] || die "Datenbank angeben: --db=/root/export.zip oder --from=HOST --src-db=NAME --src-user=BENUTZER (Hilfe: --help)"
+    [ -n "$MIG_DB$MIG_FROM$MIG_FILES" ] || die "Angeben: --db=/root/export.zip und/oder --files=/root/dateien.zip (Hilfe: --help)"
     [ -z "$MIG_FILES" ] || [ -f "$MIG_FILES" ] || die "Datei-Archiv nicht gefunden: $MIG_FILES"
     if [ ! -f "$CONF" ] || [ "${ROLE:-}" != alles ] || [ ! -d "$WEB_DIR/.git" ]; then
         step "Webseite auf diesem Server einrichten (Rolle „alles“)"
@@ -1140,6 +1169,7 @@ cmd_migrate() {
     local ts work sql cfg="$WEB_DIR/data/config.php" pre safety
     ts=$(date +%Y%m%d-%H%M%S); work=$(mktemp -d /root/ghostnode-umzug.XXXXXX); chmod 700 "$work"; sql="$work/datenbank.sql"
     step "Datenbank-Export lesen"
+    if [ -z "$MIG_DB" ] && { [ -z "$MIG_SRC_DB" ] || [ -z "$MIG_SRC_USER" ]; }; then mig_src_from_archive; fi   # direkt von der Plesk-MySQL
     mig_sql "$sql"
     [ -s "$sql" ] || die "Der Export ist leer."
     pre=$(grep -m1 -oE 'CREATE TABLE (IF NOT EXISTS )?`[A-Za-z0-9_]*users`' "$sql" | sed -E 's/.*`([A-Za-z0-9_]*)users`/\1/' || true)
