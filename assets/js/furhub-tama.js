@@ -235,7 +235,11 @@
     }
 
     // ---------- Aktionen ----------
-    const COOLDOWN = { pat: 1200, hug: 3000, awoo: 2000 };
+    const COOLDOWN = { pat: 1200, hug: 3000, awoo: 2000, trick: 2500, walk: 8000 };
+    /** Tricks: werden mit der Stufe freigeschaltet – [Symbol, Name, ab Stufe, Animation] */
+    const TRICKS = { sit: ['🐾', 'Sitz', 1, 'sit'], paw: ['🤝', 'Pfötchen', 2, 'paw'], spin: ['🌀', 'Drehen', 3, 'spin'], beg: ['🙏', 'Männchen', 4, 'beg'],
+        roll: ['🔄', 'Rolle', 5, 'roll'], wave: ['👋', 'Winken', 6, 'wave'], dance: ['💃', 'Tanzen', 8, 'dance'], shake: ['💦', 'Schütteln', 10, 'shake'] };
+    let lastFood = 'kibble';
     function cd(k) { const now = Date.now(); if (now - (cool[k] || 0) < (COOLDOWN[k] || 0)) return false; cool[k] = now; return true; }
     function act(a, arg) {
         decay();
@@ -258,7 +262,7 @@
                 if (now - lastBoop > 250) { s.love = clamp(s.love + 1, 0, 100); s.fun = clamp(s.fun + 1, 0, 100); }
                 lastBoop = now; s.stat.boops++;
                 combo++; clearTimeout(comboT); comboT = setTimeout(() => { combo = 0; }, 1300);
-                const pet = $('#tamaPet'); pet.classList.remove('squish'); void pet.offsetWidth; pet.classList.add('squish');
+                const pet = $('#tamaPet'); pet.classList.remove('squish'); void pet.offsetWidth; pet.classList.add('squish'); setTimeout(() => pet.classList.remove('squish'), 400);
                 flash('surprised', 550); play('boop'); react('boop'); boopCount();
                 const r = pet.getBoundingClientRect();
                 floatText(r.left + scrollX + r.width / 2 - 20 + (Math.random() * 40 - 20), r.top + scrollY + r.height * 0.45, combo > 4 ? combo + '×' : rnd(['boop!', '*boop*', 'eep!', '>w<', 'mlem']));
@@ -270,12 +274,12 @@
             case 'pat':
                 if (!cd('pat')) return;
                 s.love = clamp(s.love + 3 * (s.pers === 'cuddly' ? 1.5 : 1), 0, 100); s.fun = clamp(s.fun + 4, 0, 100); s.stat.pats++; xp(1);
-                flash('happy', 1100); react('pat'); play('purr'); say(rnd(['*lehnt sich in die Hand*', '💖', 'Mehr! Mehr!', '*wedelt*', '*schnurrt*']));
+                flash('happy', 1100); react('pat'); play('purr'); anim('cuddle'); say(rnd(['*lehnt sich in die Hand*', '💖', 'Mehr! Mehr!', '*wedelt*', '*schnurrt*']));
                 break;
             case 'hug': {
                 if (!cd('hug')) return;
                 s.love = clamp(s.love + 5, 0, 100); s.fun = clamp(s.fun + 3, 0, 100); s.stat.hugs++; xp(2);
-                flash('happy', 1500); react('hug'); say(rnd(['*kuschel*', 'Beste Umarmung! 🫂', '*drückt zurück*']));
+                flash('happy', 1500); react('hug'); anim('cuddle'); say(rnd(['*kuschel*', 'Beste Umarmung! 🫂', '*drückt zurück*']));
                 const r = $('#tamaPet').getBoundingClientRect();
                 for (let i = 0; i < 5; i++) setTimeout(() => floatText(r.left + scrollX + Math.random() * r.width, r.top + scrollY + r.height * 0.4, rnd(['💖', '💕', '💗']), 'heart'), i * 120);
                 break;
@@ -283,13 +287,14 @@
             case 'awoo':
                 if (!cd('awoo')) return;
                 play('awoo'); react('awoo'); unlock('awoo'); s.fun = clamp(s.fun + 2, 0, 100);
-                say('🐺 AWOOO! … ' + nm + ' heult mit!'); setTimeout(() => play(s.voice), 1500); flash('happy', 2000);
+                say('🐺 AWOOO! … ' + nm + ' heult mit!'); anim('beg'); setTimeout(() => play(s.voice), 1500); flash('happy', 2000);
                 break;
             case 'feed': {
                 const k = arg || 'kibble', f = FOODS[k]; if (!f) return;
                 if (k !== 'kibble' && !(s.inv[k] > 0)) { say('Davon hast du nichts mehr – im Shop gibt’s Nachschub. 🛒'); return; }
                 if (s.food > 95) { say(nm + ' ist pappsatt. *bäuerchen*'); flash('angry', 600); return; }
                 if (k !== 'kibble') s.inv[k]--;
+                lastFood = k; anim('eat');
                 Object.entries(f[3]).forEach(([st2, v]) => { s[st2] = clamp(s[st2] + v, 0, 100); });
                 s.stat.feeds++; xp(5); unlock('pet');
                 if (k === s.fav) { s.fun = clamp(s.fun + 10, 0, 100); s.love = clamp(s.love + 3, 0, 100); say(f[0] + ' Lieblingsessen!! 😍', true); }
@@ -302,7 +307,7 @@
                 s.fun = clamp(s.fun + 20 * (s.pers === 'playful' ? 1.3 : 1) * (has('ball') ? 1.25 : 1), 0, 100);
                 s.energy = clamp(s.energy - 12, 0, 100); s.food = clamp(s.food - 6, 0, 100); s.clean = clamp(s.clean - 6, 0, 100); xp(8);
                 say(rnd([(has('ball') ? '⚽' : '🎾') + ' *jagt den Ball*', 'Nochmal! Nochmal!', '*zoomies* 💨', 'Hab ihn!']));
-                $('#tamaPet').classList.add('bounce'); setTimeout(() => $('#tamaPet').classList.remove('bounce'), 700);
+                anim('play'); s.stat.games = (s.stat.games || 0) + 1;
                 flash('happy', 1200); play(s.voice);
                 break;
             case 'wash': {
@@ -311,6 +316,7 @@
                 s.clean = clamp(s.clean + (soap ? 55 : 35), 0, 100);
                 if (s.pers === 'cheeky' && !soap) { s.fun = clamp(s.fun - 5, 0, 100); flash('angry', 900); say('Baden?! Pfff. 😤 (aber sauber)'); }
                 else { flash('happy', 900); say(soap ? '🧼 Schaumparty! So flauschig!' : '🛁 Plitsch, platsch – sauber!'); }
+                anim('wash'); setTimeout(() => anim('shake'), 1550);
                 xp(3);
                 const r = $('#tamaPet').getBoundingClientRect();
                 for (let i = 0; i < 6; i++) setTimeout(() => floatText(r.left + scrollX + Math.random() * r.width, r.top + scrollY + r.height * 0.6, '🫧', 'heart'), i * 100);
@@ -324,9 +330,37 @@
             case 'medicine':
                 if (!s.sick && s.health > 80) { say(nm + ' ist kerngesund. 💪'); return; }
                 if (!(s.inv.medicine > 0)) { say('Keine Medizin mehr – im Shop kaufen! 💊'); return; }
-                s.inv.medicine--; s.sick = false; s.health = clamp(s.health + 45, 0, 100);
+                s.inv.medicine--; s.sick = false; s.health = clamp(s.health + 45, 0, 100); anim('medicine');
                 flash('sad', 700); setTimeout(() => flash('happy', 1200), 750); say('💊 Bäh! … Aber schon viel besser.', true);
                 break;
+            case 'walk': {   // Gassi gehen: läuft über den Bildschirm und findet manchmal etwas
+                if (s.energy < 15) { say(nm + ' ist zu müde für einen Spaziergang. 😴'); flash('sleepy', 900); return; }
+                if (!cd('walk')) { say('Gerade erst draußen gewesen – gleich wieder! 🐾'); return; }
+                s.energy = clamp(s.energy - 10, 0, 100); s.fun = clamp(s.fun + 15, 0, 100); s.clean = clamp(s.clean - 6, 0, 100); s.food = clamp(s.food - 5, 0, 100);
+                s.stat.walks = (s.stat.walks || 0) + 1; xp(6); anim('walk'); say(rnd(['🚶 Gassi! *schwanzwedel*', '🐾 Ab nach draußen!', '*schnüffelt an jedem Grashalm*']));
+                setTimeout(() => {
+                    const r = Math.random();
+                    if (r < 0.45) { const n = 1 + Math.floor(Math.random() * 4); s.coins += n; say('🪙 ' + nm + ' hat ' + n + ' Münze' + (n > 1 ? 'n' : '') + ' gefunden!', true); }
+                    else if (r < 0.7) { const k = rnd(['treat', 'berries', 'carrot']); s.inv[k] = (s.inv[k] || 0) + 1; say(FOODS[k][0] + ' Unterwegs gefunden: ' + FOODS[k][1] + '!', true); }
+                    else if (r < 0.8) { s.love = clamp(s.love + 6, 0, 100); say('🐕 ' + nm + ' hat einen Freund getroffen! 💕', true); }
+                    else say(rnd(['🌼 Schöner Spaziergang!', '🍂 *raschel raschel*', '🦋 Einen Schmetterling gejagt!']), true);
+                    flash('happy', 1200); touch(); renderAll();
+                }, ANIMS.walk);
+                break;
+            }
+            case 'trick': {
+                const t = TRICKS[arg]; if (!t) return;
+                if (s.level < t[2]) { say(t[0] + ' „' + t[1] + '“ lernt ' + nm + ' ab Stufe ' + t[2] + '. 🎓'); return; }
+                if (s.energy < 8) { say(nm + ' ist zu müde für Tricks. 😴'); return; }
+                if (!cd('trick')) return;
+                s.fun = clamp(s.fun + 6, 0, 100); s.love = clamp(s.love + 2, 0, 100); s.energy = clamp(s.energy - 3, 0, 100);
+                s.stat.tricks = (s.stat.tricks || 0) + 1; xp(3);
+                anim(t[3]); flash('happy', 1300); play(s.voice);
+                if (Math.random() < 0.3) { s.coins++; const r = $('#tamaPet').getBoundingClientRect(); floatText(r.left + scrollX + r.width / 2, r.top + scrollY + 10, '+1 🪙'); }
+                say(t[0] + ' ' + rnd(['Brav! „' + t[1] + '“!', '„' + t[1] + '“ – perfekt! 🌟', '*macht ' + t[1] + '* Leckerli? 👀']));
+                closeMenu();
+                break;
+            }
             case 'sleep':
                 s.sleeping = !s.sleeping;
                 say(s.sleeping ? nm + ' kuschelt sich ein. Gute Nacht! 🌙' : nm + ' wurde geweckt. *gähn*', true);
@@ -336,21 +370,118 @@
     }
 
     // ---------- Anzeige ----------
+    // ---------- Animiertes Tier: ganzer Körper (Schwanz je Tierart, Flügel, Beine) + Bewegungen ----------
+    const TAIL = { fox: 'fluffy', wolf: 'fluffy', husky: 'fluffy', novabeast: 'glow', redpanda: 'ringed', raccoon: 'ringed', skunk: 'plume', cat: 'thin', tiger: 'striped', mouse: 'mouse',
+        bat: 'thin', lion: 'tuft', hyena: 'tuft', dog: 'thick', otter: 'thick', rabbit: 'pom', deer: 'pom', dragon: 'dragon', bird: 'feather', protogen: 'cable' };
+    const WINGS = { dragon: 'leather', bat: 'leather', bird: 'feather' };
+    let svgSeq = 0;
+    function tailSvg(kind, c, id) {
+        const fluffy = 'M0,8 C20,6 46,-12 52,-44 C56,-64 44,-80 32,-84 C38,-62 26,-36 0,-12 Z';
+        switch (kind) {
+            case 'fluffy': return `<path d="${fluffy}" fill="${c.main}"/><path d="M52,-44 C56,-64 44,-80 32,-84 C38,-70 42,-58 47,-46 Z" fill="${c.tip}"/>`;
+            case 'glow': return `<path d="${fluffy}" fill="${c.main}"/><path d="M52,-44 C56,-64 44,-80 32,-84 C38,-70 42,-58 47,-46 Z" fill="${c.inner}" class="tp-glow"/>`;
+            case 'ringed': return `<clipPath id="${id}"><path d="${fluffy}"/></clipPath><path d="${fluffy}" fill="${c.main}"/><g clip-path="url(#${id})" fill="${c.second}">${[[6, -2], [22, -14], [36, -32], [46, -54], [42, -74]].map(([x, y], i) => `<rect x="${x - 30}" y="${y - 4}" width="60" height="8" transform="rotate(${-20 - i * 14} ${x} ${y})"/>`).join('')}</g>`;
+            case 'plume': return `<path d="M0,8 C30,10 70,-10 66,-56 C62,-92 30,-100 14,-90 C40,-76 30,-34 0,-12 Z" fill="${c.second}"/><path d="M8,-2 C34,-6 54,-30 50,-60 C46,-80 34,-86 26,-86 C40,-68 32,-30 6,-10 Z" fill="${c.belly}"/>`;
+            case 'thin': return `<path d="M0,0 C24,2 36,-28 24,-58 C20,-68 26,-74 32,-72" stroke="${c.main}" stroke-width="7" fill="none" stroke-linecap="round"/>`;
+            case 'striped': return `<path d="M0,0 C24,2 36,-28 24,-58" stroke="${c.main}" stroke-width="9" fill="none" stroke-linecap="round"/><path d="M0,0 C24,2 36,-28 24,-58" stroke="${c.second}" stroke-width="9" fill="none" stroke-dasharray="5 9" stroke-linecap="butt"/>`;
+            case 'mouse': return `<path d="M0,0 C30,8 46,-14 36,-40 C30,-56 44,-64 52,-58" stroke="${c.inner}" stroke-width="4" fill="none" stroke-linecap="round"/>`;
+            case 'tuft': return `<path d="M0,0 C22,2 34,-26 26,-50" stroke="${c.main}" stroke-width="7" fill="none" stroke-linecap="round"/><path d="M26,-50 c-10,-4 -8,-18 2,-20 c8,4 10,14 -2,20 Z" fill="${c.second}"/>`;
+            case 'thick': return `<path d="M0,-8 C24,-10 44,-22 50,-46 C52,-40 50,-30 44,-20 C34,-2 18,8 0,10 Z" fill="${c.main}"/>`;
+            case 'pom': return `<circle cx="4" cy="-4" r="13" fill="${c.belly}"/><circle cx="1" cy="-7" r="6" fill="#fff" opacity=".35"/>`;
+            case 'dragon': return `<path d="M0,-10 C30,-12 60,-6 76,-30 L82,-44 L70,-36 C56,-18 30,0 0,12 Z" fill="${c.main}"/>${[[18, -10], [34, -12], [50, -14], [64, -22]].map(([x, y]) => `<path d="M${x - 5},${y + 1} L${x},${y - 9} L${x + 5},${y + 1} Z" fill="${c.second}"/>`).join('')}<path d="M82,-44 L90,-30 L74,-34 Z" fill="${c.second}"/>`;
+            case 'feather': return [[-34, c.main], [-56, c.second], [-78, c.main]].map(([a, f]) => `<ellipse cx="22" cy="0" rx="26" ry="7" fill="${f}" transform="rotate(${a} 0 0)"/>`).join('');
+            case 'cable': return `<path d="M0,0 C26,6 40,-18 30,-44" stroke="${c.second}" stroke-width="6" fill="none" stroke-linecap="round" stroke-dasharray="7 3"/><circle cx="30" cy="-46" r="5" fill="${c.inner}" class="tp-glow"/>`;
+            default: return '';
+        }
+    }
+    function wingSvg(kind, c) {
+        if (kind === 'feather') return `<g class="tp-wing w-l"><path d="M70,52 C40,30 18,40 8,56 C26,54 40,62 66,70 Z" fill="${c.second}"/></g><g class="tp-wing w-r"><path d="M130,52 C160,30 182,40 192,56 C174,54 160,62 134,70 Z" fill="${c.second}"/></g>`;
+        return `<g class="tp-wing w-l"><path d="M72,50 L22,22 L30,44 L12,46 L28,60 L14,70 L66,72 Z" fill="${c.second}" opacity=".95"/></g><g class="tp-wing w-r"><path d="M128,50 L178,22 L170,44 L188,46 L172,60 L186,70 L134,72 Z" fill="${c.second}" opacity=".95"/></g>`;
+    }
+    /** Körper unter dem Kopf: viewBox 200×130 */
+    function bodySvg(look) {
+        const sp = look.species || 'fox', id = 'tpc' + (++svgSeq);
+        const c = { main: look.main || '#e8742a', second: look.second || '#3a2a22', belly: look.muzzleC || '#fff4e6', inner: look.inner || '#ffd2b0' };
+        c.tip = ['fox', 'husky'].includes(sp) ? c.belly : c.second;
+        const leg = (x, cls, f) => `<g class="tp-leg ${cls}"><rect x="${x}" y="82" width="20" height="34" rx="9" fill="${f}"/><ellipse cx="${x + 10}" cy="116" rx="13" ry="7" fill="${f}"/><ellipse cx="${x + 10}" cy="118" rx="6" ry="2.6" fill="${c.inner}" opacity=".7"/></g>`;
+        return `<svg class="tp-body" viewBox="0 0 200 130" aria-hidden="true">`
+            + (WINGS[sp] ? wingSvg(WINGS[sp], c) : '')
+            + `<g class="tp-tail" transform="translate(146 74)"><g class="tp-tail-in">${tailSvg(TAIL[sp] || 'fluffy', c, id)}</g></g>`
+            + leg(52, 'leg-b leg-back', c.second) + leg(128, 'leg-a leg-back', c.second)
+            + `<g class="tp-torso"><ellipse cx="100" cy="72" rx="54" ry="40" fill="${c.main}"/><ellipse cx="100" cy="82" rx="31" ry="26" fill="${c.belly}"/>`
+            + (look.marking === 'spots' ? `<g fill="${c.second}" opacity=".45"><circle cx="66" cy="60" r="5"/><circle cx="132" cy="64" r="6"/><circle cx="74" cy="84" r="4"/><circle cx="128" cy="86" r="4"/></g>` : '')
+            + (look.marking === 'stripes' ? `<g stroke="${c.second}" stroke-width="5" stroke-linecap="round" opacity=".6"><path d="M58,56 l10,8"/><path d="M54,72 l12,4"/><path d="M142,56 l-10,8"/><path d="M146,72 l-12,4"/></g>` : '')
+            + `</g>` + leg(74, 'leg-a leg-front', c.main) + leg(106, 'leg-b leg-front', c.main) + `</svg>`;
+    }
+
+    /* Bewegungen: kurze Animationen als Klasse an #tamaPet (Körper wird dabei nicht neu gezeichnet) */
+    const ANIMS = { walk: 6000, hop: 900, eat: 1500, play: 1600, wash: 1500, spin: 1100, sit: 2400, roll: 1300, paw: 1600, dance: 3200, beg: 2200, sniff: 1800, yawn: 1600, scratch: 1400, shake: 1200, cuddle: 1600, medicine: 1200, wave: 1600 };
+    let animT = null, idleT = null, curAnim = '';
+    function anim(name, ms) {
+        const el = $('#tamaPet'); if (!el || !ANIMS[name]) return;
+        el.classList.remove(...[...el.classList].filter(k => k.startsWith('an-')));
+        void el.offsetWidth;
+        el.classList.add('an-' + name); curAnim = name;
+        clearTimeout(animT);
+        animT = setTimeout(() => { el.classList.remove('an-' + name); curAnim = ''; }, ms || ANIMS[name]);
+        if (name === 'eat' || name === 'play' || name === 'wash' || name === 'medicine') {   // Requisite einblenden
+            const prop = { eat: (FOODS[lastFood] || FOODS.kibble)[0], play: has('ball') ? '⚽' : '🎾', wash: '🫧', medicine: '💊' }[name];
+            const p = document.createElement('span'); p.className = 'tp-prop prop-' + name; p.textContent = prop;
+            const w = el.querySelector('.tp-move'); if (w) { w.appendChild(p); setTimeout(() => p.remove(), ANIMS[name]); }
+        }
+    }
+    /** von selbst: herumlaufen, schnüffeln, sitzen … – passend zur Laune */
+    function idleLoop() {
+        clearTimeout(idleT);
+        idleT = setTimeout(() => {
+            idleLoop();
+            if (!s || s.dead || s.sleeping || stage() === 'egg' || curAnim || document.hidden) return;
+            const p = $('[data-panel="tama"]'); if (!p || p.hidden) return;
+            const e = emotion();
+            const pool = e === 'happy' ? ['walk', 'walk', 'hop', 'spin', 'sniff', 'wave', 'dance', 'sit'] : e === 'sad' ? ['sit', 'sniff', 'yawn'] : e === 'sleepy' ? ['yawn', 'sit', 'yawn'] : e === 'angry' ? ['shake', 'scratch', 'walk'] : ['walk', 'sniff', 'sit', 'scratch', 'yawn', 'hop', 'spin'];
+            if (s.clean < 40) pool.push('scratch', 'shake');
+            anim(rnd(pool));
+        }, 6000 + Math.random() * 8000);
+    }
+    /** Dauerzustand: schlafen, krank, traurig, fröhlich … (als Klasse, steuert Haltung und Schwanzwedeln) */
+    function moodClass() {
+        if (s.dead) return 'st-dead';
+        if (s.sleeping) return 'st-sleep';
+        if (s.sick) return 'st-sick';
+        const e = emotion();
+        return 'st-' + (e === 'surprised' ? 'happy' : e);
+    }
+    let petSig = '', headKey = '';
     function renderPet() {
         const el = $('#tamaPet'); if (!el || !s) return;
+        const keep = [...el.classList].filter(k => k.startsWith('an-') || k === 'squish' || k === 'bounce');
         const st = stage();
         if (s.dead) {
+            petSig = ''; el.className = 'tama-pet st-dead';
             el.innerHTML = `<div class="tama-grave"><div class="grave-pet">${face(lookOf(), 'sleepy')}</div><div class="grave-stone">🪦</div><b>${esc(s.name)}</b><small>${ageText()} · Stufe ${s.level}</small></div>`;
             return;
         }
         if (st === 'egg') {
+            petSig = ''; el.className = 'tama-pet st-egg';
             const left = Math.max(0, s.hatchAt - Date.now());
             el.innerHTML = `<div class="tama-egg ${left < 20000 ? 'crack' : ''}">🥚</div><div class="egg-time">schlüpft in ${Math.ceil(left / 1000)} s · Boops wärmen!</div>`;
             return;
         }
+        const L = lookOf(), emo = emotion();
+        const withBody = !(K.imgFor && K.imgFor(L, emo));   // eigene Bilder: nur der Kopf wie bisher
+        const head = withBody ? face(Object.assign({}, L, { bare: true }), emo) : face(L, emo);
         const hat = s.hat && HATS[s.hat] ? `<span class="tp-hat hat-${s.hat}">${HATS[s.hat][0]}</span>` : '';
-        const sc = STAGES[st][1] * (s.fx.big ? 1.25 : s.fx.tiny ? 0.55 : 1);
-        el.innerHTML = `<div class="tp-wrap ${s.fx.sparkle ? 'sparkle' : ''}" style="--sc:${sc}">${face(lookOf(), emotion())}${hat}</div>`;
+        const sc = (withBody ? 0.68 + 0.32 * STAGES[st][1] : STAGES[st][1]) * (s.fx.big ? 1.25 : s.fx.tiny ? 0.55 : 1);
+        el.className = 'tama-pet ' + moodClass() + (withBody ? ' has-body' : '') + ' stage-' + st + (keep.length ? ' ' + keep.join(' ') : '');
+        const sig = JSON.stringify([L.species, L.main, L.second, L.muzzleC, L.inner, L.marking, withBody, s.hat, sc, !!s.fx.sparkle, !!s.sleeping]);
+        const hk = emo + '|' + JSON.stringify(L);
+        if (sig !== petSig || !el.querySelector('.tp-head')) {
+            petSig = sig; headKey = hk;
+            el.innerHTML = `<div class="tp-move"><div class="tp-wrap ${s.fx.sparkle ? 'sparkle' : ''}" style="--sc:${sc}">${withBody ? bodySvg(L) : ''}<div class="tp-head">${head}${hat}</div>`
+                + (s.sleeping ? '<span class="tp-zzz">z</span><span class="tp-zzz z2">z</span><span class="tp-zzz z3">Z</span>' : '') + `</div><div class="tp-shadow"></div></div>`;
+        } else if (hk !== headKey) {
+            headKey = hk; const h = el.querySelector('.tp-head'); if (h) h.innerHTML = head + hat;
+        }
     }
     function renderScreen() {
         const scr = $('#tamaScreen'); if (!scr) return;
@@ -396,6 +527,12 @@
             + Object.entries(FOODS).map(([k, [ic, l]]) => { const n = k === 'kibble' ? '∞' : (s.inv[k] || 0); return `<button type="button" data-food="${k}" ${n === 0 ? 'disabled' : ''}><span>${ic}</span>${l}<small>${n}×${k === s.fav ? ' ❤' : ''}</small></button>`; }).join('') + '</div>';
         m.hidden = false;
     }
+    function openTricks() {
+        const m = $('#tamaMenu');
+        m.innerHTML = '<div class="tm-head">🎓 Tricks <small class="muted">(mehr ab höherer Stufe)</small> <button type="button" data-close-menu>×</button></div><div class="tm-items">'
+            + Object.entries(TRICKS).map(([k, [ic, l, lv]]) => `<button type="button" data-trick="${k}" ${s.level < lv ? 'disabled title="ab Stufe ' + lv + '"' : ''}><span>${s.level < lv ? '🔒' : ic}</span>${l}<small>${s.level < lv ? 'Stufe ' + lv : 'kann ' + esc(s.name)}</small></button>`).join('') + '</div>';
+        m.hidden = false;
+    }
     function closeMenu() { const m = $('#tamaMenu'); if (m) m.hidden = true; }
 
     // ---------- Seitenreiter ----------
@@ -423,7 +560,7 @@
                 <label>Stimme <span class="inl"><select id="tcVoice">${Object.entries(VOICES).map(([k, l]) => `<option value="${k}" ${s.voice === k ? 'selected' : ''}>${l}</option>`).join('')}</select><button type="button" class="fh-btn sm" id="tcVoiceTest">▶</button></span></label></div>
                 <div class="sub">Aussehen</div>
                 <div class="mode-switch four"><button type="button" data-src="avatar" class="${s.lookSrc === 'avatar' ? 'on' : ''}">🧑‍🎨 Mein Avatar</button><button type="button" data-src="sona" class="${s.lookSrc === 'sona' ? 'on' : ''}">🎨 Fursona-Bilder</button><button type="button" data-src="random" class="${s.lookSrc === 'random' ? 'on' : ''}">🎲 Zufallstier</button><button type="button" data-src="custom" class="${s.lookSrc === 'custom' ? 'on' : ''}">🖼️ Eigene Bilder</button></div>
-                ${s.lookSrc === 'random' ? '<button type="button" class="fh-btn sm" id="tcReroll">🎲 Neues Zufallstier</button>' : ''}
+                ${s.lookSrc === 'random' ? `<div class="f2"><label>Tierart <select id="tcSpecies">${Object.entries(K.SPECIES || {}).map(([k, v]) => `<option value="${k}" ${(s.randomLook.species || '') === k ? 'selected' : ''}>${esc(v[0])}</option>`).join('')}</select></label></div><button type="button" class="fh-btn sm" id="tcReroll">🎲 Neue Farben</button>` : ''}
                 ${s.lookSrc === 'sona' ? '<p class="muted small">Benutzt deine Fursona – mit deinen eigenen Bildern, falls du dort welche hochgeladen hast.</p>' : ''}
                 ${s.lookSrc === 'avatar' ? `<p class="muted small">${K.currentLook() ? 'Dein gezeichneter Avatar – mit allen 6 Emotionen, passend zur Laune.' : 'Du hast noch keinen Avatar – solange wird das Zufallstier gezeigt.'} <a href="#avatar" data-goto="avatar">Avatar bearbeiten →</a></p>` : ''}
                 <div class="emo-slots" id="tcSlots" ${s.lookSrc === 'custom' ? '' : 'hidden'}></div>
@@ -436,7 +573,8 @@
             $('#tcVoice').onchange = e => { s.voice = e.target.value; touch(); };
             $('#tcVoiceTest').onclick = () => sfx[s.voice] && sfx[s.voice]();
             $('#tcShell').oninput = e => { s.shell = e.target.value; touch(); renderScreen(); };
-            if ($('#tcReroll')) $('#tcReroll').onclick = () => { s.randomLook = randomLook(); touch(); renderPet(); };
+            if ($('#tcReroll')) $('#tcReroll').onclick = () => { s.randomLook = randomLook(s.randomLook.species || undefined); touch(); renderPet(); anim('hop'); };
+            if ($('#tcSpecies')) $('#tcSpecies').onchange = e => { s.randomLook = randomLook(e.target.value); touch(); renderPet(); anim('spin'); say('✨ ' + s.name + ' ist jetzt ' + (K.SPECIES[e.target.value] || [''])[0] + '!'); };
         } else if (tab === 'settings') {
             const c = s.cfg, H_ = hc();
             const chk = (k, l, hint, locked) => `<label class="set-row"><input type="checkbox" data-cfg="${k}" ${c[k] ? 'checked' : ''}${lock(locked)}><span><b>${l}</b><small>${hint}</small></span></label>`;
@@ -463,7 +601,7 @@
             renderSlots(box);
         } else {
             box.innerHTML = '<ul class="pet-log">' + (s.log.map(([t, txt]) => `<li><small>${new Date(t).toLocaleString('de-DE', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small> ${esc(txt)}</li>`).join('') || '<li class="muted">Noch nichts erlebt.</li>') + '</ul>'
-                + `<p class="muted small">Gestreichelt ${s.stat.pats}× · umarmt ${s.stat.hugs}× · gefüttert ${s.stat.feeds}× · ${s.stat.cleaned} Häufchen weggeräumt · ${s.stat.games} Spiele · Spielstand seit ${new Date(s.created || s.born).toLocaleDateString('de-DE')}</p>`;
+                + `<p class="muted small">Gestreichelt ${s.stat.pats}× · umarmt ${s.stat.hugs}× · gefüttert ${s.stat.feeds}× · ${s.stat.cleaned} Häufchen weggeräumt · ${s.stat.games} Spiele · ${s.stat.walks || 0} Spaziergänge · ${s.stat.tricks || 0} Tricks · Spielstand seit ${new Date(s.created || s.born).toLocaleDateString('de-DE')}</p>`;
         }
     }
 
@@ -623,11 +761,13 @@
         panel.addEventListener('click', e => {
             const t = e.target;
             if (slotAction(e)) return;
-            const q = t.closest('[data-t]'); if (q && q.tagName === 'BUTTON') { if (q.dataset.t === 'feed' && !s.dead && !(s.cfg.vacation && !hc()) && stage() !== 'egg') { $('#tamaMenu').hidden ? openMenu() : closeMenu(); } else act(q.dataset.t); return; }
+            const q = t.closest('[data-t]'); if (q && q.tagName === 'BUTTON' && q.dataset.t === 'tricks') { if (!s.dead && stage() !== 'egg') { $('#tamaMenu').hidden ? openTricks() : closeMenu(); } return; }
+            if (q && q.tagName === 'BUTTON') { if (q.dataset.t === 'feed' && !s.dead && !(s.cfg.vacation && !hc()) && stage() !== 'egg') { $('#tamaMenu').hidden ? openMenu() : closeMenu(); } else act(q.dataset.t); return; }
             if (t.closest('#tamaPet')) { act('boop'); return; }
             const hw = t.closest('[data-hw]'); if (hw) { act({ a: 'boop', b: 'feed', c: 'play' }[hw.dataset.hw]); return; }
             const p = t.closest('[data-poop]'); if (p) { s.poops = Math.max(0, s.poops - 1); s.stat.cleaned++; xp(2); if (s.stat.cleaned >= 10) unlock('tidy'); say('🧹 *wisch*'); touch(); renderAll(); return; }
             const fd = t.closest('[data-food]'); if (fd) { act('feed', fd.dataset.food); return; }
+            const tr = t.closest('[data-trick]'); if (tr) { act('trick', tr.dataset.trick); return; }
             if (t.closest('[data-close-menu]')) { closeMenu(); return; }
             const tt = t.closest('[data-tt]'); if (tt) { tab = tt.dataset.tt; renderTab(); return; }
             const b = t.closest('[data-buy]'); if (b) { const [kind, k] = b.dataset.buy.split(':'); buy(kind, k); return; }
@@ -654,12 +794,13 @@
         // Tastenkürzel
         document.addEventListener('keydown', e => {
             if (panel.hidden || e.ctrlKey || e.metaKey || e.altKey || e.target.closest('input, textarea, select')) return;
-            const map = { f: 'feed', p: 'play', w: 'wash', c: 'clean', m: 'medicine', l: 'sleep', h: 'hug', k: 'pat' };
+            const map = { f: 'feed', p: 'play', w: 'wash', c: 'clean', m: 'medicine', l: 'sleep', h: 'hug', k: 'pat', g: 'walk', t: 'tricks' };
             const a = map[e.key.toLowerCase()];
             if (!a) return;
+            if (a === 'tricks') { if (!s.dead && stage() !== 'egg') { $('#tamaMenu').hidden ? openTricks() : closeMenu(); } return; }
             if (a === 'feed') { $('#tamaMenu').hidden ? openMenu() : closeMenu(); } else act(a);
         });
-        renderAll(); K.renderMine(); K.renderTop();
+        renderAll(); K.renderMine(); K.renderTop(); idleLoop();
         if (!$('#tamaSay').textContent) say(s.dead ? '🌈 …' : stage() === 'egg' ? 'Ein Ei! Boop es, damit es schneller schlüpft. 🥚' : s.sick ? s.name + ' fühlt sich nicht gut … 🤒' : s.poops ? 'Da liegt was … 💩' : s.food < 25 ? s.name + ' hat Hunger!' : 'Hallo! ' + rnd(['🐾', '💖', '✨']));
     }
 

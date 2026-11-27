@@ -142,10 +142,12 @@
         const o = [];
         o.push(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" class="fh-sona">`);
         o.push(`<defs><clipPath id="${id}h"><ellipse cx="100" cy="112" rx="64" ry="58"/></clipPath><radialGradient id="${id}g" cx="50%" cy="35%" r="70%"><stop offset="0" stop-color="${shade(L.bg, 12)}"/><stop offset="1" stop-color="${L.bg}"/></radialGradient></defs>`);
-        o.push(`<rect width="200" height="200" rx="28" fill="url(#${id}g)"/>`);
-        // Körper
-        o.push(M(L.gender === 'male' ? 'M 22 200 Q 34 154 100 152 Q 166 154 178 200 Z' : L.gender === 'female' ? 'M 46 200 Q 54 160 100 158 Q 146 160 154 200 Z' : 'M 34 200 Q 44 158 100 156 Q 156 158 166 200 Z', L.main));
-        o.push(`<ellipse cx="100" cy="190" rx="28" ry="22" fill="${L.muzzleC}"/>`);
+        if (!L.bare) {   // bare: nur der Kopf (Tamagotchi mit eigenem Körper) – ohne Hintergrundplatte und Schultern
+            o.push(`<rect width="200" height="200" rx="28" fill="url(#${id}g)"/>`);
+            // Körper
+            o.push(M(L.gender === 'male' ? 'M 22 200 Q 34 154 100 152 Q 166 154 178 200 Z' : L.gender === 'female' ? 'M 46 200 Q 54 160 100 158 Q 146 160 154 200 Z' : 'M 34 200 Q 44 158 100 156 Q 156 158 166 200 Z', L.main));
+            o.push(`<ellipse cx="100" cy="190" rx="28" ry="22" fill="${L.muzzleC}"/>`);
+        }
         // Mähne / Flossen hinter dem Kopf
         if (L.extra === 'mane') {
             let pts = []; for (let i = 0; i < 32; i++) { const a = i / 32 * Math.PI * 2, r = i % 2 ? 76 : 90; pts.push((100 + Math.cos(a) * r).toFixed(1) + ',' + (110 + Math.sin(a) * r * 0.92).toFixed(1)); }
