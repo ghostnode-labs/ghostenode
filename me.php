@@ -107,6 +107,7 @@ code{background:rgba(255,255,255,.06);padding:1px 6px}
 <div class="me-row"><label>Über mich</label><textarea name="bio" rows="4" maxlength="600" style="flex:1"><?php echo e($d['bio'] ?? ''); ?></textarea></div>
 <div class="me-row"><label>Links (https, max. 4)</label><input type="text" name="links" value="<?php echo e(implode(' ', (array)($d['links'] ?? []))); ?>" placeholder="https://… https://…"></div>
 <div class="me-row"><label><input type="checkbox" name="show_role" value="1"<?php echo !empty($d['show_role']) ? ' checked' : ''; ?>> Rolle anzeigen</label></div>
+<div class="me-row"><label><input type="checkbox" name="federate" value="1"<?php echo !empty($d['federate']) ? ' checked' : ''; ?>> 🛰 Auch auf Partner-Servern zeigen (Föderation – nur Name, Text und Link)</label></div>
 <button class="btn">💾 Speichern</button>
 <?php if ($p['public'] && $p['slug']): ?> <a class="btn" href="u.php?n=<?php echo e(urlencode($p['slug'])); ?>" target="_blank">👁 Ansehen</a><?php endif; ?>
 <p class="muted">Gezeigt werden nur Anzeigename, „Mitglied seit“, dein Text, Links und – wenn du willst – deine Rolle. Keine E-Mail, kein VRChat-Konto.</p></form>

@@ -156,7 +156,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'db_config' => 'database.manage', 'db_test' => 'database.manage', 'db_transfer' => 'database.manage', 'db_switch' => 'database.manage',
         'db_check' => 'database.manage', 'db_dump' => 'database.manage',
         'reg_save' => 'system.manage',
-        'tasks_save' => 'system.manage', 'domains_save' => 'system.manage', 'task_run' => 'system.manage', 'tasks_newkey' => 'system.manage', 'backup_delete' => 'backup.download', 'backup_now' => 'backup.download',
+        'tasks_save' => 'system.manage', 'domains_save' => 'system.manage', 'fed_save' => 'system.manage', 'task_run' => 'system.manage', 'tasks_newkey' => 'system.manage', 'backup_delete' => 'backup.download', 'backup_now' => 'backup.download',
         // Nexus (VRC Nexus: Konten, Warnliste, Community, Chat)
         'nx_service' => 'admin.access', 'nx_ban' => 'admin.access', 'nx_unban' => 'admin.access', 'nx_age_revoke' => 'nexus.age', 'nx_age_grant' => 'nexus.age', 'nx_cadm' => 'nexus.community', 'nx_lic' => 'admin.access', 'nx_cron' => 'admin.access',
         'nx_warn_settings' => 'admin.access', 'nx_warn_update' => 'admin.access', 'nx_warn_delete' => 'admin.access', 'nx_warn_clear' => 'admin.access', 'nx_warn_appeal' => 'admin.access',
@@ -682,6 +682,17 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 if (!$res[$tid]['ok']) throw new InvalidArgumentException(TASKS[$tid][1] . ': ' . $res[$tid]['text']);
                 $msg = TASKS[$tid][0] . ' ' . TASKS[$tid][1] . ': ' . $res[$tid]['text'] . ' (' . $res[$tid]['seconds'] . ' s)';
                 break;
+            // ---------- 8.1: Föderation (nur Inhaber) ----------
+            case 'fed_save': {
+                if (empty($me['role_is_system'])) throw new InvalidArgumentException('Nur der Inhaber darf die Föderation ändern.');
+                require_once __DIR__ . '/inc/modules/federation.php';
+                $do = (string)($_POST['do'] ?? '');
+                if ($do === 'toggle') { set_setting('fed_on', fed_on() ? '0' : '1'); if (fed_on()) fed_keypair(); $msg = fed_on() ? 'Föderation eingeschaltet.' : 'Föderation ausgeschaltet.'; audit($msg); }
+                elseif ($do === 'add') { $pp = fed_peer_add((string)($_POST['url'] ?? '')); try { $n = fed_pull($pp['url']); $msg = 'Partner „' . $pp['name'] . '“ eingetragen, ' . $n . ' Einträge übernommen.'; } catch (Throwable $e) { $msg = 'Partner eingetragen, erster Abgleich fehlgeschlagen: ' . $e->getMessage(); } }
+                elseif ($do === 'remove') { fed_peer_remove((string)($_POST['url'] ?? '')); $msg = 'Partner entfernt.'; }
+                elseif ($do === 'pull') { try { $msg = 'Abgeglichen: ' . fed_pull((string)($_POST['url'] ?? '')) . ' Einträge.'; } catch (RuntimeException $e) { throw new InvalidArgumentException($e->getMessage()); } }
+                break;
+            }
             // ---------- 8.1: Domains & Weiterleitungen (nur Inhaber – falsche Einträge könnten die Seite unerreichbar machen) ----------
             case 'domains_save': {
                 if (empty($me['role_is_system'])) throw new InvalidArgumentException('Nur der Inhaber darf Domains ändern.');
@@ -1916,6 +1927,22 @@ function bytes(int $b): string {
                     <button class="btn btn-sm btn-danger" onclick="if (!confirm('Neuen Schlüssel erzeugen? Die alte Adresse funktioniert dann nicht mehr.')) return false; this.form.elements.action.value='tasks_newkey';">↻ Neuer Schlüssel</button>
                 </details>
             </form>
+            <?php if (!empty($me['role_is_system'])): require_once __DIR__ . '/inc/modules/federation.php'; $fpeers = fed_peers(); $fon = fed_on(); ?>
+            <div class="panel" id="federation">
+                <div class="panel-title"><span>// 🛰 Föderation</span><span class="muted small"><?php echo $fon ? 'an' : 'aus'; ?> · <?php echo count($fpeers); ?> Partner · <a href="fed.php">Übersicht</a></span></div>
+                <p class="muted small">Tauscht öffentliche, gelistete Clubs (nie 18+) und Profile mit „Föderation erlaubt“ mit befreundeten GhostNode-Servern. Alles signiert (Ed25519); der Schlüssel eines Partners wird beim Eintragen angeheftet. Abgleich über die Aufgabe „Föderation“.</p>
+                <form method="POST" style="display:inline"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="fed_save"><input type="hidden" name="do" value="toggle"><button class="btn btn-sm <?php echo $fon ? 'btn-danger' : 'btn-gold'; ?>"><?php echo $fon ? 'Ausschalten' : 'Einschalten'; ?></button></form>
+                <?php if ($fon): ?><small class="muted">Eigener Schlüssel: <code style="user-select:all"><?php echo e(fed_pubkey_b64()); ?></code></small><?php endif; ?>
+                <?php foreach ($fpeers as $fp): ?>
+                    <div class="stor"><span><?php echo $fp['ok'] ? '🟢' : '🔴'; ?> <b><?php echo e($fp['name']); ?></b> <small class="muted"><?php echo e($fp['url']); ?></small></span>
+                        <span class="small muted"><?php echo (int)$fp['count']; ?> Einträge<?php echo $fp['last'] ? ' · ' . e(date('d.m. H:i', (int)$fp['last'])) : ''; ?><?php echo $fp['msg'] ? ' · ' . e($fp['msg']) : ''; ?></span>
+                        <span class="tools"><form method="POST"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="fed_save"><input type="hidden" name="do" value="pull"><input type="hidden" name="url" value="<?php echo e($fp['url']); ?>"><button class="btn btn-sm" title="Jetzt abgleichen">↻</button></form>
+                        <form method="POST" onsubmit="return confirm('Partner entfernen?');"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="fed_save"><input type="hidden" name="do" value="remove"><input type="hidden" name="url" value="<?php echo e($fp['url']); ?>"><button class="btn btn-sm btn-danger">×</button></form></span></div>
+                <?php endforeach; ?>
+                <?php if ($fon): ?><form method="POST" style="display:flex;gap:6px;margin-top:10px"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="fed_save"><input type="hidden" name="do" value="add">
+                    <input type="url" name="url" placeholder="https://partner.example" aria-label="Adresse des Partner-Servers" required style="flex:1"><button class="btn btn-sm btn-gold">➕ Partner</button></form><?php endif; ?>
+            </div>
+            <?php endif; ?>
             <?php if (!empty($me['role_is_system'])): require_once __DIR__ . '/inc/modules/domains.php'; $dc = dom_cfg(); ?>
             <form method="POST" class="panel" id="domains"><input type="hidden" name="tab" value="system"><input type="hidden" name="action" value="domains_save">
                 <div class="panel-title"><span>// 🌐 Domains &amp; Weiterleitungen</span><span class="muted small"><?php echo count($dc['domains']); ?> Domains · <?php echo count($dc['redirects']); ?> Kurz-Links</span></div>

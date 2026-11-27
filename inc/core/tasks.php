@@ -22,6 +22,7 @@ const TASKS = [
     'posters'   => ['🖼️', 'VRChat-Poster', 'Bilder aus den FTP-Eingangsordnern übernehmen und „live“ Bildlinks neu laden.', 15, true],
     'webhooks'  => ['🪝', 'Webhooks der Mitglieder', 'Neue VRC-Nexus-Versionen und bald beginnende Termine an die Webhooks aus „Mein Bereich“ schicken.', 15, true],
     'status'    => ['🩺', 'Status-Seite', 'Website, Datenbank, HypeRate-Weiterleitung und Discord-Bot prüfen (status.php), Störungen an den Status-Webhook melden.', 15, true],
+    'federation' => ['🛰', 'Föderation', 'Öffentliche Clubs und Profile der Partner-Server abgleichen (Admin → System → Föderation).', 60, true],
     'vrcstats'  => ['🌍', 'VRChat-Spielerzahl', 'Spieler online bei VRChat messen (öffentlich, ohne Anmeldung) – für die Kurve im Nexus.', 15, true],
 ];
 const TASK_INTERVALS = [15 => '15 min', 30 => '30 min', 60 => '1 Std.', 180 => '3 Std.', 360 => '6 Std.', 720 => '12 Std.', 1440 => 'täglich', 10080 => 'wöchentlich'];
@@ -75,6 +76,9 @@ function task_run(string $id): string {
         case 'nexusage':
             require_once APP_ROOT . '/inc/modules/nexusacct.php';
             return nx_cron(20) . ' abgelaufene Freigaben aufgeräumt';
+        case 'federation':
+            require_once APP_ROOT . '/inc/modules/federation.php';
+            return fed_task();
         case 'status':
             require_once APP_ROOT . '/inc/modules/status.php';
             return st_task();

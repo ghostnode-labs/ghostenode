@@ -111,6 +111,7 @@ function me_profile_save(int $uid, array $in): array {
     foreach (preg_split('/\s+/', (string)($in['links'] ?? '')) as $l) if (preg_match('#^https://[^\s<>"]{4,200}$#', $l) && count($links) < 4) $links[] = $l;
     $d['links'] = $links;
     $d['show_role'] = !empty($in['show_role']);
+    $d['federate'] = $public && !empty($in['federate']);   // 8.1: auch auf Partner-Servern zeigen (Föderation)
     me_put($uid, $d, $public ? $slug : ($slug !== '' && preg_match('/^[a-z0-9][a-z0-9_-]{2,23}$/', $slug) ? $slug : ''), $public);
     return me_get($uid);
 }
