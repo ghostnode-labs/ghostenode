@@ -84,7 +84,7 @@ $example = json_encode(['format' => 1, 'id' => 'mein-theme', 'name' => 'Mein The
 <body>
 <?php auth_corner(); ?>
 <div class="wrapper tm-wrap">
-    <div class="nav-bar"><a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a><div class="nav-tabs"><a href="nexus.php" class="nav-tab">🥽 VRC Nexus</a><a href="market.php" class="nav-tab">🧩 Plugins</a></div></div>
+    <div class="nav-bar"><a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a><div class="nav-tabs"><a href="nexus.php" class="nav-tab">🥽 VRC Nexus</a><a href="market.php" class="nav-tab">🧩 Plugins</a><a href="dev.php" class="nav-tab">🛠 Entwickler</a></div></div>
     <header>
         <div class="tm-eyebrow">VRC NEXUS // THEMES</div>
         <h1>🎨 Themes-Marktplatz</h1>

@@ -79,7 +79,7 @@ $ST = ['pending' => '⏳ wartet auf Prüfung', 'approved' => '✅ freigegeben', 
 <body>
 <?php auth_corner(); ?>
 <div class="wrapper mk-wrap">
-    <div class="nav-bar"><a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a><div class="nav-tabs"><a href="nexus.php" class="nav-tab">🥽 VRC Nexus</a><a href="themes.php" class="nav-tab">🎨 Themes</a></div></div>
+    <div class="nav-bar"><a href="dashboard.php" class="nav-back">&larr; ZUM DASHBOARD</a><div class="nav-tabs"><a href="nexus.php" class="nav-tab">🥽 VRC Nexus</a><a href="themes.php" class="nav-tab">🎨 Themes</a><a href="dev.php" class="nav-tab">🛠 Entwickler</a></div></div>
     <header class="mk-head">
         <div class="mk-eyebrow">VRC NEXUS // PLUGINS</div>
         <h1>🧩 Plugin-Marktplatz</h1>
