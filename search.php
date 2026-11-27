@@ -31,7 +31,7 @@ if (mb_strlen($q) >= 2) {
         if ($has($t, $h)) $hits[] = ['k' => '🗂 Seite', 'icon' => $i, 't' => $t, 's' => '', 'h' => $h];
     try {   // Changelog
         require_once __DIR__ . '/inc/modules/changelog.php';
-        foreach (cl_fetch() as $r) { $r['body'] = preg_replace('/\n\| File \|.*$/s', '', (string)$r['body']); if (!$has('Version ' . $r['v'], $r['body'])) continue; $hits[] = ['k' => '📜 Changelog', 'icon' => '📦', 't' => 'VRC Nexus ' . $r['v'], 's' => $snip(str_replace('🔞 ***', '', $r['body'])), 'h' => 'changelog.php#v' . $r['v']]; if (count($hits) > 60) break; }
+        foreach (cl_fetch() as $r) { $r['body'] = preg_replace('/\n\| File \|.*$/s', '', (string)$r['body']); if (!$has('Version ' . $r['v'] . ' ' . cl_ver($r['v']), $r['body'])) continue; $hits[] = ['k' => '📜 Changelog', 'icon' => '📦', 't' => 'VRC Nexus ' . $r['v'], 's' => $snip(str_replace('🔞 ***', '', $r['body'])), 'h' => 'changelog.php#v' . $r['v']]; if (count($hits) > 60) break; }
     } catch (Throwable $e) { /* GitHub nicht erreichbar */ }
     try {   // Termine (±1 Jahr)
         require_once __DIR__ . '/inc/modules/calendar.php';

@@ -3,6 +3,12 @@
 const CL_REPO = 'ghostnode-labs/vrc_nexus';
 const CL_TTL = 1800;
 
+/** Versions-Anzeige: bis 9.x unverändert, ab „10“ Datums-Version (intern 2026.1127.1 → angezeigt v20261127.1) */
+function cl_ver(string $v): string {
+    if (!preg_match('/^(20\d\d)\.([1-9]\d{2,3})\.([1-9]\d?)$/', $v, $m)) return $v;
+    return 'v' . $m[1] . sprintf('%02d%02d', intdiv((int)$m[2], 100), (int)$m[2] % 100) . '.' . $m[3];
+}
+function cl_ver_is_date(string $v): bool { return (bool)preg_match('/^20\d\d\.[1-9]\d{2,3}\.[1-9]\d?$/', $v); }
 function cl_fetch(): array {
     $dir = DATA_DIR . '/cache'; if (!is_dir($dir)) @mkdir($dir, 0755, true);
     $f = $dir . '/changelog_releases.json';

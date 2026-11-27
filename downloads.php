@@ -36,7 +36,7 @@ pre{background:rgba(255,255,255,.05);padding:10px;overflow:auto;font-size:.8rem}
 </style></head><body class="dl"><div class="dl-wrap">
 <h1 style="margin:0">⬇ Downloads</h1>
 <?php if (!$latest): ?><p class="muted">Gerade keine Versionen erreichbar (GitHub). Bitte später erneut versuchen.</p><?php else: ?>
-<p class="muted">Neueste Version: <b>VRC Nexus <?php echo e($latest['v']); ?></b> vom <?php echo e(date('d.m.Y', strtotime($latest['date']) ?: time())); ?> · <a href="changelog.php">Was ist neu?</a> · <a href="<?php echo e($latest['url']); ?>" target="_blank" rel="noopener">auf GitHub</a></p>
+<p class="muted">Neueste Version: <b>VRC Nexus <?php echo e(cl_ver($latest['v'])); ?></b> vom <?php echo e(date('d.m.Y', strtotime($latest['date']) ?: time())); ?> · <a href="changelog.php">Was ist neu?</a> · <a href="<?php echo e($latest['url']); ?>" target="_blank" rel="noopener">auf GitHub</a></p>
 <div class="dl-grid">
 <?php foreach ($KINDS as $k => [$ic, $label, $match, $help]):
     $a = null; foreach ($latest['assets'] as $x) if ($match($x['name']) && ($k !== 'android' || (!str_contains($x['name'], 'Watch') && !str_starts_with($x['name'], 'Nexus-Pet')))) { $a = $x; break; }
@@ -51,6 +51,6 @@ pre{background:rgba(255,255,255,.05);padding:10px;overflow:auto;font-size:.8rem}
 <p class="muted">So siehst du, dass die Datei unverändert ist – das Ergebnis muss genau der Zeichenkette oben entsprechen.</p>
 <pre>Windows (PowerShell):  Get-FileHash .\VRC-Nexus-<?php echo e($latest['v']); ?>-Setup.exe -Algorithm SHA256
 macOS / Linux:         shasum -a 256 VRC-Nexus-<?php echo e($latest['v']); ?>-android.apk</pre></details>
-<details><summary>🗂 Ältere Versionen</summary><p class="muted"><?php foreach (array_slice($rel, 1, 12) as $r) echo '<a href="' . e($r['url']) . '" target="_blank" rel="noopener">' . e($r['v']) . '</a> · '; ?> <a href="changelog.php">alle im Changelog</a></p></details>
+<details><summary>🗂 Ältere Versionen</summary><p class="muted"><?php foreach (array_slice($rel, 1, 12) as $r) echo '<a href="' . e($r['url']) . '" target="_blank" rel="noopener">' . e(cl_ver($r['v'])) . '</a> · '; ?> <a href="changelog.php">alle im Changelog</a></p></details>
 <?php endif; ?>
 </div></body></html>

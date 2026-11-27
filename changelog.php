@@ -89,9 +89,9 @@ body.cl{padding:0;display:block}
 <?php else: ?>
 <div class="cl-tools"><input type="search" id="clQ" placeholder="🔍 Suchen, z. B. „Uhr“, „OSC“, „5.2“ …" aria-label="Changelog durchsuchen">
 <button type="button" class="cl-chip on" data-mj="">Alle</button><?php foreach ($majors as $mj => $n): ?><button type="button" class="cl-chip" data-mj="<?= $mj ?>"><?= $mj ?>.x <small>(<?= $n ?>)</small></button><?php endforeach; ?></div>
-<?php foreach ($rel as $i => $r): [$t, $h] = cl_md($r['body']); $minor = !preg_match('/\.0$/', $r['v']); ?>
+<?php foreach ($rel as $i => $r): [$t, $h] = cl_md($r['body']); $minor = !preg_match('/\.0$/', $r['v']) && !cl_ver_is_date($r['v']); ?>
 <article class="cl-rel<?= $minor ? ' minor' : '' ?>" id="v<?= e($r['v']) ?>" data-mj="<?= (int)explode('.', $r['v'])[0] ?>">
-<header><span class="cl-v"><?= e($r['v']) ?></span><h2><a href="#v<?= e($r['v']) ?>"><?= e($t ?: 'VRC Nexus ' . $r['v']) ?></a></h2><span class="cl-date"><?= e($fmt($r['date'])) ?></span><?php if ($i === 0): ?><span class="cl-latest">AKTUELL</span><?php endif; ?></header>
+<header><span class="cl-v"><?= e(cl_ver($r['v'])) ?></span><h2><a href="#v<?= e($r['v']) ?>"><?= e($t ?: 'VRC Nexus ' . cl_ver($r['v'])) ?></a></h2><span class="cl-date"><?= e($fmt($r['date'])) ?></span><?php if ($i === 0): ?><span class="cl-latest">AKTUELL</span><?php endif; ?></header>
 <div class="cl-body"><?= $h ?: '<p class="cl-date">Keine Beschreibung.</p>' ?>
 <?php if ($r['assets']): ?><div class="cl-dl"><?php foreach ($r['assets'] as $a): if (!preg_match('#^https://github\.com/#', $a['url'])) continue; ?><a href="<?= e($a['url']) ?>" rel="noopener"><?= e($kind($a['name'])) ?> · <?= round($a['size'] / 1048576, 1) ?> MB</a><?php endforeach; ?><a href="<?= e($r['url']) ?>" target="_blank" rel="noopener">GitHub ↗</a></div><?php endif; ?>
 </div></article>

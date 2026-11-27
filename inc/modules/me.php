@@ -131,7 +131,7 @@ function me_notes(array $u): array {
     $out = []; $p = me_get((int)$u['id']); $seen = (int)$p['notif_seen'];
     try {
         require_once APP_ROOT . '/inc/modules/changelog.php';
-        foreach (array_slice(cl_fetch(), 0, 6) as $r) if (!$r['pre']) $out[] = ['t' => strtotime($r['date']) ?: 0, 'icon' => '📦', 'title' => 'VRC Nexus ' . $r['v'] . ' ist erschienen', 'href' => 'changelog.php#v' . $r['v']];
+        foreach (array_slice(cl_fetch(), 0, 6) as $r) if (!$r['pre']) $out[] = ['t' => strtotime($r['date']) ?: 0, 'icon' => '📦', 'title' => 'VRC Nexus ' . cl_ver($r['v']) . ' ist erschienen', 'href' => 'changelog.php#v' . $r['v']];
     } catch (Throwable $e) { /* GitHub nicht erreichbar */ }
     try {
         require_once APP_ROOT . '/inc/modules/calendar.php';
@@ -204,7 +204,7 @@ function me_hooks_run(): string {
         $rel = array_values(array_filter(cl_fetch(), fn($r) => !$r['pre']));
         $last = setting('me_hook_release', '');
         if ($rel && $last === '') set_setting('me_hook_release', $rel[0]['v']);   // erster Lauf: nichts Altes schicken
-        elseif ($rel && version_compare($rel[0]['v'], $last, '>')) { $msgs['release'][] = '📦 **VRC Nexus ' . $rel[0]['v'] . '** ist erschienen: ' . me_site() . '/changelog.php'; set_setting('me_hook_release', $rel[0]['v']); }
+        elseif ($rel && version_compare($rel[0]['v'], $last, '>')) { $msgs['release'][] = '📦 **VRC Nexus ' . cl_ver($rel[0]['v']) . '** ist erschienen: ' . me_site() . '/changelog.php'; set_setting('me_hook_release', $rel[0]['v']); }
     } catch (Throwable $e) { /* egal */ }
     try {
         require_once APP_ROOT . '/inc/modules/calendar.php';

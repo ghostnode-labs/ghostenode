@@ -31,7 +31,7 @@ return [
         try {
             require_once APP_ROOT . '/inc/modules/changelog.php';
             $r = cl_fetch()[0] ?? null;
-            if ($r) $h .= '<div class="tdy-h">📦 VRC Nexus</div><p><a href="changelog.php#v' . e($r['v']) . '">Version ' . e($r['v']) . '</a> <span class="muted">vom ' . e(date('d.m.', strtotime($r['date']) ?: time())) . '</span> · <a href="downloads.php">Downloads</a></p>';
+            if ($r) $h .= '<div class="tdy-h">📦 VRC Nexus</div><p><a href="changelog.php#v' . e($r['v']) . '">Version ' . e(cl_ver($r['v'])) . '</a> <span class="muted">vom ' . e(date('d.m.', strtotime($r['date']) ?: time())) . '</span> · <a href="downloads.php">Downloads</a></p>';
         } catch (Throwable $e) { /* GitHub nicht erreichbar */ }
         return '<style>.tdy-h{font-weight:700;color:var(--accent-cyan);margin:8px 0 4px}.tdy-l{margin:0;padding-left:18px}.tdy-l li{margin:2px 0}</style>' . $h;
     },
