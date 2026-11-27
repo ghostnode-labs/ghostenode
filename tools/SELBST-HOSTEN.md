@@ -2,6 +2,8 @@
 
 Dieses Paket ist die komplette GhostNode-Webseite (Dashboard, VRC-Nexus-Web, Clubs, Marktplatz, Status-Seite …) **ohne** persönliche Daten.
 
+> **Eigener Root-Server?** `server/ghostnode-root.sh` richtet alles automatisch ein – Webseite, Datenbank, HTTPS, HypeRate-Weiterleitung, Discord-Bot, TURN für Anrufe, Poster-FTPS, Mail, Cron, Backups und Firewall. Anleitung: [`server/ROOTSERVER.md`](../server/ROOTSERVER.md).
+
 ## Voraussetzungen
 - PHP **8.1 oder neuer** mit `pdo_sqlite` (oder `pdo_mysql`), `curl`, `mbstring`, `openssl`, `sodium`, `zip`, `gd` (für WebP-Bilder)
 - Apache (mit `.htaccess`) – z. B. Plesk, cPanel, eigener Server. Bei nginx die Regeln aus `.htaccess` übertragen (Ordner `data/`, `inc/`, `tools/` sperren!)
