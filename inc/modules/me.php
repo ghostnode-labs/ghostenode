@@ -291,3 +291,41 @@ function me_delete(array $u, string $confirm, string $password): void {
     foreach (['DELETE FROM user_sessions WHERE user_id = ?', 'DELETE FROM user_prefs WHERE user_id = ?', 'UPDATE audit_log SET ip = \'\' WHERE user_id = ?', 'DELETE FROM users WHERE id = ?'] as $q)
         try { $db->prepare($q)->execute([$uid]); } catch (Throwable $e) { /* Tabelle fehlt */ }
 }
+
+// ---------- 8.1: Datenschutz-Center – alles auf einen Blick, mit Sofort-Knöpfen ----------
+function me_privacy(int $uid): array {
+    $p = me_get($uid); $d = $p['d'];
+    $out = ['public' => (int)$p['public'] === 1, 'slug' => (string)$p['slug'], 'hooks' => count((array)($d['hooks'] ?? [])), 'devices' => [], 'sessions' => 0, 'vrchat' => false, 'current' => (string)($_SESSION['auth']['sid'] ?? '')];
+    try { require_once APP_ROOT . '/inc/modules/nexus_client.php'; $out['devices'] = nc_tokens($uid); } catch (Throwable $e) { $out['devices'] = []; }
+    try { $out['sessions'] = count(sessions_list($uid)); } catch (Throwable $e) { $out['sessions'] = 0; }
+    try { require_once APP_ROOT . '/inc/modules/vrchat.php'; $acc = vrc_account($uid); $out['vrchat'] = !empty($acc['vrc_id']); } catch (Throwable $e) { /* egal */ }
+    return $out;
+}
+function me_privacy_act(int $uid, string $act, array $in): string {
+    switch ($act) {
+        case 'public_off':
+            me_schema();
+            site_db()->prepare('UPDATE user_prefs SET public = 0, updated = ? WHERE user_id = ?')->execute([time(), $uid]);
+            audit('Datenschutz', 'öffentliches Profil ausgeschaltet', 'info');
+            return 'Öffentliches Profil ist aus.';
+        case 'device_revoke':
+            require_once APP_ROOT . '/inc/modules/nexus_client.php';
+            nc_token_revoke($uid, (int)($in['id'] ?? 0));
+            audit('Datenschutz', 'Gerät entfernt', 'info');
+            return 'Gerät entfernt – es kommt ohne neues Token nicht mehr rein.';
+        case 'devices_all':
+            require_once APP_ROOT . '/inc/modules/nexus_client.php';
+            foreach (nc_tokens($uid) as $t) nc_token_revoke($uid, (int)$t['id']);
+            audit('Datenschutz', 'alle Geräte entfernt', 'info');
+            return 'Alle Geräte entfernt.';
+        case 'sessions_others':
+            $sid = (string)($_SESSION['auth']['sid'] ?? '');
+            site_db()->prepare('DELETE FROM user_sessions WHERE user_id = ? AND id <> ?')->execute([$uid, $sid]);
+            audit('Datenschutz', 'andere Sitzungen abgemeldet', 'info');
+            return 'Alle anderen Sitzungen sind abgemeldet.';
+        case 'hooks_off':
+            $p = me_get($uid); $d = $p['d']; $d['hooks'] = []; me_put($uid, $d);
+            return 'Alle Webhooks entfernt.';
+    }
+    throw new RuntimeException('Unbekannte Aktion.');
+}

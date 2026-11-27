@@ -260,7 +260,7 @@ $rm_default = [
     'Sitzungen verwalten: alle angemeldeten Geräte sehen und abmelden' => 'done',
     'Kontolöschung und Datenexport (DSGVO) mit einem Klick' => 'done',
     'Installierbare Web-App (PWA) mit Offline-Ansicht' => 'done',
-    'Datenschutz-Center mit allen Einstellungen an einem Ort' => 'wip',
+    'Datenschutz-Center mit allen Einstellungen an einem Ort' => 'done',
     // 6.7.0
     'Grenzen-Profil mit Kategorien und Notizen, jederzeit änderbar' => 'done',
     'Safeword-Varianten (Wort, Geste, Knopf, Uhr) überall gleich' => 'done',

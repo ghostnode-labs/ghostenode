@@ -39,6 +39,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
             }
             case 'seen': me_notes_seen($uid); $msg = 'Alles als gelesen markiert.'; break;
+            case 'priv': $msg = me_privacy_act($uid, (string)($_POST['do'] ?? ''), $_POST); break;   // 8.1 Datenschutz-Center
             case 'delete':
                 me_delete(user_load($uid) + $me, (string)($_POST['confirm'] ?? ''), (string)($_POST['password'] ?? ''));
                 auth_logout();
@@ -132,7 +133,18 @@ code{background:rgba(255,255,255,.06);padding:1px 6px}
 <div><?php echo e(str_replace(',', ', ', (string)$k['roles']) ?: '–'); ?></div><div><?php echo $exp ? date('d.m.Y', $exp) : 'unbegrenzt'; ?></div><div><?php echo $st; ?></div><?php endforeach; ?></div>
 <p class="muted">Verlängern oder übertragen kann die Besitzerin – schreib ihr im Discord.</p><?php endif; ?></div>
 
-<?php elseif ($tab === 'privacy'): ?>
+<?php elseif ($tab === 'privacy'): $pv = me_privacy($uid); $pf = fn($do, $label, $cls = '', $extra = '') => '<form method="POST" style="display:inline"><input type="hidden" name="tab" value="privacy"><input type="hidden" name="action" value="priv"><input type="hidden" name="do" value="' . $do . '">' . $extra . '<button class="btn btn-sm ' . $cls . '">' . $label . '</button></form>'; ?>
+<div class="me-card"><h3>🛡 Datenschutz-Center</h3><p class="muted">Alles, was mit deinen Daten passiert, an einem Ort – mit Sofort-Knöpfen. Keine Werbe- oder Tracking-Cookies; nur ein Sitzungs-Cookie für die Anmeldung.</p>
+<table class="me-priv">
+<tr><td>🌐 Öffentliches Profil</td><td><?php echo $pv['public'] ? '<b>sichtbar</b> unter <a href="u.php?n=' . e(rawurlencode($pv['slug'])) . '">u.php?n=' . e($pv['slug']) . '</a>' : 'aus – niemand sieht ein Profil'; ?></td><td><?php echo $pv['public'] ? $pf('public_off', 'Ausschalten') : '<a class="btn btn-sm" href="me.php?tab=profile">Einstellen</a>'; ?></td></tr>
+<tr><td>🖥 Verbundene Geräte (VRC Nexus)</td><td><?php echo $pv['devices'] ? count($pv['devices']) . ' Gerät(e) mit Zugriff' : 'keine'; ?></td><td><?php echo $pv['devices'] ? $pf('devices_all', 'Alle entfernen', 'btn-danger') : ''; ?></td></tr>
+<?php foreach ($pv['devices'] as $dv): ?><tr class="sub"><td>↳ <?php echo e($dv['name']); ?></td><td class="muted"><?php echo e(trim(($dv['platform'] ?? '') . ' ' . ($dv['version'] ?? ''))); ?> · <?php echo $dv['last_seen'] ? 'zuletzt ' . e(date('d.m.Y H:i', (int)$dv['last_seen'])) : 'nie benutzt'; ?></td><td><?php echo $pf('device_revoke', 'Entfernen', '', '<input type="hidden" name="id" value="' . (int)$dv['id'] . '">'); ?></td></tr><?php endforeach; ?>
+<tr><td>🔐 Angemeldete Sitzungen</td><td><?php echo (int)$pv['sessions']; ?> Sitzung(en) auf deinen Geräten</td><td><?php echo $pv['sessions'] > 1 ? $pf('sessions_others', 'Andere abmelden') : ''; ?></td></tr>
+<tr><td>🪝 Webhooks</td><td><?php echo $pv['hooks'] ? $pv['hooks'] . ' Adresse(n) bekommen Nachrichten' : 'keine'; ?></td><td><?php echo $pv['hooks'] ? $pf('hooks_off', 'Alle entfernen') : ''; ?></td></tr>
+<tr><td>🟦 VRChat-Verbindung der Website</td><td><?php echo $pv['vrchat'] ? 'verbunden (Sitzungs-Cookie verschlüsselt gespeichert, kein Passwort)' : 'nicht verbunden'; ?></td><td><?php echo $pv['vrchat'] ? '<a class="btn btn-sm" href="vrcx.php">Verwalten</a>' : ''; ?></td></tr>
+<tr><td>🍪 Cookies</td><td>nur das Sitzungs-Cookie (und „angemeldet bleiben“, wenn gewählt) – kein Tracking, keine Werbung, keine Dritt-Cookies</td><td></td></tr>
+</table></div>
+<style>.me-priv{width:100%;border-collapse:collapse;font-size:.9rem}.me-priv td{border-bottom:1px solid var(--border-color);padding:8px;vertical-align:top}.me-priv td:first-child{white-space:nowrap;font-weight:600}.me-priv tr.sub td{font-size:.82rem;padding-left:22px}.me-priv td:last-child{text-align:right;white-space:nowrap}</style>
 <div class="me-card"><h3>📦 Meine Daten</h3><p class="muted">Alles, was die Webseite zu deinem Konto speichert, als JSON-Datei – ohne Passwort-Prüfsumme und ohne Zwei-Faktor-Geheimnis.</p>
 <a class="btn" href="me.php?export=1">⬇ Daten herunterladen</a></div>
 <form method="POST" class="me-card" onsubmit="return confirm('Konto wirklich endgültig löschen?')"><input type="hidden" name="tab" value="privacy"><input type="hidden" name="action" value="delete"><h3 style="color:var(--accent-red)">🗑 Konto löschen</h3>
