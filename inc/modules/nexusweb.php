@@ -41,6 +41,8 @@ function nxweb_who(int $uid): array {
 function nxweb_action(int $uid, string $act, array $in): array {
     $who = nxweb_who($uid);
     $J = function (string $k) use ($in) { $v = json_decode((string)($in[$k] ?? ''), true); return is_array($v) ? $v : []; };
+    // 7.0 Clubs & Events: gleiche Aktionen wie nexusclubs.php (App), Daten als JSON im Feld „data“
+    if (strpos($act, 'nw_club_') === 0) { require_once __DIR__ . '/clubs.php'; return cl_action($who, substr($act, 8), $J('data')); }
     switch ($act) {
         case 'nw_me': {
             $a = nx_public($who);

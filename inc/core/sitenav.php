@@ -9,7 +9,7 @@ const SITENAV_SKIP = ['index.php', 'p.php', 'cron.php', 'session.php', 'toyrelay
     'nexusacct.php', 'nexuschat.php', 'nexuscomm.php', 'nexuswarn.php', 'nexuspulse.php', 'nexuslic.php', 'auth-discord.php'];
 const SITENAV_MAIN = [
     ['dashboard.php', '🧭', 'Dashboard'], ['nexus.php', '🥽', 'VRC Nexus'], ['poster.php', '🖼️', 'Poster'],
-    ['market.php', '🧩', 'Marktplatz'], ['changelog.php', '📜', 'Changelog'], ['downloads.php', '⬇', 'Downloads'], ['Roadmap.php', '🗺', 'Roadmap'],
+    ['market.php', '🧩', 'Marktplatz'], ['changelog.php', '📜', 'Changelog'], ['downloads.php', '⬇', 'Downloads'], ['events.php', '🗓️', 'Events'], ['Roadmap.php', '🗺', 'Roadmap'],
 ];
 
 function sitenav_start(): void {

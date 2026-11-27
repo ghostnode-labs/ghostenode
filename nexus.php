@@ -1171,6 +1171,8 @@ session_write_close();
                 <button type="button" class="vx-tabbtn" data-tab="community" data-msub="following"><span>⭐</span><em>Folge ich</em></button>
                 <button type="button" class="vx-tabbtn" data-tab="community" data-msub="saved"><span>🔖</span><em>Gemerkt</em></button>
                 <button type="button" class="vx-tabbtn" data-tab="community" data-msub="profile"><span>👤</span><em>Mein Profil</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="clubs" data-msub="browse"><span>🏠</span><em>Clubs</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="clubs" data-msub="cal"><span>🗓️</span><em>Event-Kalender</em></button>
                 <button type="button" class="vx-tabbtn" data-tab="groups"><span>🛡️</span><em>Gruppen</em></button>
                 <button type="button" class="vx-tabbtn" data-tab="moderation"><span>🚫</span><em>Blockiert &amp; stumm</em></button>
                 <button type="button" class="vx-tabbtn cm-mod-only" data-tab="community" data-msub="mod" hidden><span>🛡</span><em>Community-Moderation</em></button>
@@ -1388,6 +1390,7 @@ session_write_close();
     </section>
 
     <section class="vx-tab" data-pane="community" hidden><div id="nwComm" class="nw"></div></section>
+    <section class="vx-tab" data-pane="clubs" hidden><div id="nwClubs" class="nw"></div></section>
     <section class="vx-tab" data-pane="pulse" hidden><div id="nwPulse" class="nw"></div></section>
     <section class="vx-tab" data-pane="erp" hidden><div id="nwErp" class="nw"></div></section>
     <section class="vx-tab" data-pane="client" hidden><div id="clientPane" class="nc"></div></section>
@@ -1506,6 +1509,7 @@ session_write_close();
 </script>
 <script src="assets/js/nexus.js"></script>
 <script src="assets/js/nexus-web.js"></script>
+<script src="assets/js/nexus-clubs.js"></script>
 <script src="assets/js/nexus-client.js"></script>
 <script src="assets/js/nexus-translate.js"></script>
 </body>

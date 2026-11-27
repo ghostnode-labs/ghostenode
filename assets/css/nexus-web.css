@@ -115,3 +115,20 @@ body.nav-side .vx-sidefoot { display: flex; flex-direction: column; gap: 2px; ma
 .nw-l18:last-child { border-bottom: 0; }
 .nw-consent { margin-top: 8px; border-color: rgba(255,85,140,.45); }
 .nw-consent input[type=text] { width: 100%; margin: 6px 0; }
+/* 7.0 Clubs & Events */
+.cl-ban { height: 70px; margin: -14px -16px 10px; background: center/cover no-repeat; }
+.cl-ban-big { height: 140px; margin: 0 0 10px; border: 1px solid var(--border-color); }
+.cl-form { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.cl-form label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--text-muted); }
+.cl-form label:has(> input[type=checkbox]) { flex-direction: row; align-items: center; }
+.cl-form .cl-wide { grid-column: 1 / -1; }
+.cl-form input:not([type=checkbox]):not([type=color]), .cl-form select, .cl-form textarea { width: 100%; box-sizing: border-box; }
+.cl-ev { margin-bottom: 8px; }
+.cl-day { margin: 14px 0 6px; font-size: .9rem; color: var(--accent-cyan); text-transform: capitalize; }
+.cl-gal { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px; margin-top: 10px; }
+.cl-gal figure { margin: 0; background: var(--panel-bg); border: 1px solid var(--border-color); }
+.cl-gal img { width: 100%; aspect-ratio: 16/10; object-fit: cover; display: block; }
+.cl-gal figcaption { padding: 6px 8px; font-size: .82rem; }
+.cl-mem { padding: 4px 0; border-bottom: 1px solid var(--border-color); }
+#nwClubs .nw-row select, #nwClubs .nw-row input[type=search] { width: auto; flex: 1; min-width: 130px; }
+#nwClubs a[data-goclub], #nwClubs a[data-goclub]:visited { color: var(--accent-cyan); }
