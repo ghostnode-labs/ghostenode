@@ -16,11 +16,12 @@ $KINDS = [
     'portable' => ['🧳', 'Windows – portable', fn($n) => str_ends_with($n, '-portable.exe'), 'Ohne Installation, z. B. vom USB-Stick. Daten liegen neben der Datei.'],
     'android'  => ['📱', 'Android', fn($n) => str_ends_with($n, '-android.apk'), 'APK auf dem Handy öffnen und „Aus dieser Quelle installieren“ erlauben. Danach aktualisiert sich die App selbst. Nicht die Wear-OS-Datei nehmen!'],
     'watch'    => ['⌚', 'Wear OS (Nexus Watch)', fn($n) => str_contains($n, 'Watch') && str_ends_with($n, '.apk'), 'Für die Uhr: per ADB installieren oder über die Handy-App (Werkzeuge → Nexus Watch). Braucht Wear OS 3 oder neuer.'],
+    'pet'      => ['🐾', 'Nexus Pet (Android)', fn($n) => str_starts_with($n, 'Nexus-Pet') && str_ends_with($n, '.apk'), 'Eigene App: ein virtuelles Haustier – zieh deinen Geistling auf (füttern, spielen, putzen, Entwicklung in 13 Formen, Widget). Unabhängig von VRC Nexus; funktioniert ohne Konto und ohne Internet.'],
     'deck'     => ['🎛', 'Stream-Deck-Plugin', fn($n) => str_ends_with($n, '.streamDeckPlugin'), 'Doppelklicken – die Stream-Deck-App installiert das Plugin. Liegt auch der Windows-App bei (Werkzeuge → Stream Deck).'],
 ];
 $size = fn(int $b) => $b > 1048576 ? number_format($b / 1048576, 1, ',', '.') . ' MB' : max(1, (int)round($b / 1024)) . ' KB';
 ?><!doctype html><html lang="de"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Downloads · VRC Nexus</title>
-<meta name="description" content="VRC Nexus herunterladen – Windows, Android, Wear OS und Stream Deck, mit Prüfsummen.">
+<meta name="description" content="VRC Nexus herunterladen – Windows, Android, Wear OS, Stream Deck und Nexus Pet, mit Prüfsummen.">
 <link rel="stylesheet" href="assets/css/hud.css">
 <style>
 body.dl{padding:0;display:block}.dl-wrap{box-sizing:border-box;max-width:980px;margin:0 auto;padding:20px 20px 60px}
@@ -37,7 +38,7 @@ pre{background:rgba(255,255,255,.05);padding:10px;overflow:auto;font-size:.8rem}
 <p class="muted">Neueste Version: <b>VRC Nexus <?php echo e($latest['v']); ?></b> vom <?php echo e(date('d.m.Y', strtotime($latest['date']) ?: time())); ?> · <a href="changelog.php">Was ist neu?</a> · <a href="<?php echo e($latest['url']); ?>" target="_blank" rel="noopener">auf GitHub</a></p>
 <div class="dl-grid">
 <?php foreach ($KINDS as $k => [$ic, $label, $match, $help]):
-    $a = null; foreach ($latest['assets'] as $x) if ($match($x['name']) && ($k !== 'android' || !str_contains($x['name'], 'Watch'))) { $a = $x; break; }
+    $a = null; foreach ($latest['assets'] as $x) if ($match($x['name']) && ($k !== 'android' || (!str_contains($x['name'], 'Watch') && !str_starts_with($x['name'], 'Nexus-Pet')))) { $a = $x; break; }
     if (!$a) continue; ?>
 <div class="dl-card"><h3><?php echo $ic . ' ' . e($label); ?></h3><p><?php echo e($help); ?></p>
 <a class="btn" href="<?php echo e($a['url']); ?>" rel="noopener">⬇ <?php echo e($a['name']); ?> · <?php echo $size((int)$a['size']); ?></a>

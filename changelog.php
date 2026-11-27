@@ -46,6 +46,7 @@ foreach ($rel as $r) { $mj = (int)explode('.', $r['v'])[0]; $majors[$mj] = ($maj
 $fmt = fn(string $d) => $d ? date('d.m.Y', strtotime($d)) : '';
 $kind = function (string $name): string {
     if (str_contains($name, 'Watch')) return '⌚ Wear OS';
+    if (str_starts_with($name, 'Nexus-Pet')) return '🐾 Nexus Pet';
     if (str_ends_with($name, '.apk')) return '📱 Android';
     if (str_contains($name, 'Setup')) return '🪟 Windows-Installer';
     if (str_contains($name, 'portable')) return '🪟 Windows portable';
