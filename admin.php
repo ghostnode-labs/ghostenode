@@ -1136,8 +1136,8 @@ function bytes(int $b): string {
     <meta name="robots" content="noindex, nofollow">
     <title>ADMIN CORE</title>
     <?php echo emoji_favicon('⚙️'); ?>
-    <link rel="stylesheet" href="assets/css/hud.css">
-    <link rel="stylesheet" href="assets/css/admin.css">
+    <link rel="stylesheet" href="assets/css/hud.css?v=<?php echo (int)@filemtime(__DIR__ . '/assets/css/hud.css'); ?>">
+    <link rel="stylesheet" href="assets/css/admin.css?v=<?php echo (int)@filemtime(__DIR__ . '/assets/css/admin.css'); ?>">
 </head>
 <body class="<?php echo $mode === 'panel' ? 'panel-mode' : 'gate-mode'; ?>">
 
@@ -2125,8 +2125,8 @@ function bytes(int $b): string {
 <script>window.PALETTE = <?php echo json_encode($palette, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT | JSON_UNESCAPED_UNICODE); ?>;</script>
 <?php endif; ?>
 
-<script src="assets/js/qr.js"></script>
-<script src="assets/js/admin.js"></script>
-<script src="assets/js/gender.js"></script>
+<script src="assets/js/qr.js?v=<?php echo (int)@filemtime(__DIR__ . '/assets/js/qr.js'); ?>"></script>
+<script src="assets/js/admin.js?v=<?php echo (int)@filemtime(__DIR__ . '/assets/js/admin.js'); ?>"></script>
+<script src="assets/js/gender.js?v=<?php echo (int)@filemtime(__DIR__ . '/assets/js/gender.js'); ?>"></script>
 </body>
 </html>

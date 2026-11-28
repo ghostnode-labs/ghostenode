@@ -46,6 +46,11 @@ function a11y_fix(string $buf): string {
         . '@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}'
         . '@media (pointer:coarse){button,.btn,select,input[type=checkbox],input[type=radio]{min-height:24px;min-width:24px}}</style>';
     $out = $head . substr($body, 0, $end + 1) . $skip . $css . substr($body, $end + 1);
+    // eigene CSS/JS-Dateien mit Änderungszeit versehen (?v=…), damit Browser nach einem Update nie alte Styles/Skripte aus dem Cache nehmen
+    $out = (string)preg_replace_callback('#\b(href|src)="(assets/[A-Za-z0-9_./-]+\.(?:css|js))"#', static function ($m) {
+        $t = (int)@filemtime(APP_ROOT . '/' . $m[2]);
+        return $t ? $m[1] . '="' . $m[2] . '?v=' . $t . '"' : $m[0];
+    }, $out);
     // Mauerwerk-Raster + volle Breite auf allen Seiten (nach den Seiten-Styles, damit die Regeln greifen)
     if (strpos($out, 'assets/js/masonry.js') === false) {
         $v = static fn(string $f) => (int)(@filemtime(APP_ROOT . '/' . $f) ?: 1);
