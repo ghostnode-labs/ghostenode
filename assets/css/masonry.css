@@ -1,0 +1,11 @@
+/* Zentral auf allen Seiten (inc/core/sitenav.php) – nach den Seiten-Styles geladen. */
+
+/* Mauerwerk-Raster (assets/js/masonry.js): feine Zeilen, jede Karte belegt so viele, wie sie hoch ist → keine Lücken unter kürzeren Karten */
+.nxm-on { grid-auto-rows: 4px !important; row-gap: 0 !important; align-items: start !important; }
+.nxm-on > * { align-self: start !important; }
+.nxm-on.nxm-dense { grid-auto-flow: row dense !important; }
+
+/* Inhalte immer über die volle Breite (zwischen Seitenleisten); Dialoge/Popups und Anmelde-Kästen bleiben schmal */
+#main, .wrapper, .ap-wrap, .cal-wrapper, .ld-hero, .ld-sec, .ld-stats, .ld-foot, .page-form, .mk-form, .tm-form { max-width: none !important; }
+/* feste Zwei-/Drei-Spalten-Raster mit nur einer Karte: Karte über die volle Breite statt halber Seite leer */
+.grid2 > :only-child, .grid3 > :only-child, .roles > :only-child, .bd-2col > :only-child, .cn-grid2 > :only-child, .vx-cols > :only-child, .vx-u-cols > :only-child { grid-column: 1 / -1; }

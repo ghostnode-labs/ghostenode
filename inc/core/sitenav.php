@@ -45,7 +45,15 @@ function a11y_fix(string $buf): string {
         . ':focus-visible{outline:2px solid #f3c262!important;outline-offset:2px}[id=main]:focus{outline:none}'
         . '@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}'
         . '@media (pointer:coarse){button,.btn,select,input[type=checkbox],input[type=radio]{min-height:24px;min-width:24px}}</style>';
-    return $head . substr($body, 0, $end + 1) . $skip . $css . substr($body, $end + 1);
+    $out = $head . substr($body, 0, $end + 1) . $skip . $css . substr($body, $end + 1);
+    // Mauerwerk-Raster + volle Breite auf allen Seiten (nach den Seiten-Styles, damit die Regeln greifen)
+    if (strpos($out, 'assets/js/masonry.js') === false) {
+        $v = static fn(string $f) => (int)(@filemtime(APP_ROOT . '/' . $f) ?: 1);
+        $tags = '<link rel="stylesheet" href="assets/css/masonry.css?v=' . $v('assets/css/masonry.css') . '"><script src="assets/js/masonry.js?v=' . $v('assets/js/masonry.js') . '" defer></script>';
+        $bp = strripos($out, '</body>');
+        $out = $bp === false ? $out . $tags : substr($out, 0, $bp) . $tags . substr($out, $bp);
+    }
+    return $out;
 }
 
 function sitenav_inject(string $buf): string {
