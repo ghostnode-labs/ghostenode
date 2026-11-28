@@ -40,6 +40,20 @@
     // ---------- Dialoge ----------
     const closeAll = () => $$('.modal-overlay.open').forEach(m => m.classList.remove('open'));
     document.addEventListener('click', e => { if (e.target.closest('[data-close]') || e.target.classList.contains('modal-overlay')) closeAll(); });
+    // allgemeine Öffner: <button data-open="#idDesDialogs">
+    $$('[data-open]').forEach(b => b.addEventListener('click', () => {
+        const m = document.querySelector(b.dataset.open);
+        if (!m) return;
+        m.classList.add('open');
+        const f = m.querySelector('input:not([type=hidden]), select, textarea');
+        if (f) setTimeout(() => f.focus(), 30);
+    }));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+    // Tabellen-Suche: <input data-vip-filter="#tabelle"> – Zeilen mit data-q werden gefiltert
+    $$('[data-vip-filter]').forEach(inp => inp.addEventListener('input', () => {
+        const q = inp.value.toLowerCase().trim();
+        $$(inp.dataset.vipFilter + ' tr[data-q]').forEach(tr => { tr.hidden = q !== '' && !tr.dataset.q.includes(q); });
+    }));
 
     // Benutzer anlegen / bearbeiten
     const uf = $('#userForm');

@@ -163,7 +163,13 @@ t($ad && (int)$ad['expires'] === strtotime('2099-12-31 23:59:59') && ($_SESSION[
 $bad = false; try { admin_vip_post('vip_list_delete', ['id' => $vip, 'confirm' => 'falsch']); } catch (InvalidArgumentException $x) { $bad = true; }
 t($bad && vip_list($vip), 'Admin: Liste löschen nur mit Bestätigung der Kurzadresse');
 ob_start(); admin_vip_view(); $html = ob_get_clean();
-t(str_contains($html, 'class="grid2"') && !preg_match('/max-width/i', $html) && str_contains($html, 'kofi.php') && str_contains($html, 'Text kopieren') && !str_contains($html, $tok), 'Admin-Ansicht: Masonry-Raster (.grid2), keine max-width, Webhook-URL, „Text kopieren“, kein Token im HTML');
+t(str_contains($html, 'class="grid2"') && !preg_match('/max-width/i', $html) && str_contains($html, 'Text kopieren') && !str_contains($html, 'kofi.php') && !str_contains($html, $tok), 'Admin-Listenreiter: Masonry-Raster (.grid2), keine max-width, „Text kopieren“, Ko-fi nicht hier, kein Token im HTML');
+t(substr_count($html, 'class="vip-tab') >= count(vip_lists()) + 2 && str_contains($html, 'href="admin.php?tab=vip&amp;list=' . $vip . '"') && str_contains($html, 'list=settings') && str_contains($html, 'id="vipNewModal"') && str_contains($html, 'data-open="#vipNewModal"'), 'Admin: ein Reiter je Liste + Einstellungen, „Neue Liste“ als Popup');
+$_GET['list'] = 'settings';
+ob_start(); admin_vip_view(); $html = ob_get_clean(); unset($_GET['list']);
+t(str_contains($html, 'kofi.php') && str_contains($html, 'Gist-Spiegel') && str_contains($html, 'class="grid2"') && !str_contains($html, 'Einträge (') && ($_SESSION['vip_list'] ?? '') === 'settings' && !str_contains($html, $tok), 'Admin-Reiter „Einstellungen“: Ko-fi + Gist, keine Listeneinträge, Auswahl gemerkt, kein Token');
+admin_vip_post('vip_kofi_settings', ['list' => $vip, 'group' => 'KOFI', 'sub_days' => 35, 'don_days' => 0, 'types' => VIP_KOFI_TYPES]);
+t(($_SESSION['vip_list'] ?? '') === 'settings', 'nach dem Speichern der Ko-fi-Einstellungen bleibt der Reiter „Einstellungen“ offen');
 $perm = (string)file_get_contents(__DIR__ . '/../../admin.php');
 t(str_contains($perm, "array_fill_keys(VIP_ADMIN_ACTIONS, 'vip.manage')") && str_contains($perm, 'admin_vip_post'), 'Admin-Aktionen laufen über guard_post mit Recht vip.manage (Herkunftsprüfung wie alle Reiter)');
 

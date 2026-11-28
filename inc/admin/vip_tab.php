@@ -52,6 +52,7 @@ function admin_vip_post(string $act, array $in): string {
             elseif ($lid === 0) { set_setting('vip_kofi_list', ''); vip_db()->exec('UPDATE vip_lists SET kofi = 0'); }
             if (!empty($in['token_clear'])) vip_secret_set('kofi', '');
             elseif (trim((string)($in['token'] ?? '')) !== '') vip_secret_set('kofi', (string)$in['token']);
+            $_SESSION['vip_list'] = 'settings';
             audit('VIP-Listen: Ko-fi-Einstellungen gespeichert', '', 'security');
             return 'Ko-fi-Einstellungen gespeichert.';
         case 'vip_gist_settings':
@@ -69,9 +70,11 @@ function admin_vip_post(string $act, array $in): string {
             $u = rtrim(trim((string)($in['public_url'] ?? '')), '/');
             if ($u !== '' && !preg_match('#^https://[^\s/]+(/[^\s]*)?$#i', $u)) throw new InvalidArgumentException('Öffentliche Adresse: z. B. https://ghostnode-labs.dev');
             set_setting('vip_public_url', $u);
+            $_SESSION['vip_list'] = 'settings';
             audit('VIP-Listen: Gist-Einstellungen gespeichert', '', 'security');
             return 'Gist-Einstellungen gespeichert.';
         case 'vip_gist_sync':
+            $_SESSION['vip_list'] = 'settings';
             try { return vip_gist_sync(true); }
             catch (RuntimeException $e) { throw new InvalidArgumentException($e->getMessage()); }
     }
@@ -85,127 +88,169 @@ function vip_form(string $act, array $hidden = [], string $attrs = ''): string {
     return $h;
 }
 /** Adresse mit Kopier-Knopf */
-function vip_copy_field(string $id, string $value, string $label): string {
-    return '<label class="field">' . $label . '</label><span class="inv-link" style="display:flex;gap:6px"><input type="text" readonly id="' . e($id) . '" value="' . e($value) . '" style="flex:1">'
-        . '<button type="button" class="btn btn-sm" data-copy="#' . e($id) . '">⧉ Kopieren</button></span>';
+function vip_copy_field(string $id, string $value, string $label, string $hint = ''): string {
+    return '<div class="vip-link"><div class="vip-link-h"><b>' . $label . '</b>' . ($hint !== '' ? '<small>' . $hint . '</small>' : '') . '</div>'
+        . '<div class="vip-link-row"><input type="text" readonly id="' . e($id) . '" value="' . e($value) . '">'
+        . '<button type="button" class="btn btn-sm" data-copy="#' . e($id) . '">⧉ Kopieren</button></div></div>';
 }
+/** kleines Abzeichen */
+function vip_chip(string $txt, string $cls = ''): string { return '<span class="vip-chip' . ($cls !== '' ? ' ' . $cls : '') . '">' . $txt . '</span>'; }
+
 
 function admin_vip_view(): void {
     vip_schema();
     $lists = vip_lists();
-    $sel = (int)($_GET['list'] ?? ($_SESSION['vip_list'] ?? 0));
-    $cur = $sel ? vip_list($sel) : null;
-    if (!$cur && $lists) $cur = $lists[0];
+    // gewählter Reiter: Listen-ID oder „settings“ (über ?list=…, sonst zuletzt benutzt)
+    $want = isset($_GET['list']) ? (string)$_GET['list'] : (string)($_SESSION['vip_list'] ?? '');
+    if (isset($_GET['list'])) $_SESSION['vip_list'] = $want === 'settings' ? 'settings' : (int)$want;
+    $settings = $want === 'settings';
+    $cur = null;
+    if (!$settings) {
+        foreach ($lists as $l) if ((int)$l['id'] === (int)$want) $cur = $l;
+        if (!$cur && $lists) $cur = $lists[0];
+    }
     $base = vip_base_url();
     $kc = vip_kofi_cfg();
     $gist_on = setting('vip_gist_on', '0') === '1';
     $gist_tok = vip_secret_source('gist');
     $kofi_tok = vip_secret_source('kofi');
     $pending = array_sum(array_map(fn($l) => (int)$l['pending'], $lists));
-    $src = fn($s) => $s === 'env' ? '<b style="color:#4ade80">gesetzt (Server-Secret)</b>' : ($s === 'admin' ? '<b style="color:#4ade80">gesetzt (verschlüsselt hier gespeichert)</b>' : '<b style="color:#f87171">fehlt</b>');
+    $src = fn($s) => $s === 'env' ? vip_chip('✔ Server-Secret', 'ok') : ($s === 'admin' ? vip_chip('✔ verschlüsselt gespeichert', 'ok') : vip_chip('✖ fehlt', 'bad'));
 
-    echo '<div class="kpis"><div class="kpi"><span class="k">Listen</span><span class="v">' . count($lists) . '</span></div>'
-        . '<div class="kpi"><span class="k">Einträge</span><span class="v">' . array_sum(array_map(fn($l) => (int)$l['n'], $lists)) . '</span></div>'
-        . '<div class="kpi"><span class="k">Warten auf Prüfung</span><span class="v">' . $pending . '</span></div>'
-        . '<div class="kpi"><span class="k">Gist</span><span class="v">' . ($gist_on ? ($gist_tok ? 'an' : 'ohne Token') : 'aus') . '</span></div></div>';
+    echo '<div class="kpis vip-kpis"><div class="kpi"><span class="k">Listen</span><span class="v">' . count($lists) . '</span></div>'
+        . '<div class="kpi"><span class="k">Aktive Einträge</span><span class="v">' . array_sum(array_map(fn($l) => (int)$l['n'], $lists)) . '</span></div>'
+        . '<div class="kpi"><span class="k">Warten auf Prüfung</span><span class="v"' . ($pending ? ' style="color:var(--accent-gold)"' : '') . '>' . $pending . '</span></div>'
+        . '<div class="kpi"><span class="k">Ko-fi · Gist</span><span class="v small">' . ($kc['list'] && $kofi_tok ? '💖 an' : '💖 aus') . ' · ' . ($gist_on ? ($gist_tok ? '🐙 an' : '🐙 ohne Token') : '🐙 aus') . '</span></div></div>';
 
-    // ---------- Listen + neue Liste ----------
-    echo '<div class="grid2">';
+    // ---------- Reiter: je Liste einer, dann Einstellungen, dann „Neue Liste“ (Popup) ----------
+    echo '<nav class="vip-tabs" aria-label="VIP-Listen">';
     foreach ($lists as $l) {
-        $direct = $base . '/vip.php?l=' . rawurlencode($l['slug']);
-        $raw = vip_gist_raw_url($l['slug'] . '.txt');
-        echo '<div class="panel"><div class="panel-title"><span>// ' . e($l['title']) . ($l['world'] !== '' ? ' · ' . e($l['world']) : '') . '</span>'
-            . '<a class="btn btn-sm' . ($cur && (int)$cur['id'] === (int)$l['id'] ? ' btn-gold' : '') . '" href="admin.php?tab=vip&amp;list=' . (int)$l['id'] . '">✎ Einträge</a></div>'
-            . '<p class="muted small"><code>' . e($l['slug']) . '</code> · Standardgruppe <b>' . e($l['grp']) . '</b> · ' . (int)$l['n'] . ' aktiv' . ((int)$l['pending'] ? ' · <b style="color:#f5c242">' . (int)$l['pending'] . ' warten</b>' : '')
-            . ((int)$l['kofi'] ? ' · 💖 empfängt Ko-fi' : '') . ((int)$l['gist'] ? ' · im Gist' : '') . '</p>';
-        if ($raw !== '' && (int)$l['gist']) echo vip_copy_field('vipr' . (int)$l['id'], $raw, 'Unity „URL 1“ (Gist, vertrauenswürdig)');
-        echo vip_copy_field('vipd' . (int)$l['id'], $direct, 'Unity „URL 2“ (direkt – nur mit „Untrusted URLs“)')
-            . vip_copy_field('vipn' . (int)$l['id'], $raw !== '' && (int)$l['gist'] ? vip_gist_raw_url($l['slug'] . '.names.txt') : $direct . '&fmt=names', 'Nur Namen (z. B. „Url“ einer Keypad-Rolle)')
-            . '<textarea id="vipt' . (int)$l['id'] . '" readonly hidden>' . e(vip_text($l)) . '</textarea>'
-            . '<p style="margin-top:8px"><button type="button" class="btn btn-sm" data-copy="#vipt' . (int)$l['id'] . '">⧉ Text kopieren (für ein Gist von Hand)</button></p></div>';
+        $on = $cur && (int)$cur['id'] === (int)$l['id'];
+        echo '<a class="vip-tab' . ($on ? ' active' : '') . '" href="admin.php?tab=vip&amp;list=' . (int)$l['id'] . '"' . ($on ? ' aria-current="page"' : '') . '>'
+            . '<span class="vt-t">' . e($l['title']) . '</span>' . ($l['world'] !== '' ? '<span class="vt-w">' . e($l['world']) . '</span>' : '')
+            . '<span class="vt-n" title="aktive Einträge">' . (int)$l['n'] . '</span>' . ((int)$l['pending'] ? '<span class="vt-p" title="warten auf Prüfung">' . (int)$l['pending'] . '</span>' : '')
+            . ((int)$l['kofi'] ? '<span title="empfängt Ko-fi">💖</span>' : '') . '</a>';
     }
-    echo vip_form('vip_list_save', [], ' class="panel"') . '<div class="panel-title"><span>// Neue Liste</span></div>'
-        . '<label class="field">Name (z. B. „VIP“ oder „Ko-fi-Unterstützer“)</label><input type="text" name="title" maxlength="80" required>'
-        . '<label class="field">Kurzadresse (a–z, 0–9, -; leer = aus dem Namen)</label><input type="text" name="slug" maxlength="40" pattern="[a-z0-9-]*">'
-        . '<label class="field">Welt (nur zur Übersicht)</label><input type="text" name="world" maxlength="80">'
-        . '<label class="field">Standardgruppe (z. B. VIP, KOFI)</label><input type="text" name="grp" value="VIP" maxlength="20">'
+    echo '<span class="vip-tabs-gap"></span>'
+        . '<a class="vip-tab vip-tab-set' . ($settings ? ' active' : '') . '" href="admin.php?tab=vip&amp;list=settings"' . ($settings ? ' aria-current="page"' : '') . '>⚙ Einstellungen <small>Ko-fi · Gist</small></a>'
+        . '<button type="button" class="vip-tab vip-tab-new" data-open="#vipNewModal">＋ Neue Liste</button></nav>';
+
+    // ---------- Popup „Neue Liste“ ----------
+    echo '<div class="modal-overlay" id="vipNewModal" role="dialog" aria-modal="true" aria-labelledby="vipNewTitle">'
+        . vip_form('vip_list_save', [], ' class="modal-box vip-modal"') . '<button type="button" class="modal-close" data-close aria-label="Schließen">&times;</button>'
+        . '<div class="panel-title"><span id="vipNewTitle">// ⭐ Neue Liste</span></div>'
+        . '<p class="muted small">Jede Liste bekommt eine eigene Adresse für die Welt. Einträge fügst du danach im Reiter der Liste hinzu.</p>'
+        . '<label class="field">Name *</label><input type="text" name="title" maxlength="80" required placeholder="z. B. VIP oder Ko-fi-Unterstützer">'
+        . '<div class="f2"><div><label class="field">Kurzadresse</label><input type="text" name="slug" maxlength="40" pattern="[a-z0-9-]*" placeholder="leer = aus dem Namen"></div>'
+        . '<div><label class="field">Standardgruppe</label><input type="text" name="grp" value="VIP" maxlength="20"></div></div>'
+        . '<label class="field">Welt (nur zur Übersicht)</label><input type="text" name="world" maxlength="80" placeholder="z. B. Sylvan Club">'
         . '<label class="check"><input type="checkbox" name="gist" value="1" checked> ins Gist spiegeln</label>'
         . '<label class="check"><input type="checkbox" name="kofi" value="1"> neue Ko-fi-Unterstützer landen in dieser Liste</label>'
-        . '<button class="btn btn-gold" style="margin-top:10px">＋ Liste anlegen</button></form>';
-    echo '</div>';
+        . '<div class="vip-actions"><button type="button" class="btn" data-close>Abbrechen</button><button class="btn btn-gold">＋ Liste anlegen</button></div></form></div>';
 
-    // ---------- Einträge der gewählten Liste (volle Breite) ----------
-    if ($cur) {
-        $rows = vip_entries((int)$cur['id']);
-        echo '<div class="panel"><div class="panel-title"><span>// Einträge: ' . e($cur['title']) . ' (' . count($rows) . ')</span></div>'
-            . '<p class="muted small">Anzeigename genau wie in VRChat (Groß/Klein und Leerzeichen am Rand sind egal). Ablauf leer = dauerhaft. Abgelaufene und ungeprüfte Einträge erscheinen nicht in der Welt. '
-            . 'Notizen bleiben intern und werden nie ausgeliefert.</p>'
-            . '<div class="tbl-wrap"><table class="tbl"><tr><th>Anzeigename</th><th>Gruppe</th><th>Notiz (intern)</th><th>läuft ab</th><th>Status</th><th></th></tr>';
-        foreach ($rows as $r) {
-            $fid = 'vipe' . (int)$r['id'];
-            $expired = (int)$r['expires'] > 0 && (int)$r['expires'] <= time();
-            $state = $r['status'] === 'pending' ? '<b style="color:#f5c242">wartet</b>' : ($expired ? '<span style="color:#f87171">abgelaufen</span>' : '<span style="color:#4ade80">aktiv</span>');
-            echo '<tr><td><input form="' . $fid . '" type="text" name="name" value="' . e($r['name']) . '" maxlength="64" required></td>'
-                . '<td><input form="' . $fid . '" type="text" name="grp" value="' . e($r['grp']) . '" maxlength="20" style="width:7em"></td>'
-                . '<td><input form="' . $fid . '" type="text" name="note" value="' . e($r['note']) . '" maxlength="200"></td>'
-                . '<td><input form="' . $fid . '" type="date" name="expires" value="' . ((int)$r['expires'] ? e(date('Y-m-d', (int)$r['expires'])) : '') . '"></td>'
-                . '<td>' . $state . ($r['source'] === 'kofi' ? ' · 💖' : '') . '</td><td style="white-space:nowrap">'
-                . vip_form('vip_entry_save', ['list' => (int)$cur['id'], 'id' => (int)$r['id']], ' id="' . $fid . '" style="display:inline"') . '<button class="btn btn-sm">💾</button></form> '
-                . ($r['status'] === 'pending' ? vip_form('vip_entry_approve', ['id' => (int)$r['id']], ' style="display:inline"') . '<button class="btn btn-sm btn-gold">✔ Freigeben</button></form> ' : '')
-                . vip_form('vip_entry_delete', ['id' => (int)$r['id']], ' style="display:inline" onsubmit="return confirm(\'Eintrag entfernen?\')"') . '<button class="btn btn-sm">🗑</button></form></td></tr>';
-        }
-        echo '<tr><td><input form="vipnew" type="text" name="name" maxlength="64" placeholder="VRChat-Anzeigename" required></td>'
-            . '<td><input form="vipnew" type="text" name="grp" value="' . e($cur['grp']) . '" maxlength="20" style="width:7em"></td>'
-            . '<td><input form="vipnew" type="text" name="note" maxlength="200" placeholder="z. B. Event-Helferin"></td>'
-            . '<td><input form="vipnew" type="date" name="expires"></td><td></td><td>' . vip_form('vip_entry_save', ['list' => (int)$cur['id']], ' id="vipnew"') . '<button class="btn btn-sm btn-gold">＋ Hinzufügen</button></form></td></tr>';
-        echo '</table></div></div>';
+    if ($settings) { vip_settings_view($lists, $kc, $base, $gist_on, $gist_tok, $kofi_tok, $src); return; }
 
-        echo '<div class="grid2">' . vip_form('vip_list_save', ['id' => (int)$cur['id']], ' class="panel"') . '<div class="panel-title"><span>// Liste bearbeiten</span></div>'
-            . '<label class="field">Name</label><input type="text" name="title" value="' . e($cur['title']) . '" maxlength="80" required>'
-            . '<label class="field">Kurzadresse (Achtung: ändert die Adresse in der Welt)</label><input type="text" name="slug" value="' . e($cur['slug']) . '" maxlength="40" pattern="[a-z0-9-]+" required>'
-            . '<label class="field">Welt</label><input type="text" name="world" value="' . e($cur['world']) . '" maxlength="80">'
-            . '<label class="field">Standardgruppe</label><input type="text" name="grp" value="' . e($cur['grp']) . '" maxlength="20">'
-            . '<label class="check"><input type="checkbox" name="gist" value="1"' . ((int)$cur['gist'] ? ' checked' : '') . '> ins Gist spiegeln</label>'
-            . '<label class="check"><input type="checkbox" name="kofi" value="1"' . ((int)$cur['kofi'] ? ' checked' : '') . '> empfängt Ko-fi-Unterstützer</label>'
-            . '<button class="btn btn-gold" style="margin-top:10px">Speichern</button></form>'
-            . vip_form('vip_list_delete', ['id' => (int)$cur['id']], ' class="panel"') . '<div class="panel-title"><span>// Liste löschen</span></div>'
-            . '<p class="muted small">Löscht die Liste mit allen Einträgen. Die Adresse in der Welt liefert danach „nicht gefunden“.</p>'
-            . '<label class="field">Zur Bestätigung „' . e($cur['slug']) . '“ eintippen</label><input type="text" name="confirm" autocomplete="off">'
-            . '<button class="btn" style="margin-top:10px">🗑 Löschen</button></form></div>';
+    if (!$cur) {
+        echo '<div class="panel vip-empty"><div class="vip-empty-i">⭐</div><h3>Noch keine VIP-Liste</h3>'
+            . '<p class="muted">Lege eine Liste an, trage Namen ein und kopiere die Adresse in die VIP-Tafel oder eine Keypad-Rolle in Unity.</p>'
+            . '<button type="button" class="btn btn-gold" data-open="#vipNewModal">＋ Erste Liste anlegen</button></div>';
+        return;
     }
 
-    // ---------- Ko-fi + Gist ----------
+    // ---------- Kopf der gewählten Liste ----------
+    $id = (int)$cur['id'];
+    $rows = vip_entries($id);
+    $direct = $base . '/vip.php?l=' . rawurlencode($cur['slug']);
+    $raw = (int)$cur['gist'] ? vip_gist_raw_url($cur['slug'] . '.txt') : '';
+    $expired = count(array_filter($rows, fn($r) => (int)$r['expires'] > 0 && (int)$r['expires'] <= time()));
+    echo '<div class="panel vip-hero"><div class="vip-hero-i">⭐</div><div class="vip-hero-b"><h2>' . e($cur['title']) . '</h2>'
+        . '<div class="vip-chips">' . vip_chip('/' . e($cur['slug'])) . ($cur['world'] !== '' ? vip_chip('🌍 ' . e($cur['world'])) : '') . vip_chip('Gruppe ' . e($cur['grp']))
+        . ((int)$cur['kofi'] ? vip_chip('💖 empfängt Ko-fi', 'pink') : '') . ((int)$cur['gist'] ? vip_chip('🐙 im Gist', 'ok') : vip_chip('nicht im Gist')) . '</div></div>'
+        . '<div class="vip-stats"><div><b>' . (int)$cur['n'] . '</b><small>aktiv</small></div><div' . ((int)$cur['pending'] ? ' class="warn"' : '') . '><b>' . (int)$cur['pending'] . '</b><small>warten</small></div>'
+        . '<div' . ($expired ? ' class="bad"' : '') . '><b>' . $expired . '</b><small>abgelaufen</small></div></div></div>';
+
+    // ---------- Einträge (volle Breite) ----------
+    echo '<div class="panel vip-entries"><div class="panel-title"><span>// 👥 Einträge (' . count($rows) . ')</span>'
+        . ($rows ? '<input type="search" class="vip-search" data-vip-filter="#vipTbl" placeholder="🔍 Suchen …" aria-label="Einträge durchsuchen">' : '') . '</div>'
+        . '<p class="muted small">Anzeigename genau wie in VRChat (Groß/Klein und Leerzeichen am Rand sind egal). Ablauf leer = dauerhaft. Abgelaufene und ungeprüfte Einträge erscheinen nicht in der Welt. Notizen bleiben intern.</p>'
+        . '<div class="tbl-wrap"><table class="tbl vip-tbl" id="vipTbl"><thead><tr><th>Anzeigename</th><th>Gruppe</th><th>Notiz (intern)</th><th>läuft ab</th><th>Status</th><th></th></tr></thead><tbody>'
+        . '<tr class="vip-addrow"><td><input form="vipnew" type="text" name="name" maxlength="64" placeholder="＋ VRChat-Anzeigename" required></td>'
+        . '<td><input form="vipnew" type="text" name="grp" value="' . e($cur['grp']) . '" maxlength="20" class="vip-grp"></td>'
+        . '<td><input form="vipnew" type="text" name="note" maxlength="200" placeholder="z. B. Event-Helferin"></td>'
+        . '<td><input form="vipnew" type="date" name="expires"></td><td></td><td>' . vip_form('vip_entry_save', ['list' => $id], ' id="vipnew"') . '<button class="btn btn-sm btn-gold">＋ Hinzufügen</button></form></td></tr>';
+    foreach ($rows as $r) {
+        $fid = 'vipe' . (int)$r['id'];
+        $exp = (int)$r['expires'] > 0 && (int)$r['expires'] <= time();
+        $state = $r['status'] === 'pending' ? vip_chip('⏳ wartet', 'warn') : ($exp ? vip_chip('abgelaufen', 'bad') : vip_chip('● aktiv', 'ok'));
+        echo '<tr data-q="' . e(mb_strtolower($r['name'] . ' ' . $r['grp'] . ' ' . $r['note'])) . '"><td><input form="' . $fid . '" type="text" name="name" value="' . e($r['name']) . '" maxlength="64" required></td>'
+            . '<td><input form="' . $fid . '" type="text" name="grp" value="' . e($r['grp']) . '" maxlength="20" class="vip-grp"></td>'
+            . '<td><input form="' . $fid . '" type="text" name="note" value="' . e($r['note']) . '" maxlength="200"></td>'
+            . '<td><input form="' . $fid . '" type="date" name="expires" value="' . ((int)$r['expires'] ? e(date('Y-m-d', (int)$r['expires'])) : '') . '"></td>'
+            . '<td>' . $state . ($r['source'] === 'kofi' ? ' ' . vip_chip('💖', 'pink') : '') . '</td><td class="vip-act">'
+            . vip_form('vip_entry_save', ['list' => $id, 'id' => (int)$r['id']], ' id="' . $fid . '"') . '<button class="btn btn-sm" title="Speichern">💾</button></form>'
+            . ($r['status'] === 'pending' ? vip_form('vip_entry_approve', ['id' => (int)$r['id']]) . '<button class="btn btn-sm btn-gold">✔ Freigeben</button></form>' : '')
+            . vip_form('vip_entry_delete', ['id' => (int)$r['id']], ' onsubmit="return confirm(\'Eintrag entfernen?\')"') . '<button class="btn btn-sm" title="Entfernen">🗑</button></form></td></tr>';
+    }
+    echo '</tbody></table></div>' . (!$rows ? '<p class="muted small vip-none">Noch keine Einträge – oben den ersten Namen eintragen.</p>' : '') . '</div>';
+
+    // ---------- Links + Bearbeiten (Masonry) ----------
+    echo '<div class="grid2"><div class="panel"><div class="panel-title"><span>// 🔗 Links für Unity</span></div>'
+        . '<p class="muted small">In der VIP-Tafel (NexusVipBoard) gehören die Adressen ins Feld „Urls“. Für eine Keypad-Rolle reicht die Namensliste.</p>';
+    if ($raw !== '') echo vip_copy_field('vipr' . $id, $raw, 'URL 1 · Gist', 'vertrauenswürdig, klappt ohne „Untrusted URLs“');
+    echo vip_copy_field('vipd' . $id, $direct, ($raw !== '' ? 'URL 2' : 'URL') . ' · direkt', 'nur mit „Allow Untrusted URLs“')
+        . vip_copy_field('vipn' . $id, $raw !== '' ? vip_gist_raw_url($cur['slug'] . '.names.txt') : $direct . '&fmt=names', 'Nur Namen', 'z. B. „Url“ einer Keypad-Rolle')
+        . '<textarea id="vipt' . $id . '" readonly hidden>' . e(vip_text($cur)) . '</textarea>'
+        . '<div class="vip-actions"><button type="button" class="btn btn-sm" data-copy="#vipt' . $id . '">⧉ Text kopieren (für ein Gist von Hand)</button>'
+        . '<a class="btn btn-sm" href="' . e($direct) . '" target="_blank" rel="noopener">↗ Vorschau</a></div></div>';
+
+    echo vip_form('vip_list_save', ['id' => $id], ' class="panel"') . '<div class="panel-title"><span>// ✎ Liste bearbeiten</span></div>'
+        . '<label class="field">Name</label><input type="text" name="title" value="' . e($cur['title']) . '" maxlength="80" required>'
+        . '<div class="f2"><div><label class="field">Kurzadresse ⚠</label><input type="text" name="slug" value="' . e($cur['slug']) . '" maxlength="40" pattern="[a-z0-9-]+" required title="Ändert die Adresse in der Welt"></div>'
+        . '<div><label class="field">Standardgruppe</label><input type="text" name="grp" value="' . e($cur['grp']) . '" maxlength="20"></div></div>'
+        . '<label class="field">Welt</label><input type="text" name="world" value="' . e($cur['world']) . '" maxlength="80">'
+        . '<label class="check"><input type="checkbox" name="gist" value="1"' . ((int)$cur['gist'] ? ' checked' : '') . '> ins Gist spiegeln</label>'
+        . '<label class="check"><input type="checkbox" name="kofi" value="1"' . ((int)$cur['kofi'] ? ' checked' : '') . '> empfängt Ko-fi-Unterstützer</label>'
+        . '<div class="vip-actions"><button class="btn btn-gold">Speichern</button></div></form>';
+
+    echo vip_form('vip_list_delete', ['id' => $id], ' class="panel vip-danger"') . '<div class="panel-title"><span>// 🗑 Liste löschen</span></div>'
+        . '<p class="muted small">Löscht die Liste mit allen Einträgen. Die Adresse in der Welt liefert danach „nicht gefunden“.</p>'
+        . '<label class="field">Zur Bestätigung „' . e($cur['slug']) . '“ eintippen</label><input type="text" name="confirm" autocomplete="off">'
+        . '<div class="vip-actions"><button class="btn btn-danger">🗑 Endgültig löschen</button></div></form></div>';
+}
+
+/** Reiter „Einstellungen“: Ko-fi-Webhook und Gist-Spiegel */
+function vip_settings_view(array $lists, array $kc, string $base, bool $gist_on, string $gist_tok, string $kofi_tok, callable $src): void {
     $kofi_url = $base . '/kofi.php';
-    echo '<div class="grid2">' . vip_form('vip_kofi_settings', [], ' class="panel" autocomplete="off"') . '<div class="panel-title"><span>// 💖 Ko-fi-Webhook</span></div>'
-        . vip_copy_field('vipkofi', $kofi_url, 'In Ko-fi → Einstellungen → API/Webhooks als „Webhook URL“ eintragen')
-        . '<p class="muted small">Verification Token: ' . $src($kofi_tok) . '. Am besten als Server-Secret <code>GN_KOFI_TOKEN</code> (<code>ghostnode secrets</code>); sonst hier eintragen (wird verschlüsselt gespeichert, nie angezeigt).</p>'
+    echo '<div class="grid2">' . vip_form('vip_kofi_settings', [], ' class="panel" autocomplete="off"') . '<div class="panel-title"><span>// 💖 Ko-fi-Webhook</span>' . $src($kofi_tok) . '</div>'
+        . vip_copy_field('vipkofi', $kofi_url, 'Webhook-Adresse', 'Ko-fi → Einstellungen → API/Webhooks → „Webhook URL“, danach „Send Test“')
+        . '<p class="muted small">Verification Token am besten als Server-Secret <code>GN_KOFI_TOKEN</code> (<code>ghostnode secrets</code>); sonst hier eintragen – wird verschlüsselt gespeichert und nie angezeigt.</p>'
         . '<label class="field">Verification Token (leer = behalten)</label><input type="password" name="token" autocomplete="new-password"' . ($kofi_tok === 'env' ? ' disabled placeholder="kommt vom Server"' : '') . '>'
         . ($kofi_tok === 'admin' ? '<label class="check"><input type="checkbox" name="token_clear" value="1"> gespeicherten Token löschen</label>' : '')
-        . '<label class="field">Neue Unterstützer landen in</label><select name="list"><option value="0">– keine Liste (Ko-fi aus) –</option>';
+        . '<div class="f2"><div><label class="field">Neue Unterstützer landen in</label><select name="list"><option value="0">– keine Liste (Ko-fi aus) –</option>';
     foreach ($lists as $l) echo '<option value="' . (int)$l['id'] . '"' . ($kc['list'] === (int)$l['id'] ? ' selected' : '') . '>' . e($l['title']) . ' (' . e($l['slug']) . ')</option>';
-    echo '</select><label class="field">Gruppe für neue Ko-fi-Einträge</label><input type="text" name="group" value="' . e($kc['grp']) . '" maxlength="20">'
-        . '<label class="field">Abo: jede Zahlung verlängert um … Tage</label><input type="number" name="sub_days" min="1" max="400" value="' . $kc['sub_days'] . '">'
-        . '<label class="field">Einzel-Unterstützung: sichtbar für … Tage (0 = dauerhaft)</label><input type="number" name="don_days" min="0" max="3650" value="' . $kc['don_days'] . '">'
-        . '<label class="field">Diese Arten übernehmen</label>';
+    echo '</select></div><div><label class="field">Gruppe für neue Einträge</label><input type="text" name="group" value="' . e($kc['grp']) . '" maxlength="20"></div>'
+        . '<div><label class="field">Abo: jede Zahlung verlängert um … Tage</label><input type="number" name="sub_days" min="1" max="400" value="' . $kc['sub_days'] . '"></div>'
+        . '<div><label class="field">Einmalig: sichtbar für … Tage (0 = dauerhaft)</label><input type="number" name="don_days" min="0" max="3650" value="' . $kc['don_days'] . '"></div></div>'
+        . '<label class="field">Diese Arten übernehmen</label><div class="vip-checks">';
     foreach (VIP_KOFI_TYPES as $t) echo '<label class="check"><input type="checkbox" name="types[]" value="' . e($t) . '"' . (in_array($t, $kc['types'], true) ? ' checked' : '') . '> ' . e($t) . '</label>';
-    echo '<label class="check"><input type="checkbox" name="review" value="1"' . ($kc['review'] ? ' checked' : '') . '> erst prüfen (neue Einträge warten auf „Freigeben“)</label>'
+    echo '</div><label class="check"><input type="checkbox" name="review" value="1"' . ($kc['review'] ? ' checked' : '') . '> erst prüfen (neue Einträge warten auf „Freigeben“)</label>'
         . '<p class="muted small">Name: steht in der Ko-fi-Nachricht z. B. <code>vrc: DeinName</code>, wird dieser genommen, sonst der Ko-fi-Name. Gespeichert werden nur Name, Art/Stufe und Datum – keine E-Mail, kein Betrag, keine Nachricht. '
-        . 'Private Unterstützungen (nicht öffentlich) warten immer auf Prüfung. Doppelte Zustellungen werden erkannt.</p>'
-        . '<button class="btn btn-gold" style="margin-top:10px">Speichern</button></form>';
+        . 'Private Unterstützungen warten immer auf Prüfung. Doppelte Zustellungen werden erkannt.</p>'
+        . '<div class="vip-actions"><button class="btn btn-gold">Speichern</button></div></form>';
 
     $gid = setting('vip_gist_id', '');
-    echo vip_form('vip_gist_settings', [], ' class="panel" autocomplete="off"') . '<div class="panel-title"><span>// 🐙 Gist-Spiegel</span></div>'
+    echo vip_form('vip_gist_settings', [], ' class="panel" autocomplete="off"') . '<div class="panel-title"><span>// 🐙 Gist-Spiegel</span>' . $src($gist_tok) . '</div>'
         . '<p class="muted small">VRChat lädt Texte aus <code>gist.githubusercontent.com</code> ohne „Untrusted URLs“ – darum spiegelt die Webseite die Listen in ein geheimes Gist. '
-        . 'Token: ' . $src($gist_tok) . ' (GitHub → Settings → Developer settings → Personal access token, nur Recht „Gists: Read and write“). Am besten als Server-Secret <code>GN_GIST_TOKEN</code>.</p>'
-        . '<label class="check"><input type="checkbox" name="on" value="1"' . ($gist_on ? ' checked' : '') . '> Gist-Spiegel an (bei Änderungen, höchstens 1× pro Minute, und alle 15 min per Aufgabenplaner)</label>'
+        . 'Token: GitHub → Settings → Developer settings → Personal access token, nur Recht „Gists: Read and write“; am besten als Server-Secret <code>GN_GIST_TOKEN</code>.</p>'
+        . '<label class="check"><input type="checkbox" name="on" value="1"' . ($gist_on ? ' checked' : '') . '> Gist-Spiegel an (bei Änderungen höchstens 1× pro Minute, sonst alle 15 min per Aufgabenplaner)</label>'
         . '<label class="field">Gist-Token (leer = behalten)</label><input type="password" name="token" autocomplete="new-password"' . ($gist_tok === 'env' ? ' disabled placeholder="kommt vom Server"' : '') . '>'
         . ($gist_tok === 'admin' ? '<label class="check"><input type="checkbox" name="token_clear" value="1"> gespeicherten Token löschen</label>' : '')
-        . '<label class="field">Vorhandenes Gist benutzen (ID, leer = wird automatisch angelegt)</label><input type="text" name="gist_id" value="' . e($gid) . '" maxlength="40">'
-        . '<label class="field">GitHub-Benutzername des Gists (wird beim Abgleich automatisch erkannt)</label><input type="text" name="gist_owner" value="' . e(setting('vip_gist_owner', '')) . '" maxlength="39">'
+        . '<div class="f2"><div><label class="field">Vorhandenes Gist (ID)</label><input type="text" name="gist_id" value="' . e($gid) . '" maxlength="40" placeholder="leer = automatisch anlegen"></div>'
+        . '<div><label class="field">GitHub-Benutzer des Gists</label><input type="text" name="gist_owner" value="' . e(setting('vip_gist_owner', '')) . '" maxlength="39" placeholder="wird erkannt"></div></div>'
         . '<label class="field">Öffentliche Adresse der Webseite (leer = automatisch)</label><input type="url" name="public_url" value="' . e(setting('vip_public_url', '')) . '" placeholder="https://ghostnode-labs.dev">'
-        . '<p class="muted small">Letzter Abgleich: ' . e(setting('vip_gist_result', '–') ?: '–') . (setting('vip_gist_dirty', '0') === '1' ? ' · <b>Änderungen warten</b>' : '') . '</p>'
-        . ($gist_tok === '' ? '<p class="muted small">Ohne Token: Gist von Hand auf gist.github.com anlegen, je Liste den Text mit „⧉ Text kopieren“ einfügen und die „Raw“-Adresse (ohne Commit-Kennung) in Unity eintragen.</p>' : '')
-        . '<button class="btn btn-gold" style="margin-top:10px">Speichern</button></form>';
-    echo '</div>';
-    if ($gist_on && $gist_tok !== '') echo vip_form('vip_gist_sync') . '<button class="btn btn-sm">🔄 Gist jetzt abgleichen</button></form>';
+        . '<div class="vip-sync"><span>Letzter Abgleich: <b>' . e(setting('vip_gist_result', '–') ?: '–') . '</b></span>' . (setting('vip_gist_dirty', '0') === '1' ? vip_chip('Änderungen warten', 'warn') : '') . '</div>'
+        . ($gist_tok === '' ? '<p class="muted small">Ohne Token: Gist von Hand auf gist.github.com anlegen, je Liste den Text mit „⧉ Text kopieren“ (im Reiter der Liste) einfügen und die „Raw“-Adresse (ohne Commit-Kennung) in Unity eintragen.</p>' : '')
+        . '<div class="vip-actions"><button class="btn btn-gold">Speichern</button>'
+        . ($gist_on && $gist_tok !== '' ? '<button class="btn" form="vipSync">🔄 Jetzt abgleichen</button>' : '') . '</div></form></div>';
+    if ($gist_on && $gist_tok !== '') echo vip_form('vip_gist_sync', [], ' id="vipSync" hidden') . '</form>';
 }
