@@ -105,6 +105,7 @@ ${b}Einstellungen${z}
   secrets           Schlüssel (Discord, HypeRate, SMTP …) ändern und übernehmen
   bungie            Bungie-Werte für D2 Nexus eintragen
   certs             Zertifikate (erneut) holen
+  musik-login [neu|aus]   YouTube-Anmeldung für die Bot-Musik („This video requires login“)
 
 ${b}Notfall & Umzug${z}
   login liste | entsperren | passwort BENUTZER | 2fa-aus BENUTZER | aktivieren BENUTZER
@@ -136,7 +137,9 @@ install_cli() {   # /usr/local/bin/ghostnode → dieses Script (bleibt nach Upda
 _ghostnode() {
     local cur=${COMP_WORDS[COMP_CWORD]} prev=${COMP_WORDS[1]:-}
     if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=($(compgen -W "update bot check bericht crons backup secrets bungie certs login usedb olddb migrate install cli help" -- "$cur"))
+        COMPREPLY=($(compgen -W "update bot check bericht crons backup secrets bungie certs musik-login login usedb olddb migrate install cli help" -- "$cur"))
+    elif [ "$prev" = musik-login ] && [ "$COMP_CWORD" -eq 2 ]; then
+        COMPREPLY=($(compgen -W "neu aus" -- "$cur"))
     elif [ "$prev" = login ] && [ "$COMP_CWORD" -eq 2 ]; then
         COMPREPLY=($(compgen -W "liste entsperren passwort 2fa-aus aktivieren" -- "$cur"))
     else
@@ -167,7 +170,7 @@ for a in "$@"; do
         --src-port=*) MIG_SRC_PORT=${a#--src-port=} ;;
         --force|--neu) ;;   # für olddb
         -h|--help) show_help; exit 0 ;;
-        *) [ "$CMD" = login ] || die "Unbekannte Option: $a (Hilfe: --help)" ;;   # login: Unterbefehl + Benutzername
+        *) [ "$CMD" = login ] || [ "$CMD" = musik-login ] || die "Unbekannte Option: $a (Hilfe: --help)" ;;   # login: Unterbefehl + Benutzername
     esac
 done
 want() {   # want <teil> → läuft dieser Teil?
@@ -212,8 +215,8 @@ save_kv() {   # save_kv DATEI VAR... – Format VAR='wert', lesbar für bash und
 }
 SECRET_VARS=(HYPERATE_API_KEY DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET
              GN_DISCORD_CLIENT_ID GN_DISCORD_CLIENT_SECRET SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASS SMTP_FROM STATUS_WEBHOOK
-             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET OLD_DB_PASS LIVE_SECRET GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET LAVALINK_PASSWORD)
-CONF_VARS=(ROLE RUN_MODE DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST VOICE_HOST HR_UPSTREAM BOT_UPSTREAM FTP_USER TZ_NAME OLD_DB_HOST OLD_DB_PORT OLD_DB_NAME OLD_DB_USER OLD_DB_MIRROR AUTO_UPDATE)
+             REDDIT_CLIENT_ID REDDIT_CLIENT_SECRET TWITCH_EXT_CLIENT_ID TWITCH_EXT_SECRET DB_PASS TURN_SECRET FTP_PASS MUMBLE_SUPW MUMBLE_PASS BOT_SSO_SECRET OLD_DB_PASS LIVE_SECRET GN_BUNGIE_KEY GN_BUNGIE_CLIENT_ID GN_BUNGIE_CLIENT_SECRET LAVALINK_PASSWORD YT_REFRESH_TOKEN)
+CONF_VARS=(ROLE RUN_MODE DOMAIN LE_EMAIL WEB_DIR DB_ENGINE DB_NAME DB_USER HR_HOST BOT_HOST TURN_HOST VOICE_HOST HR_UPSTREAM BOT_UPSTREAM FTP_USER TZ_NAME OLD_DB_HOST OLD_DB_PORT OLD_DB_NAME OLD_DB_USER OLD_DB_MIRROR AUTO_UPDATE YT_OAUTH)
 
 ask_config() {
     step "Einstellungen"
@@ -855,12 +858,59 @@ lavalink_yml() {   # lavalink_yml YOUTUBE-VERSION → application.yml (nur 127.0
     echo "    allowSearch: true"
     echo "    allowDirectVideoIds: true"
     echo "    allowDirectPlaylistIds: true"
+    # YouTube verlangt von Rechenzentrums-IPs oft eine Anmeldung („This video requires login“) → mehrere Clients, mit Anmeldung zuerst TV
+    if [ "${YT_OAUTH:-0}" = 1 ]; then
+        echo "    clients: [\"MUSIC\", \"TV\", \"ANDROID_VR\", \"WEB\", \"WEBEMBEDDED\", \"TVHTML5_SIMPLY\"]"
+        echo "    oauth:"
+        echo "      enabled: true"
+        [ -n "${YT_REFRESH_TOKEN:-}" ] && echo "      refreshToken: \"$YT_REFRESH_TOKEN\""
+    else
+        echo "    clients: [\"MUSIC\", \"ANDROID_VR\", \"WEB\", \"WEBEMBEDDED\", \"TVHTML5_SIMPLY\"]"
+    fi
     echo "logging:"
     echo "  file:"
     echo "    path: ./logs/"
     echo "  level:"
     echo "    root: WARN"
     echo "    lavalink: INFO"
+    echo "    dev.lavalink.youtube.http.YoutubeOauth2Handler: INFO"
+}
+cmd_musik_login() {   # YouTube-Anmeldung für den Musik-Dienst (Google-Gerätecode; Zweitkonto empfohlen)
+    local dir=/opt/ghostnode/lavalink yt
+    [ -s "$dir/Lavalink.jar" ] || die "Musik-Dienst ist nicht eingerichtet (ghostnode bot)."
+    yt=$(sed -n 's/.*youtube-plugin:\([^"]*\)".*/\1/p' "$dir/application.yml" 2>/dev/null | head -1)
+    if [ "${ARGS[0]:-}" = aus ]; then
+        YT_OAUTH=0; YT_REFRESH_TOKEN=""; save_kv "$CONF" "${CONF_VARS[@]}"; save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
+        ( umask 077; lavalink_yml "$yt" > "$dir/application.yml" ); chown "$APP_USER:$APP_USER" "$dir/application.yml"; chmod 600 "$dir/application.yml"
+        svc restart ghostnode-lavalink; ok "YouTube-Anmeldung entfernt (Token gelöscht)."; return 0
+    fi
+    echo "  ${c_warn}Bitte ein ZWEIT-Google-Konto nehmen, nicht dein Hauptkonto – YouTube kann Konten sperren, die Bots nutzen.${c_0}"
+    YT_OAUTH=1; [ "${ARGS[0]:-}" = neu ] && YT_REFRESH_TOKEN=""
+    save_kv "$CONF" "${CONF_VARS[@]}"
+    ( umask 077; lavalink_yml "$yt" > "$dir/application.yml" ); chown "$APP_USER:$APP_USER" "$dir/application.yml"; chmod 600 "$dir/application.yml"
+    if [ -n "${YT_REFRESH_TOKEN:-}" ]; then svc restart ghostnode-lavalink; ok "Anmeldung ist schon gespeichert – Musik-Dienst neu gestartet (neu anmelden: ghostnode musik-login neu)."; return 0; fi
+    local since; since=$(date '+%Y-%m-%d %H:%M:%S')
+    svc restart ghostnode-lavalink
+    step "Warte auf den Anmelde-Code (bis zu 10 Minuten) …"
+    local tok="" line shown=0 end=$((SECONDS + 600))
+    while [ $SECONDS -lt $end ]; do
+        while IFS= read -r line; do
+            if [ $shown = 0 ] && echo "$line" | grep -qiE 'google\.com/device|enter (the )?code|code:'; then
+                echo; echo "  ${c_ok}➜ Im Browser öffnen: https://www.google.com/device${c_0}"; echo "  $(echo "$line" | sed 's/^.*\]: //' | cut -c1-200)"; echo "  Dort mit dem Zweitkonto anmelden und den Code eingeben. Ich warte …"; shown=1
+            fi
+            t=$(echo "$line" | grep -oE '1//[A-Za-z0-9_-]{20,}' | head -1 || true); [ -n "$t" ] && tok=$t
+        done < <(journalctl -u ghostnode-lavalink --since "$since" --no-pager -o cat 2>/dev/null)
+        [ -n "$tok" ] && break
+        sleep 5
+    done
+    if [ -z "$tok" ]; then
+        [ $shown = 1 ] || warn "Kein Code im Protokoll gefunden. Ansehen: journalctl -u ghostnode-lavalink -n 80"
+        warn "Kein Token erhalten – nochmal: ghostnode musik-login"; return 1
+    fi
+    YT_REFRESH_TOKEN=$tok; save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"
+    ( umask 077; lavalink_yml "$yt" > "$dir/application.yml" ); chown "$APP_USER:$APP_USER" "$dir/application.yml"; chmod 600 "$dir/application.yml"
+    svc restart ghostnode-lavalink
+    ok "YouTube-Anmeldung gespeichert (nur in $SECRETS und application.yml, beide nur für root/Dienst lesbar). Musik-Dienst neu gestartet."
 }
 setup_lavalink() {   # Musik-Dienst für den Bot (Lavalink ≥ 4.2 mit DAVE – Discord verlangt Ende-zu-Ende-Verschlüsselung in Sprachkanälen)
     step "Musik-Dienst (Lavalink)"
@@ -1991,6 +2041,7 @@ case "$CMD" in
         [[ " ${ARGS[*]} " == *" --force "* ]] && rm -f /var/lib/ghostnode/old-db-imported
         setup_olddb; want cron && setup_cron ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
+    musik-login) [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; cmd_musik_login ;;
     cli) install_cli; ok "Befehl angelegt: ghostnode → $(readlink -f "$0")"; echo "  Tab-Vervollständigung gilt ab der nächsten Anmeldung (oder sofort: source /etc/bash_completion.d/ghostnode)." ;;
     *) die "Unbekannter Befehl: $CMD – Hilfe: ghostnode help" ;;
 esac
