@@ -320,6 +320,26 @@ function vrc_migrate(PDO $db): void {
         $db->exec("CREATE TABLE IF NOT EXISTS friend_banners (user_id INTEGER NOT NULL, vrc_id TEXT NOT NULL, banner TEXT NOT NULL DEFAULT '', PRIMARY KEY (user_id, vrc_id));
                    PRAGMA user_version = 19;");
     }
+    if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 20) {
+        // 8.2 Web-Nexus (inc/modules/nexusplus.php): Puls-Verlauf vom Desktop-Client, Welt-Wunschliste,
+        // 🔞 Spielzeug-Partner-Links (Ablauf, Obergrenze, Muster, Consent) mit Protokoll nur für die Beteiligten, Befehlsbremse
+        $db->exec("
+        CREATE TABLE IF NOT EXISTS web_heart (user_id INTEGER NOT NULL, ts INTEGER NOT NULL, bpm INTEGER NOT NULL, PRIMARY KEY (user_id, ts));
+        CREATE TABLE IF NOT EXISTS web_wish (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL, world_id TEXT NOT NULL, name TEXT NOT NULL DEFAULT '', image TEXT NOT NULL DEFAULT '',
+                                author TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', prio INTEGER NOT NULL DEFAULT 1, tag TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL,
+                                visited INTEGER NOT NULL DEFAULT 0, UNIQUE (user_id, world_id));
+        CREATE TABLE IF NOT EXISTS toy_links (id TEXT PRIMARY KEY, owner TEXT NOT NULL, partner TEXT NOT NULL, cap INTEGER NOT NULL DEFAULT 50, patterns TEXT NOT NULL DEFAULT '[]',
+                                surprise INTEGER NOT NULL DEFAULT 0, limits TEXT NOT NULL DEFAULT '', safeword TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'active',
+                                accepted INTEGER NOT NULL DEFAULT 0, created INTEGER NOT NULL, expires INTEGER NOT NULL, ended INTEGER NOT NULL DEFAULT 0, last_used INTEGER NOT NULL DEFAULT 0, last_lv INTEGER NOT NULL DEFAULT 0);
+        CREATE INDEX IF NOT EXISTS idx_toy_links_owner ON toy_links(owner, status);
+        CREATE INDEX IF NOT EXISTS idx_toy_links_partner ON toy_links(partner, status);
+        CREATE TABLE IF NOT EXISTS toy_log (id INTEGER PRIMARY KEY AUTOINCREMENT, link_id TEXT NOT NULL, owner TEXT NOT NULL, actor TEXT NOT NULL, ts INTEGER NOT NULL, cmd TEXT NOT NULL, detail TEXT NOT NULL DEFAULT '');
+        CREATE INDEX IF NOT EXISTS idx_toy_log_link ON toy_log(link_id, id);
+        CREATE INDEX IF NOT EXISTS idx_toy_log_ts ON toy_log(ts);
+        CREATE TABLE IF NOT EXISTS toy_rate (vrc_id TEXT PRIMARY KEY, minute INTEGER NOT NULL, n INTEGER NOT NULL DEFAULT 0);
+        PRAGMA user_version = 20;
+    ");
+    }
 }
 
 // ---------- Verschlüsselung der Sitzungs-Cookies ----------

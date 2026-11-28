@@ -202,6 +202,14 @@ function nc_state_save(int $uid, int $client, array $s): void {
         'avatar' => mb_substr((string)($s['avatar'] ?? ''), 0, 80), 'avatar_id' => mb_substr((string)($s['avatar_id'] ?? ''), 0, 64),
         'osc' => !empty($s['osc']), 'params' => $params, 'display_name' => mb_substr((string)($s['display_name'] ?? ''), 0, 64),
     ];
+    // 8.2: Puls (bpm + Quelle) und Geräte mit Akku (Uhr, Tracker, Controller …) für Web-Nexus – Puls landet zusätzlich im Verlauf
+    $bpm = (int)($s['heart'] ?? 0);
+    if ($bpm >= 25 && $bpm <= 250) { $clean['heart'] = $bpm; $clean['heart_src'] = mb_substr((string)($s['heart_src'] ?? ''), 0, 24); }
+    if (isset($s['devices']) || $bpm) {
+        require_once __DIR__ . '/nexusplus.php';
+        if (isset($s['devices'])) $clean['devices'] = nxp_devices_clean($s['devices']);
+        if (isset($clean['heart'])) nxp_heart_store($uid, $bpm);
+    }
     vrc_db()->prepare('INSERT INTO client_state (user_id, client_id, updated, state) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET client_id = excluded.client_id, updated = excluded.updated, state = excluded.state')
         ->execute([$uid, $client, time(), json_encode($clean, JSON_UNESCAPED_UNICODE)]);
 }

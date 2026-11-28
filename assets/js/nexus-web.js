@@ -182,6 +182,7 @@
                 + (own ? '' : '<button type="button" class="btn btn-sm' + (p.i_follow ? '' : ' btn-gold') + '" id="nwFollow">' + (p.i_follow ? '✓ Folge ich' : '⭐ Folgen') + '</button>')
                 + '<button type="button" class="btn btn-sm" id="nwVrc">VRChat-Profil</button></div>'
                 + '<div class="nw-facts">' + facts.map(f => '<span class="nw-fact">' + esc(f) + '</span>').join('') + '</div>'
+                + '<div class="nxp-badges" data-badges="' + esc(p.vrc_id) + '"></div>'
                 + (p.bio ? '<div class="nw-text">' + rich(p.bio) + '</div>' : '')
                 + (p.interests ? '<div class="nw-muted">💜 ' + esc(p.interests) + '</div>' : '')
                 + (p.links && p.links.length ? '<div class="nw-row">' + p.links.map(l => '<a class="chip" href="' + esc(l) + '" target="_blank" rel="noopener noreferrer">🔗 ' + esc(l.replace(/^https:\/\//, '').slice(0, 40)) + '</a>').join('') + '</div>' : '')
@@ -190,6 +191,7 @@
                 + '</div>' + (own ? profileForm(p) : '') + '<h3 class="nw-muted" style="margin:6px 0 0">Beiträge</h3><div class="nw" id="nwList"></div><button type="button" class="btn btn-sm" id="nwMore" hidden>Ältere laden</button>';
             if ($('#nwFollow', box)) $('#nwFollow', box).onclick = () => api('nw_follow', { id: p.vrc_id, on: p.i_follow ? '' : '1' }).then(x => { toast(x.msg); showProfile(id, box); }).catch(x => toast('⚠ ' + x.message, true));
             $('#nwVrc', box).onclick = () => K.openUser(p.vrc_id);
+            if (window.NexusPlus) window.NexusPlus.badges($('[data-badges]', box));   // 8.2: Abzeichen & Vollständigkeit
             $$('[data-l18]', box).forEach(b => { b.onclick = () => l18Do(b, () => showProfile(id, box)); });
             if (own) bindProfileForm(box, p);
             cs.box = box; cs.author = p.vrc_id; cs.mode = ''; cs.q = ''; cs.tag = ''; cs.rating = box.id === 'nwErpBody' ? 'nsfw' : 'sfw';
@@ -349,7 +351,7 @@
         if (!a.verified18) return gate(box, '🔞 Nur mit Verified 18+', 'Schließe in VRChat die Altersverifizierung (18+) ab und mach sie im Profil sichtbar – danach hier neu laden.');
         box.innerHTML = '<div class="nw-erp-hero"><div class="nw-row"><div style="flex:1"><h2>❤️ 18+ / ERP</h2><span class="nw-muted">Nur für dich sichtbar, weil dein Konto Verified 18+ ist. Inhalte bleiben im 18+-Bereich – nichts davon erscheint im normalen Feed.</span></div>'
             + '<label class="vx-auto"><input type="checkbox" id="nwNsfwOn"' + (me.nsfw ? ' checked' : '') + '> NSFW-Inhalte anzeigen</label></div></div>'
-            + (me.nsfw ? '<div class="nw-row">' + [['feed', '🔞 NSFW-Feed'], ['links', '💌 Anfragen & Consent'], ['reddit', '👽 r/VRchatERP'], ['profile', '👤 Mein 18+-Profil'], ['couple', '💞 Paar-Profil'], ['tpl', '📚 Vorlagen'], ['tips', '🛡 Sicherheit & Regeln']].map(([k, l]) => '<button type="button" class="chip' + (erpSub === k ? ' on' : '') + '" data-esub="' + k + '">' + l + '</button>').join('') + '</div><div id="nwErpBody" class="nw"></div>'
+            + (me.nsfw ? '<div class="nw-row">' + [['feed', '🔞 NSFW-Feed'], ['links', '💌 Anfragen & Consent'], ['reddit', '👽 r/VRchatERP'], ['profile', '👤 Mein 18+-Profil'], ['couple', '💞 Paar-Profil'], ['tpl', '📚 Vorlagen'], ['toys', '🎮 Spielzeug'], ['tips', '🛡 Sicherheit & Regeln']].map(([k, l]) => '<button type="button" class="chip' + (erpSub === k ? ' on' : '') + '" data-esub="' + k + '">' + l + '</button>').join('') + '</div><div id="nwErpBody" class="nw"></div>'
                 : '<div class="nw-card nw-gate"><b>NSFW ist aus</b><span class="nw-muted">Schalte oben „NSFW-Inhalte anzeigen“ ein. Das gilt auch in der App (gleiches Nexus-Konto) und lässt sich jederzeit wieder ausschalten.</span></div>');
         $('#nwNsfwOn', box).onchange = e => api('nw_nsfw', { on: e.target.checked ? '1' : '0' }).then(d => { toast(d.msg); meP = null; return ME(); }).then(openErp).catch(x => { e.target.checked = !e.target.checked; toast('⚠ ' + x.message, true); });
         $$('[data-esub]', box).forEach(b => { b.onclick = () => { erpSub = b.dataset.esub; openErp(); }; });
@@ -360,6 +362,7 @@
         if (erpSub === 'links') return openLinks(body);
         if (erpSub === 'profile') { cs.box = body; return showProfile(a.vrc_id, body); }
         if ((erpSub === 'couple' || erpSub === 'tpl') && window.NexusAdult) return window.NexusAdult.render(body, erpSub);   // 7.3.2
+        if (erpSub === 'toys' && window.NexusToyWeb) return window.NexusToyWeb.render(body);   // 8.2: Spielzeug im Browser, Partner-Links
         body.innerHTML = '<div class="nw-tiles">' + [
             ['🤝', 'Einverständnis zuerst', 'Klärt Grenzen vorher. „Nein“ und Safewords gelten sofort – auch mitten in einer Szene.'],
             ['🔒', 'Privatsphäre', 'Keine echten Namen, Adressen oder Gesichtsbilder posten. Screenshots anderer nur mit deren Erlaubnis.'],
@@ -382,8 +385,16 @@
     };
     // Erster Aufruf: nexus.js hat den gespeicherten Reiter schon geöffnet, bevor diese Datei geladen war
     ME().catch(() => {});
+    // 8.2: Partner-Link (nexus.php?toylink=<id>) → 18+ / ERP → 🎮 Spielzeug; ob man ihn nutzen darf, entscheidet der Server
+    const tl = new URLSearchParams(location.search).get('toylink');
+    const toyLink = !!tl && /^[0-9a-f]{20}$/.test(tl);
+    if (toyLink) {
+        window.NexusToyLink = tl; erpSub = 'toys';
+        try { history.replaceState(null, '', location.pathname); } catch (e) { /* egal */ }
+        ME().then(() => { if (window.NexusTab) window.NexusTab('erp'); }).catch(() => {});
+    }
     const cur = $('.vx-tab:not([hidden])');
-    if (cur && ['community', 'pulse', 'erp'].includes(cur.dataset.pane)) {
+    if (!toyLink && cur && ['community', 'pulse', 'erp'].includes(cur.dataset.pane)) {
         const b = $('#tabs [data-tab="' + cur.dataset.pane + '"].active');
         window.NexusWeb.open(cur.dataset.pane, b ? b.dataset.msub : '');
     }

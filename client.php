@@ -7,7 +7,9 @@
  *
  *   GET  client.php?a=hello              Wer bin ich? Server-Zeit, Abfrage-Intervalle
  *   POST client.php?a=events             {"events":[{ts, kind, world_id, instance, world_name, player_id, player_name, detail}, …]}
- *   POST client.php?a=state              {"state":{running, world_id, instance, world_name, since, players:[{id,name,since}], avatar, avatar_id, osc, params}}
+ *   POST client.php?a=state              {"state":{running, world_id, instance, world_name, since, players:[{id,name,since}], avatar, avatar_id, osc, params,
+ *                                         heart, heart_src, devices:[{kind: watch|phone|tracker|controller|headset|heart|toy|other, name, battery, charging, connected, via}]}}
+ *   POST client.php?a=heart              {"samples":[{ts, bpm}, …]} gepufferte Pulswerte (8.2, Puls-Verlauf in Web-Nexus)
  *   GET  client.php?a=osc                offene OSC-Befehle abholen
  *   POST client.php?a=osc_ack            {"results":[{id, ok, error}]}
  *   POST client.php?a=notes              {"since":ts, "notes":[{vrc_id, note, favorite, tags, watch, updated}]} → neuere Notizen vom Server
@@ -101,6 +103,12 @@ try {
             if (!$post) nc_reply(['error' => 'Nur per POST.'], 405);
             nc_state_save($uid, $cid, (array)($body['state'] ?? []));
             nc_reply(['ok' => true]);
+        case 'heart': {
+            // 8.2: gepufferte Pulswerte nachreichen {"samples":[{ts, bpm}, …]} (höchstens einer je 20 s wird gespeichert)
+            if (!$post) nc_reply(['error' => 'Nur per POST.'], 405);
+            require_once __DIR__ . '/inc/modules/nexusplus.php';
+            nc_reply(['ok' => true, 'stored' => nxp_heart_batch($uid, (array)($body['samples'] ?? []))]);
+        }
         case 'osc':
             nc_reply(['ok' => true, 'commands' => nc_osc_take($uid, $cid)]);
         case 'osc_ack':

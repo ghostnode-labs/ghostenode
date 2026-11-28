@@ -11,6 +11,8 @@
  *
  * „to“ ist ein Hash der VRChat-User-ID (die ID selbst steht nirgends). Lesen darf nur, wer beim ersten Abholen
  * den Briefkasten-Schlüssel gesetzt hat. Nachrichten verfallen nach 90 s. Keine Sitzung, keine Cookies, keine Datenbank.
+ * 8.2: Web-Nexus (nexus.php, Aktionen nxp_toy_*) legt Befehle aus dem Browser über denselben Speicher (inc/modules/toybox.php)
+ * in die Briefkästen – mit Webseiten-Anmeldung, Verified 18+ + NSFW bei jeder Anfrage und den Grenzen des Partner-Links.
  * <title>Nexus Toy-Relay</title>
  */
 require_once __DIR__ . '/inc/core/jsonguard.php'; json_guard();
@@ -18,30 +20,19 @@ header('Content-Type: application/json; charset=utf-8');
 header('Cache-Control: no-store');
 header('X-Content-Type-Options: nosniff');
 
-const TR_TTL = 90;
-const TR_MAX_MSGS = 50;
-const TR_MAX_LEN = 6000;
-/** Dateien enden auf .php und beginnen hiermit – auch ohne .htaccess (z. B. nginx) direkt aufgerufen nur leer */
-const TR_GUARD = "<?php http_response_code(404); exit; ?>\n";
+require_once __DIR__ . '/inc/modules/toybox.php';   // 8.2: gemeinsamer Briefkasten-Speicher (auch für Web-Nexus im Browser)
+const TR_TTL = TB_TTL;
+const TR_MAX_MSGS = TB_MAX_MSGS;
+const TR_MAX_LEN = TB_MAX_LEN;
 const TR_RATE = 300;          // Anfragen pro IP und Minute (Abholen 1×/s + Regler)
 
 function tr_out(array $o, int $code = 200): void { json_guard_clean(); http_response_code($code); echo json_encode($o, JSON_UNESCAPED_UNICODE); exit; }
-function tr_dir(): string {
-    $d = __DIR__ . '/data/toyrelay';
-    if (!is_dir($d)) { @mkdir($d, 0700, true); @file_put_contents($d . '/.htaccess', "Require all denied\nDeny from all\n"); }
-    return $d;
-}
+function tr_dir(): string { return tb_dir(); }
 /** Datei gesperrt öffnen, $fn darf den Inhalt ändern */
 function tr_with(string $file, callable $fn) {
-    $h = fopen($file, 'c+');
-    if (!$h) tr_out(['error' => 'Speicher nicht beschreibbar (Ordner data/).'], 500);
-    flock($h, LOCK_EX);
-    $raw = (string)stream_get_contents($h);
-    if (strpos($raw, TR_GUARD) === 0) $raw = substr($raw, strlen(TR_GUARD));
-    $d = $raw ? (json_decode($raw, true) ?: []) : [];
-    $res = $fn($d);
-    ftruncate($h, 0); rewind($h); fwrite($h, TR_GUARD . json_encode($d)); fflush($h);
-    flock($h, LOCK_UN); fclose($h);
+    $ok = false;
+    $res = tb_with($file, $fn, $ok);
+    if (!$ok) tr_out(['error' => 'Speicher nicht beschreibbar (Ordner data/).'], 500);
     return $res;
 }
 

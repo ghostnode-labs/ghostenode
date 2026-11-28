@@ -167,6 +167,7 @@
         if (window.NexusWeb) window.NexusWeb.open(name, sub);
         if (window.NexusClubs) window.NexusClubs.open(name, sub);
         if (window.NexusWiki) window.NexusWiki.open(name);
+        if (window.NexusPlus) window.NexusPlus.open(name, sub);   // 8.2: Mein Nexus
         syncSubNav(name, sub);
     }
     window.NexusTab = tab;
@@ -560,6 +561,10 @@
             api('instance_create', { world: w.id, type: f.type.value, region: f.region.value, group: f.group ? f.group.value : '', access: f.access ? f.access.value : '', invite_me: f.invite_me.checked ? 1 : '' })
                 .then(d => { toast(d.msg); }).catch(x => toast(x.message, true)).finally(() => { b.disabled = false; });
         });
+        // 8.2: auf die Welt-Wunschliste (Mein Nexus → 🗺)
+        const wb = document.createElement('button'); wb.type = 'button'; wb.className = 'btn btn-sm'; wb.textContent = '🗺 Wunschliste'; wb.title = 'Will ich besuchen – wird automatisch abgehakt, sobald du drin warst';
+        $('#wFav').after(wb);
+        wb.addEventListener('click', () => api('nxp_wish_add', { world_id: w.id, name: w.name, image: /^https:\/\//.test(w.image || '') ? w.image : '', author: w.author }).then(d => toast(d.msg)).catch(x => toast(x.message, true)));
         $('#wFav').addEventListener('click', () => api('world_fav', { id: w.id, on: favEntry ? '' : 1, fav_id: favEntry ? favEntry.fav_id : '' }).then(d => { toast(d.msg); if (worldKind === 'favorites') loadWorlds('favorites'); }).catch(x => toast(x.message, true)));
     }
     function openInstance(loc) {
@@ -1444,7 +1449,7 @@
         const supported = 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
         const show = d => {
             info = d;
-            for (const k of ['watch', 'favorites', 'notifs', 'events']) pp[k].checked = !!d.prefs[k];
+            for (const k of ['watch', 'favorites', 'notifs', 'events', 'clubs', 'battery']) pp[k].checked = !!d.prefs[k];
             pp.events_min.value = d.prefs.events_min; pp.quiet_from.value = d.prefs.quiet_from; pp.quiet_to.value = d.prefs.quiet_to;
             $('#pushDev').innerHTML = (!supported ? '⚠ Dieser Browser kann keine Push-Meldungen.' : Notification.permission === 'denied' ? '⚠ Benachrichtigungen sind für diese Seite im Browser blockiert.' : '')
                 + (d.subs.length ? '<div>' + d.subs.map(s => '📱 ' + esc(s.ua || 'Gerät') + ' · seit ' + new Date(s.created * 1000).toLocaleDateString('de-DE') + (s.last_ok ? ' · zuletzt zugestellt ' + new Date(s.last_ok * 1000).toLocaleString('de-DE') : '') + ' <a href="#" data-pushdel="' + s.id + '">abmelden</a>').join('<br>') + '</div>' : '<div>Noch kein Gerät angemeldet.</div>');
@@ -1473,7 +1478,7 @@
         pp.addEventListener('submit', e => {
             e.preventDefault();
             const data = { quiet_from: pp.quiet_from.value, quiet_to: pp.quiet_to.value, events_min: pp.events_min.value };
-            for (const k of ['watch', 'favorites', 'notifs', 'events']) data[k] = pp[k].checked ? 1 : '';
+            for (const k of ['watch', 'favorites', 'notifs', 'events', 'clubs', 'battery']) data[k] = pp[k].checked ? 1 : '';
             api('push_prefs', data).then(d => { toast(d.msg); show(d); }).catch(x => toast(x.message, true));
         });
     }
