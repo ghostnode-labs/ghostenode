@@ -94,7 +94,7 @@ ${b}ghostnode${z} – GhostNode Root-Server verwalten (als root)
 ${b}Aufruf:${z} ghostnode <befehl> [optionen]      ${d}(oder: bash $(readlink -f "$0") <befehl>)${z}
 
 ${b}Täglich${z}
-  update            Webseite, HypeRate-Weiterleitung und Bot aktualisieren, Dienste neu starten, prüfen
+  update            alles aktualisieren: Webseite, Bot, Musik (Lavalink, yt-dlp, ffmpeg), Firewall/fail2ban, Befehl – dann prüfen
   bot               nur den Discord-Bot aktualisieren (Git oder neueste Release-ZIP), neu starten, prüfen
   check             alles prüfen (Dienste, Seiten, PHP-Erweiterungen, Zertifikate)
   bericht           Zustand zum Weitergeben (Versionen, Dienste, letzte Fehler) – ohne Passwörter
@@ -797,10 +797,18 @@ setup_bot() {
     [ -n "$before" ] && [ "$before" != "$after" ] && ok "Version $before → $after" || ok "Version ${after:-?}"
     install -d -o "$APP_USER" -g "$APP_USER" -m 0750 "$dir/data"
     local DASHBOARD_URL="https://$BOT_HOST" NEXUS_BASE="https://$DOMAIN" HYPERATE_RELAY="https://$HR_HOST" BOT_DATA="$dir/data" PORT=$BOT_PORT HOST=127.0.0.1
-    local LAVALINK_URL=""
+    local LAVALINK_URL="" YTDLP="" YTDLP_COOKIES=""
     [ -n "${LAVALINK_PASSWORD:-}" ] || { LAVALINK_PASSWORD=$(rand 40); save_kv "$SECRETS" "${SECRET_VARS[@]}"; chmod 600 "$SECRETS"; }
-    if [[ ",$SKIP," != *",music,"* ]] && setup_lavalink; then LAVALINK_URL="http://127.0.0.1:$LAVALINK_PORT"; fi
-    save_kv "$CONF_DIR/bot.env" DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET DASHBOARD_URL NEXUS_BASE HYPERATE_RELAY BOT_DATA PORT HOST BOT_SSO_SECRET LAVALINK_URL LAVALINK_PASSWORD
+    if [[ ",$SKIP," != *",music,"* ]] && setup_lavalink; then
+        LAVALINK_URL="http://127.0.0.1:$LAVALINK_PORT"
+        if setup_ytdlp; then
+            YTDLP=/usr/local/bin/yt-dlp
+            if [ -f "$CONF_DIR/yt-cookies.txt" ]; then   # Kopie im Datenordner des Bots (dort darf der Dienst lesen/schreiben; /etc/ghostnode nicht)
+                install -o "$APP_USER" -g "$APP_USER" -m 600 "$CONF_DIR/yt-cookies.txt" "$dir/data/yt-cookies.txt"; YTDLP_COOKIES="$dir/data/yt-cookies.txt"
+            else rm -f "$dir/data/yt-cookies.txt"; fi
+        fi
+    fi
+    save_kv "$CONF_DIR/bot.env" DISCORD_TOKEN DISCORD_APP_ID DISCORD_GUILD_ID RELEASE_CHANNEL_ID DISCORD_CLIENT_SECRET DASHBOARD_URL NEXUS_BASE HYPERATE_RELAY BOT_DATA PORT HOST BOT_SSO_SECRET LAVALINK_URL LAVALINK_PASSWORD YTDLP YTDLP_COOKIES
     chmod 600 "$CONF_DIR/bot.env"
     need_port "$BOT_PORT" node
     write_unit ghostnode-bot "GhostNode Discord-Bot (VRC Nexus)" "$dir" bot.js "$CONF_DIR/bot.env"
@@ -911,6 +919,23 @@ cmd_musik_login() {   # YouTube-Anmeldung für den Musik-Dienst (Google-Gerätec
     ( umask 077; lavalink_yml "$yt" > "$dir/application.yml" ); chown "$APP_USER:$APP_USER" "$dir/application.yml"; chmod 600 "$dir/application.yml"
     svc restart ghostnode-lavalink
     ok "YouTube-Anmeldung gespeichert (nur in $SECRETS und application.yml, beide nur für root/Dienst lesbar). Musik-Dienst neu gestartet."
+}
+setup_ytdlp() {   # yt-dlp + ffmpeg: Ausweichweg des Bots, wenn YouTube einen Titel über Lavalink verweigert (nur Streamen, nichts wird gespeichert)
+    step "YouTube-Ausweichweg (yt-dlp + ffmpeg)"
+    command -v ffmpeg >/dev/null 2>&1 || install_quiet ffmpeg || warn "ffmpeg ließ sich nicht installieren – yt-dlp läuft trotzdem (ohne Umwandlung)."
+    command -v python3 >/dev/null 2>&1 || install_quiet python3 || { warn "python3 fehlt – yt-dlp übersprungen."; return 1; }
+    local b=/usr/local/bin/yt-dlp
+    if [ -x "$b" ]; then
+        "$b" -U >/dev/null 2>&1 || true   # offizielles Selbst-Update (GitHub-Release von yt-dlp)
+    else
+        curl -fsSL -m 120 -o "$b.new" https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp && chmod 755 "$b.new" && mv -f "$b.new" "$b" || { rm -f "$b.new"; warn "yt-dlp nicht ladbar (GitHub nicht erreichbar?) – übersprungen."; return 1; }
+    fi
+    local v; v=$("$b" --version 2>/dev/null || true)
+    [ -n "$v" ] || { warn "yt-dlp startet nicht (python3 ≥ 3.9 nötig)."; return 1; }
+    # Optional: Cookies eines Zweit-Kontos (Netscape-Format) – nur auf dem Server, nie in Git
+    if [ -f "$CONF_DIR/yt-cookies.txt" ]; then chmod 600 "$CONF_DIR/yt-cookies.txt"; ok "yt-dlp nutzt die Cookies aus $CONF_DIR/yt-cookies.txt"; fi
+    ok "yt-dlp $v$(command -v ffmpeg >/dev/null 2>&1 && echo " · ffmpeg $(ffmpeg -version 2>/dev/null | head -1 | awk '{print $3}')")"
+    return 0
 }
 setup_lavalink() {   # Musik-Dienst für den Bot (Lavalink ≥ 4.2 mit DAVE – Discord verlangt Ende-zu-Ende-Verschlüsselung in Sprachkanälen)
     step "Musik-Dienst (Lavalink)"
@@ -1619,6 +1644,7 @@ cmd_crons() {
 setup_firewall() {
     step "Firewall & Schutz"
     apt-get install -y -qq ufw fail2ban unattended-upgrades >/dev/null
+    install_quiet python3-systemd || true   # fail2ban liest SSH-Anmeldungen aus dem Journal (Debian 12 / Ubuntu 24 haben kein auth.log mehr)
     local ssh_port=""; command -v sshd >/dev/null && ssh_port=$(sshd -T 2>/dev/null | awk '/^port /{print $2; exit}' || true); ssh_port=${ssh_port:-22}
     local u=1 was=0
     ufw status 2>/dev/null | grep -q '^Status: active' && was=1
@@ -1640,17 +1666,24 @@ setup_firewall() {
         if [ -n "$other" ]; then u=0; warn "ufw bleibt aus: weitere öffentliche Ports ($other) würden sonst blockiert. Prüfen, mit „ufw allow …“ freigeben, dann „ufw enable“."; fi
     fi
     if [ "$u" = 1 ] && [ "$was" = 0 ]; then ufw default deny incoming >/dev/null; ufw default allow outgoing >/dev/null; ufw --force enable >/dev/null 2>&1 || warn "ufw ließ sich nicht einschalten (Container?) – auf dem Server: ufw status"; fi
-    cat > /etc/fail2ban/jail.d/ghostnode.conf <<EOF
-[sshd]
-enabled = true
-[apache-auth]
-enabled = $(want web && echo true || echo false)
-[nginx-http-auth]
-enabled = $([ "$FRONT" = nginx ] && echo true || echo false)
-[vsftpd]
-enabled = $(want ftp && echo true || echo false)
-EOF
+    # Jails nur mit vorhandener Protokollquelle – sonst startet fail2ban gar nicht („aus“ im Dashboard)
+    local lf=/etc/fail2ban/jail.d/ghostnode.conf
+    {
+        echo "# erzeugt von ghostnode-root.sh"
+        echo "[sshd]"; echo "enabled = true"
+        if [ -f /var/log/auth.log ]; then echo "backend = auto"; else echo "backend = systemd"; fi
+        local jail logf
+        for jail in apache-auth:/var/log/apache2/error.log nginx-http-auth:/var/log/nginx/error.log vsftpd:/var/log/vsftpd.log; do
+            logf=${jail#*:}; jail=${jail%%:*}
+            echo "[$jail]"
+            case "$jail" in apache-auth) want web || logf="";; nginx-http-auth) [ "$FRONT" = nginx ] || logf="";; vsftpd) want ftp || logf="";; esac
+            if [ -n "$logf" ] && [ -f "$logf" ]; then echo "enabled = true"; else echo "enabled = false"; fi
+        done
+    } > "$lf"
     svc enable fail2ban; svc restart fail2ban
+    sleep 2
+    if is_active fail2ban; then ok "fail2ban läuft ($(fail2ban-client status 2>/dev/null | sed -n 's/.*Jail list:[[:space:]]*//p'))"
+    else warn "fail2ban startet nicht – Ursache: fail2ban-client -t ; journalctl -u fail2ban -n 30"; fi
     dpkg-reconfigure -f noninteractive unattended-upgrades >/dev/null 2>&1 || true
     if ufw status 2>/dev/null | grep -q '^Status: active'; then ok "ufw aktiv (SSH $ssh_port, 80, 443$(want turn && echo ', TURN')$(want voice && [ "$PTERO" = 0 ] && echo ', Mumble')$(want ftp && echo ', FTPS')$([ "$PTERO" = 1 ] && echo ', Wings'))"
     else warn "ufw ist aus – Regeln sind vorbereitet, einschalten mit: ufw enable"; fi
@@ -2021,6 +2054,7 @@ case "$CMD" in
         want hr  && setup_hr
         want bot && setup_bot
         want cron && setup_cron   # Wächter/Backup/Auto-Update mit dem neuesten Stand
+        want fw   && setup_firewall   # nur hinzufügen, nie zurücksetzen; fail2ban mit passender Protokollquelle
         install_cli
         check_all ;;
     bot)   # nur der Discord-Bot: Code holen (Git oder Release-ZIP), Einstellungen schreiben, neu starten, prüfen
