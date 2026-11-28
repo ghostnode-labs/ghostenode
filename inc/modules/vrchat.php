@@ -340,6 +340,22 @@ function vrc_migrate(PDO $db): void {
         PRAGMA user_version = 20;
     ");
     }
+    if ((int)$db->query('PRAGMA user_version')->fetchColumn() < 21) {
+        // Nexus-Chat 8.3: Protokoll-Aushandlung + signal-v1 (libsignal, PQXDH) – nur öffentliche Schlüssel.
+        // protos: Komma-Liste (leer = nur nexus-v1, alte Clients); sig_*: libsignal-Identität (an ik_sig gebunden), signierter Pre-Key und
+        // Kyber-„Last-Resort“-Schlüssel als JSON; Einmal-Schlüssel in eigenen Tabellen (werden beim Ausliefern verbraucht)
+        $db->exec("
+        ALTER TABLE chat_devices ADD COLUMN protos TEXT NOT NULL DEFAULT '';
+        ALTER TABLE chat_devices ADD COLUMN reg_id INTEGER NOT NULL DEFAULT 0;
+        ALTER TABLE chat_devices ADD COLUMN sig_ik TEXT NOT NULL DEFAULT '';
+        ALTER TABLE chat_devices ADD COLUMN sig_bind TEXT NOT NULL DEFAULT '';
+        ALTER TABLE chat_devices ADD COLUMN sig_spk TEXT NOT NULL DEFAULT '';
+        ALTER TABLE chat_devices ADD COLUMN sig_kyber TEXT NOT NULL DEFAULT '';
+        CREATE TABLE IF NOT EXISTS chat_sig_opks (device_id TEXT NOT NULL, opk_id INTEGER NOT NULL, pub TEXT NOT NULL, PRIMARY KEY (device_id, opk_id));
+        CREATE TABLE IF NOT EXISTS chat_kyber_keys (device_id TEXT NOT NULL, key_id INTEGER NOT NULL, pub TEXT NOT NULL, sig TEXT NOT NULL, PRIMARY KEY (device_id, key_id));
+        PRAGMA user_version = 21;
+    ");
+    }
 }
 
 // ---------- Verschlüsselung der Sitzungs-Cookies ----------

@@ -34,3 +34,15 @@ Reine PHP-Tests mit Mocks (Mock-`/proc`, Mock-GitHub), legen einen Wegwerf-Daten
 php tools/tests/site9_test.php                  # SQLite
 php my.php tools/tests/site9_test.php           # gleiche Tests gegen ein lokales Test-MySQL ($GLOBALS['__db_cfg'] in my.php setzen)
 ```
+
+## Nexus-Privat-Chat (nexuschat.php, Protokoll-Aushandlung nexus-v1 / signal-v1)
+
+Reine PHP-Tests mit Testschlüsseln (keine echten Konten); starten kurz einen eingebauten PHP-Server auf einem freien Port:
+
+```bash
+php tools/tests/nexuschat_test.php              # SQLite in einem Wegwerf-Ordner
+php my.php tools/tests/nexuschat_test.php       # gleiche Tests gegen ein lokales Test-MySQL ($GLOBALS['__db_cfg'] in my.php setzen)
+```
+
+Geprüft werden Migration 21 (neue Spalten/Tabellen), alte Clients (ohne `protos`) unverändert, Bindung der libsignal-Identität an `ik_sig`,
+Einmal-EC- und Einmal-Kyber-Schlüssel (verbraucht, danach Kyber-Last-Resort), Zähler zum Nachlegen, Rückfall bei fehlerhaftem signal-v1-Teil und Entfernen.

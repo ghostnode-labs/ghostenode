@@ -82,7 +82,7 @@ function admin_nexus_post(string $act, array $in): string {
             // --- Chat ---
             case 'nx_chat_remove':
                 $dev = preg_replace('/[^0-9a-f]/', '', (string)($in['device'] ?? ''));
-                foreach (['chat_opks WHERE device_id', 'chat_inbox WHERE to_device', 'chat_devices WHERE device_id'] as $t) nx_db()->prepare('DELETE FROM ' . $t . ' = ?')->execute([$dev]);
+                foreach (['chat_opks WHERE device_id', 'chat_sig_opks WHERE device_id', 'chat_kyber_keys WHERE device_id', 'chat_inbox WHERE to_device', 'chat_devices WHERE device_id'] as $t) nx_db()->prepare('DELETE FROM ' . $t . ' = ?')->execute([$dev]);
                 nw_log($actor, 'Admin: Chat-Gerät entfernt', '', $dev);
                 return 'Gerät entfernt (wartende verschlüsselte Nachrichten gelöscht).';
         }
