@@ -159,3 +159,58 @@ body.nav-side .vx-sidefoot { display: flex; flex-direction: column; gap: 2px; ma
 .ad-star.on { color: #f3c262; }
 .ad-body { white-space: pre-wrap; font: inherit; background: rgba(0,0,0,.2); padding: 8px; border-radius: 8px; margin: 8px 0; }
 .ad-lim summary { cursor: pointer; }
+
+/* ---------- 8.2: Mein Nexus (Geräte, Puls, Wochenrückblick, Wunschliste), Abzeichen, 🔞 Spielzeug im Browser ---------- */
+.nxp-kpis { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; margin: 10px 0; }
+.nxp-kpis > div { border: 1px solid var(--nw-line); padding: 10px; display: flex; flex-direction: column; gap: 2px; background: rgba(56, 213, 230, 0.04); }
+.nxp-kpis b { font-size: 1.2rem; color: var(--nw-strong); }
+.nxp-kpis span { font-size: 0.78rem; color: var(--text-muted); }
+.nxp-d { font-style: normal; font-size: 0.75rem; margin-left: 4px; }
+.nxp-d.up { color: #50fa7b; } .nxp-d.down { color: #ff7a7a; }
+.nxp-warn { border: 1px solid rgba(243, 194, 98, 0.5); background: rgba(243, 194, 98, 0.08); padding: 8px 10px; margin: 8px 0; }
+.nxp-empty { padding: 24px 8px; text-align: center; }
+.nxp-line { padding: 6px 0; border-bottom: 1px solid var(--nw-line); }
+.nxp-devs { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 8px; margin: 10px 0; }
+.nxp-dev { display: flex; gap: 10px; border: 1px solid var(--nw-line); padding: 10px; }
+.nxp-dev.off { opacity: 0.55; }
+.nxp-ico { font-size: 1.6rem; line-height: 1; }
+.nxp-batt { display: inline-block; width: 46px; height: 12px; border: 1px solid var(--text-muted); vertical-align: -1px; position: relative; }
+.nxp-batt i { position: absolute; left: 1px; top: 1px; bottom: 1px; max-width: calc(100% - 2px); background: #50fa7b; }
+.nxp-batt.mid i { background: #f3c262; } .nxp-batt.low i { background: #ff5555; }
+.nxp-chart { width: 100%; height: 220px; display: block; margin: 8px 0; }
+.nxp-chart .g line { stroke: var(--nw-line); stroke-width: 1; }
+.nxp-chart text { fill: var(--text-muted); font-size: 11px; }
+.nxp-chart .band { fill: rgba(255, 85, 140, 0.18); stroke: none; }
+.nxp-chart .avg { fill: none; stroke: #ff558c; stroke-width: 2; vector-effect: non-scaling-stroke; }
+.nxp-zones { display: flex; height: 22px; margin: 6px 0; border: 1px solid var(--nw-line); overflow: hidden; }
+.nxp-zones > div { display: flex; align-items: center; justify-content: center; min-width: 0; font-size: 0.72rem; white-space: nowrap; overflow: hidden; color: #061018; }
+.nxp-zones .z-ruhig { background: #6ec6ff; } .nxp-zones .z-leicht { background: #50fa7b; } .nxp-zones .z-aktiv { background: #f3c262; } .nxp-zones .z-hoch { background: #ff5555; }
+.nxp-top { margin: 6px 0 0 18px; padding: 0; } .nxp-top li { margin: 3px 0; }
+.nxp-wishes { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 8px; }
+.nxp-wish { display: grid; grid-template-columns: 96px 1fr; gap: 10px; margin: 0; }
+.nxp-wish img, .nxp-noimg { width: 96px; height: 72px; object-fit: cover; background: var(--nw-line); display: flex; align-items: center; justify-content: center; font-size: 1.6rem; }
+.nxp-hit { outline: 2px solid var(--accent-gold); outline-offset: 2px; transition: outline-color 0.4s; }
+.nxp-badges { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0; }
+.nxp-badges:empty { display: none; }
+.nxp-badge { border: 1px solid rgba(243, 194, 98, 0.5); color: var(--accent-gold); padding: 3px 9px; border-radius: 12px; font-size: 0.78rem; cursor: help; }
+.nxp-score { flex-basis: 100%; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 0.82rem; }
+.nxp-meter { width: 140px; height: 8px; background: var(--nw-line); position: relative; display: inline-block; }
+.nxp-meter i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--accent-cyan); }
+@media (max-width: 560px) { .nxp-wishes { grid-template-columns: 1fr; } .nxp-wish { grid-template-columns: 72px 1fr; } .nxp-wish img, .nxp-noimg { width: 72px; height: 56px; } }
+/* 🔞 Spielzeug */
+.nxp-stopbar { position: fixed; left: 50%; bottom: 14px; transform: translateX(-50%); z-index: 2000; padding: 12px 26px; font: inherit; font-weight: 800; font-size: 1rem; letter-spacing: 1px;
+    color: #fff; background: #d11a3a; border: 2px solid #ff8aa0; border-radius: 30px; box-shadow: 0 8px 26px rgba(209, 26, 58, 0.55); cursor: pointer; }
+.nxp-stopbar small { font-weight: 500; font-size: 0.7rem; opacity: 0.85; margin-left: 6px; }
+.nxp-stopbar:hover, .nxp-stopbar:focus-visible { background: #ff2448; outline: 3px solid #fff; }
+body.nav-side .nxp-stopbar { left: calc(50% + var(--nw-side) / 2); }
+.nxp-ctl { border-top: 1px solid var(--nw-line); margin-top: 8px; padding-top: 8px; display: flex; flex-direction: column; gap: 8px; }
+.nxp-slider { display: flex; align-items: center; gap: 10px; }
+.nxp-slider input[type=range] { flex: 1; accent-color: #ff558c; }
+.nxp-slider output { min-width: 48px; text-align: right; font-weight: 700; }
+.nxp-terms { border-left: 3px solid #ff558c; padding: 4px 10px; margin: 8px 0; }
+.nxp-pats { display: flex; flex-wrap: wrap; gap: 4px 12px; }
+.nxp-link { border-color: rgba(255, 85, 140, 0.35); }
+.nxp-modal { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.65); z-index: 1900; display: flex; align-items: center; justify-content: center; padding: 16px; }
+.nxp-modal > .nw-card { max-width: 720px; width: 100%; max-height: 80vh; overflow: auto; }
+.nxp-log { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.nxp-log td { padding: 4px 6px; border-bottom: 1px solid var(--nw-line); vertical-align: top; }

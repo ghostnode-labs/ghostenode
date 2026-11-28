@@ -3,12 +3,13 @@
  * VRC Nexus – Push-Benachrichtigungen ans Handy/PC (Web-Push), auch wenn Nexus nicht offen ist.
  * Läuft als Aufgabe „vrcpush“ (Admin → System → Aufgaben, am besten mit echtem Cron alle 15 min):
  *   gleicht VRChat ab und meldet  🟢 beobachtete Freunde online · 📨 neue VRChat-Benachrichtigungen (Einladungen, Anfragen …) · 📅 Gruppen-Events kurz vorher
+ *   8.2: 🏠 zugesagte Nexus-Club-Events kurz vorher · 🔋 schwacher Akku an Uhr/Tracker/Controller (vom Desktop-Client gemeldet)
  */
 require_once __DIR__ . '/vrchat.php';
 require_once __DIR__ . '/vrchat_extra.php';
 require_once APP_ROOT . '/inc/core/webpush.php';
 
-const NX_PUSH_DEFAULTS = ['watch' => true, 'favorites' => false, 'notifs' => true, 'events' => true, 'events_min' => 30, 'quiet_from' => '', 'quiet_to' => ''];
+const NX_PUSH_DEFAULTS = ['watch' => true, 'favorites' => false, 'notifs' => true, 'events' => true, 'events_min' => 30, 'clubs' => true, 'battery' => true, 'quiet_from' => '', 'quiet_to' => ''];
 
 function nx_push_prefs(int $uid): array {
     $p = json_decode(setting('push_prefs_' . $uid, ''), true);
@@ -17,7 +18,7 @@ function nx_push_prefs(int $uid): array {
 function nx_push_save_prefs(int $uid, array $in): array {
     $b = fn($k) => !empty($in[$k]) && $in[$k] !== '0';
     $t = fn($k) => preg_match('/^([01]\d|2[0-3]):[0-5]\d$/', (string)($in[$k] ?? '')) ? (string)$in[$k] : '';
-    $p = ['watch' => $b('watch'), 'favorites' => $b('favorites'), 'notifs' => $b('notifs'), 'events' => $b('events'),
+    $p = ['watch' => $b('watch'), 'favorites' => $b('favorites'), 'notifs' => $b('notifs'), 'events' => $b('events'), 'clubs' => $b('clubs'), 'battery' => $b('battery'),
           'events_min' => max(5, min(240, (int)($in['events_min'] ?? 30))), 'quiet_from' => $t('quiet_from'), 'quiet_to' => $t('quiet_to')];
     set_setting('push_prefs_' . $uid, json_encode($p));
     return $p;
@@ -67,6 +68,11 @@ function nx_push_check(int $uid): int {
             }
         }
         set_setting('push_ev_' . $uid, json_encode(array_slice($done, -200)));
+    }
+    // 8.2: zugesagte Club-Events und schwacher Akku (inc/modules/nexusplus.php)
+    if ($p['clubs'] || $p['battery']) {
+        require_once __DIR__ . '/nexusplus.php';
+        try { $msgs = array_merge($msgs, nxp_push_extra($uid, (string)$acc['vrc_id'], $p, $now)); } catch (Throwable $e) { /* Club-Tabellen fehlen o. Ä. */ }
     }
     set_setting('push_last_' . $uid, (string)$now);
     if (!$msgs || nx_push_quiet($p)) return 0;

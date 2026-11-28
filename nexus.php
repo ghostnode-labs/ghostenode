@@ -84,6 +84,7 @@ $uid = (int)$me['id'];
 
 if (isset($_GET['export']) && vrc_account($uid)) { vrc_export($uid, (string)$_GET['export']); exit; }
 if (isset($_GET['client_export'])) { nc_export_csv($uid); exit; }
+if (isset($_GET['heart_csv'])) { require_once __DIR__ . '/inc/modules/nexusplus.php'; nxp_heart_csv($uid); exit; }   // 8.2: Puls-Verlauf
 // Desktop-Client als ZIP (Quellcode + Start-/Build-Skripte; die fertige EXE baut build.bat bzw. GitHub Actions)
 if (isset($_GET['client_download'])) {
     $dir = __DIR__ . '/clients/nexus-desktop';
@@ -166,6 +167,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             session_write_close();
             require_once __DIR__ . '/inc/modules/nexusweb.php';
             $out = nxweb_action($uid, $act, $in);
+        } elseif (strpos($act, 'nxp_') === 0) {
+            // 8.2: Geräte, Puls-Verlauf, Wochenrückblick, Welt-Wunschliste, Profil-Abzeichen, 🔞 Spielzeug im Browser
+            session_write_close();
+            require_once __DIR__ . '/inc/modules/nexusplus.php';
+            $out = nxp_action($uid, $act, $in);
         } elseif (strpos($act, 'client_') === 0) {
             // Desktop-Client – funktioniert auch ohne verbundenes VRChat-Web-Konto
             session_write_close();
@@ -1182,6 +1188,13 @@ session_write_close();
         <button type="button" class="vx-tabbtn" data-tab="favs"><span>⭐</span><em>Favoriten</em></button>
         <div class="vx-msec" role="separator">Spiel und Mehr</div>
         <button type="button" class="vx-tabbtn" data-tab="client"><span>🎮</span><em>Spiel &amp; OSC</em></button>
+        <div class="vx-mgroup"><button type="button" class="vx-mtop" aria-haspopup="true"><span>💠</span><em>Mein Nexus</em><i>▾</i></button>
+            <div class="vx-mdrop" role="menu">
+                <button type="button" class="vx-tabbtn" data-tab="mynx" data-msub="devices"><span>🔋</span><em>Geräte &amp; Uhr</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="mynx" data-msub="heart"><span>💓</span><em>Puls-Verlauf</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="mynx" data-msub="week"><span>📆</span><em>Wochenrückblick</em></button>
+                <button type="button" class="vx-tabbtn" data-tab="mynx" data-msub="wish"><span>🗺</span><em>Welt-Wunschliste</em></button>
+            </div></div>
         <div class="vx-mgroup"><button type="button" class="vx-mtop" aria-haspopup="true"><span>🧰</span><em>Werkzeuge</em><i>▾</i></button>
             <div class="vx-mdrop" role="menu">
                 <button type="button" class="vx-tabbtn" data-tab="calendar"><span>📅</span><em>Gruppen-Kalender</em></button>
@@ -1395,6 +1408,7 @@ session_write_close();
     <section class="vx-tab" data-pane="wiki" hidden><div id="nwWiki" class="nw"></div></section>
     <section class="vx-tab" data-pane="pulse" hidden><div id="nwPulse" class="nw"></div></section>
     <section class="vx-tab" data-pane="erp" hidden><div id="nwErp" class="nw"></div></section>
+    <section class="vx-tab" data-pane="mynx" hidden><div id="nxpPane" class="nw"></div></section>
     <section class="vx-tab" data-pane="client" hidden><div id="clientPane" class="nc"></div></section>
     <section class="vx-tab" data-pane="account" hidden>
         <form class="panel" id="pushPanel" style="margin-bottom: 16px;">
@@ -1407,6 +1421,8 @@ session_write_close();
                 <label class="check"><input type="checkbox" name="favorites"> ⭐ Lieblings-Freunde kommen ins Spiel</label>
                 <label class="check"><input type="checkbox" name="notifs"> 📨 Einladungen &amp; Anfragen</label>
                 <label class="check"><input type="checkbox" name="events"> 📅 Gruppen-Events <input type="number" name="events_min" min="5" max="240" style="width:60px"> min vorher</label>
+                <label class="check"><input type="checkbox" name="clubs"> 🏠 zugesagte Club-Events (gleiche Vorlaufzeit)</label>
+                <label class="check"><input type="checkbox" name="battery"> 🔋 schwacher Akku (Uhr, Tracker, Controller)</label>
             </div>
             <div style="display:flex;gap:8px;align-items:center;margin-top:8px;" class="vx-small">🌙 Ruhezeit <input type="time" name="quiet_from"> bis <input type="time" name="quiet_to"> <button class="btn btn-sm">Speichern</button></div>
             <p class="vx-small" id="pushTask"></p>
@@ -1514,6 +1530,8 @@ session_write_close();
 <script src="assets/js/nexus-clubs.js"></script>
 <script src="assets/js/nexus-wiki.js"></script>
 <script src="assets/js/nexus-adult.js"></script>
+<script src="assets/js/nexus-plus.js"></script>
+<script src="assets/js/nexus-toyweb.js"></script>
 <script src="assets/js/nexus-client.js"></script>
 <script src="assets/js/nexus-translate.js"></script>
 </body>
