@@ -906,7 +906,11 @@ cmd_musik_login() {   # YouTube-Anmeldung für den Musik-Dienst (Google-Gerätec
     while [ $SECONDS -lt $end ]; do
         while IFS= read -r line; do
             if [ $shown = 0 ] && echo "$line" | grep -qiE 'google\.com/device|enter (the )?code|code:'; then
-                echo; echo "  ${c_ok}➜ Im Browser öffnen: https://www.google.com/device${c_0}"; echo "  $(echo "$line" | sed 's/^.*\]: //' | cut -c1-200)"; echo "  Dort mit dem Zweitkonto anmelden und den Code eingeben. Ich warte …"; shown=1
+                local code; code=$(echo "$line" | grep -oiE 'code[: ]+[A-Z0-9]{3,}(-[A-Z0-9]{2,})+' | grep -oE '[A-Z0-9]{3,}(-[A-Z0-9]{2,})+' | head -1 || true)
+                echo; echo "  ${c_ok}➜ Im Browser öffnen: https://www.google.com/device${c_0}"
+                if [ -n "$code" ]; then echo; echo "     Code:  ${c_ok}$code${c_0}"; echo
+                else echo "$line" | sed 's/^.*OAUTH INTEGRATION: *//; s/^.*\]: //' | fold -s -w 100 | sed 's/^/  /'; fi
+                echo "  Dort mit dem Zweitkonto anmelden und den Code eingeben. Ich warte …"; shown=1
             fi
             t=$(echo "$line" | grep -oE '1//[A-Za-z0-9_-]{20,}' | head -1 || true); [ -n "$t" ] && tok=$t
         done < <(journalctl -u ghostnode-lavalink --since "$since" --no-pager -o cat 2>/dev/null)
