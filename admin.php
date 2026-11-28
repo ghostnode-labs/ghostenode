@@ -10,6 +10,7 @@ require_once __DIR__ . '/inc/modules/hub.php';
 require_once __DIR__ . '/inc/admin/nexus_tabs.php';
 require_once __DIR__ . '/inc/admin/poster_tab.php';
 require_once __DIR__ . '/inc/admin/server_tab.php';
+require_once __DIR__ . '/inc/admin/vip_tab.php';
 require_once __DIR__ . '/inc/core/accounts.php';
 acc_schema();
 
@@ -175,7 +176,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         'nx_comm' => 'admin.access', 'nx_chat_remove' => 'admin.access',
         // VRChat-Poster
         'sv_do' => 'system.manage', 'ps_settings' => 'posters.manage', 'ps_run' => 'posters.manage', 'ps_slot_toggle' => 'posters.manage',
-    ];
+    ] + array_fill_keys(VIP_ADMIN_ACTIONS, 'vip.manage');
     // Während „Ansicht als Rolle“ zählt für diese Aktionen die echte Rolle nicht – nur die Vorschau beenden geht immer.
     guard_post($perm_for[$act] ?? null);
     $tab = $_POST['tab'] ?? 'overview';
@@ -213,6 +214,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
         if (isset($perm_for[$act]) && strpos($act, 'nx_') === 0) { $msg = admin_nexus_post($act, $_POST); $act = '__done'; }
         if (isset($perm_for[$act]) && strpos($act, 'ps_') === 0) { $msg = admin_poster_post($act, $_POST); $act = '__done'; }
         if (isset($perm_for[$act]) && strpos($act, 'sv_') === 0) { $msg = admin_server_post($act, $_POST); $act = '__done'; }
+        if (isset($perm_for[$act]) && strpos($act, 'vip_') === 0) { $msg = admin_vip_post($act, $_POST); $act = '__done'; }
         switch ($act) {
             case 'logout':
                 audit('Logout');
@@ -889,7 +891,7 @@ if ($mode === 'panel') {
         'audit'    => ['📜', 'Protokoll', 'audit.view'],
         'database' => ['🗄️', 'Datenbank', 'database.manage'],
         'system'   => ['🛰️', 'System', 'system.manage'],
-    ] + SV_ADMIN_TABS + NX_ADMIN_TABS + PS_ADMIN_TABS + [
+    ] + SV_ADMIN_TABS + NX_ADMIN_TABS + PS_ADMIN_TABS + VIP_ADMIN_TABS + [
         'account'  => ['👤', 'Mein Konto', null],
     ];
     $TABS = array_filter($TABS, function ($t) { return $t[2] === null || count(array_filter((array)$t[2], 'can')) > 0; });
@@ -1254,7 +1256,7 @@ function bytes(int $b): string {
             <?php
             // 8.2.1: Seitenleiste in Gruppen wie im Nexus-Client
             $groups = ['Start' => ['overview'], 'Benutzer & Zugang' => ['users', 'roles', 'invites', 'sessions', 'security'],
-                'Inhalte' => ['pages', 'posters'], 'VRC Nexus' => array_keys(NX_ADMIN_TABS),
+                'Inhalte' => ['pages', 'posters', 'vip'], 'VRC Nexus' => array_keys(NX_ADMIN_TABS),
                 'Server & System' => ['server', 'system', 'database', 'audit'], 'Konto' => ['account']];
             $placed = array_merge(...array_values($groups));
             $groups['Weitere'] = array_values(array_diff(array_keys($TABS), $placed));
@@ -2017,6 +2019,8 @@ function bytes(int $b): string {
         <?php admin_poster_view(); ?>
 <?php elseif (isset(SV_ADMIN_TABS[$tab])): ?>
         <?php admin_server_view(); ?>
+<?php elseif (isset(VIP_ADMIN_TABS[$tab])): ?>
+        <?php admin_vip_view(); ?>
 <?php elseif ($tab === 'account'): ?>
         <div class="grid2">
             <form method="POST" class="panel" autocomplete="off">

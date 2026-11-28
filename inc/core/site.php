@@ -47,6 +47,7 @@ const PERMISSIONS = [
     'posters.upload'         => ['VRChat-Poster: eigene Slots anlegen & Bilder hochladen (Browser, Bildlink, FTP)', 'Poster'],
     'posters.edit'           => ['VRChat-Poster: Slots einstellen, aktives Bild & Poster-URL ändern, Bilder bearbeiten/löschen, Freigaben vergeben', 'Poster'],
     'posters.manage'         => ['VRChat-Poster: alle Slots aller Benutzer verwalten + Admin-Einstellungen', 'Poster'],
+    'vip.manage'             => ['VIP-Listen für VRChat-Welten: Listen & Einträge, Ko-fi-Webhook, Gist-Spiegel', 'Poster'],
     'market.submit'          => ['Plugin-Marktplatz: eigene VRC-Nexus-Plugins einreichen und aktualisieren', 'Marktplatz'],
     'market.manage'          => ['Plugin-Marktplatz: Plugins prüfen, freigeben, ablehnen und löschen', 'Marktplatz'],
     'nexus.age'              => ['Nexus: „Verified 18+“ manuell vergeben und entziehen (mit Grund, protokolliert)', 'Community'],

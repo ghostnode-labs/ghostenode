@@ -72,3 +72,17 @@ php my.php tools/tests/sdadult_test.php         # gleiche Tests gegen ein lokale
 Geprüft werden: Paket aus der Quelle (ZipArchive, eigener ZIP-Schreiber, vorgebautes Paket) ist ein gültiges `.streamDeckPlugin` (ein `*.sdPlugin`-Ordner, Manifest, Bilder in beiden Größen, Neo-Layout),
 Sperre der Quelle per `.htaccess`, kein Link auf öffentlichen Seiten, 403 ohne Anmeldung / ohne Nexus-Web-Recht / ohne VRChat / ohne Verified 18+ / mit NSFW aus, 200 + gültiges Paket mit Freigabe,
 Zähler ohne Benutzer/IP und das Rate-Limit (429). Die Quelle kommt aus dem App-Repo: `node apps/vrc-nexus/streamdeck-adult/tools/sync-web.js <Pfad zu dieser Arbeitskopie>`.
+
+## VIP-Listen (vip.php, kofi.php, Admin → VIP-Listen, inc/modules/vip.php)
+
+Reine PHP-Tests mit Mocks (kein echtes Ko-fi, kein echtes GitHub – der Gist-Aufruf läuft über `$GLOBALS['__vip_http']`); starten kurz einen eingebauten PHP-Server auf einem freien Port:
+
+```bash
+php tools/tests/vip_test.php                    # SQLite in einem Wegwerf-Ordner
+php my.php tools/tests/vip_test.php             # gleiche Tests gegen ein lokales Test-MySQL ($GLOBALS['__db_cfg'] in my.php setzen)
+```
+
+Geprüft werden Migration 1 (Tabellen `vip_lists`, `vip_entries`, `vip_kofi_seen`), Textformat `GRUPPE|Name` und `fmt=names`, Gruppenfilter, Ablauf und „erst prüfen“,
+keine Notizen in der Ausgabe, Cache-Header/ETag/304, 404/405, Rate-Limit (429), Ko-fi-Webhook (ohne Token 503, falsches Token 401, richtiges Token 200, Duplikat per message_id,
+Name aus `vrc: …`, Abo verlängert, private Unterstützung wartet, keine E-Mail/Betrag/Nachricht/Transaktions-ID gespeichert, Token nur verschlüsselt bzw. aus `GN_KOFI_TOKEN`)
+und der Gist-Spiegel (anlegen per POST, ändern per PATCH, gelöschte Listen entfernen, Hash = kein unnötiger Aufruf, Drosselung, Aufgabe `vipgist`, falsches Token).
