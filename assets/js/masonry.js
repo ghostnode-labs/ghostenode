@@ -24,6 +24,23 @@
      * Einspaltig (Handy) wird nichts verändert. Elemente mit grid-column: 1 / -1 bleiben volle Breite.
      */
     var ROW = 4, ON = 'nxm-on';
+    /*
+     * 8.6 GRUNDREGEL – 4er-Raster: jedes Mauerwerk hat 4 gleich breite Spalten (schmal: 2, Handy: 1), jede Kachel hat
+     * eine von vier Größen: S = 1 Spalte, M = 2 (Standard), L = 3, XL = 4 (ganze Inhaltsbreite).
+     * Größe setzen: Klasse sz-s / sz-m / sz-l / sz-xl (oder data-sz="s|m|l|xl"); Kacheln mit grid-column: 1 / -1
+     * (z. B. .ns-wide) gelten als XL. Freie Plätze rechts werden immer aufgefüllt („dense“).
+     */
+    var SIZES = { s: 1, m: 2, l: 3, xl: 4 }, sizeOf = new WeakMap();
+    function sizeFor(k) {
+        var z = 0, m = /(?:^|\s)sz-(s|m|l|xl)(?:\s|$)/.exec(typeof k.className === 'string' ? k.className : '');
+        if (m) return SIZES[m[1]];                                    // Klasse/Attribut immer frisch lesen (kann später gesetzt werden)
+        if (k.dataset && SIZES[k.dataset.sz]) return SIZES[k.dataset.sz];
+        if (sizeOf.has(k)) return sizeOf.get(k);
+        { var kc = getComputedStyle(k); z = (kc.gridColumnEnd === '-1' || /^span (?:[4-9]|\d\d)/.test(kc.gridColumnEnd)) ? 4 : 2; }
+        sizeOf.set(k, z);
+        return z;
+    }
+    function colsFor(c) { var w = c.getBoundingClientRect().width; return w >= 980 ? 4 : w >= 520 ? 2 : 1; }
     var BOXES = [CONTAINERS, '.nx-masonry'].filter(Boolean).join(',');
     var known = new Set(), gaps = new WeakMap(), touched = new WeakSet(), seen = new WeakSet();
     var dirty = new Set(), full = false, raf = 0;
@@ -31,17 +48,23 @@
     var skip = function (el) { return SKIP && el.matches(SKIP); };
     function off(c) {
         if (!c.classList.contains(ON)) return;
-        c.classList.remove(ON, 'nxm-dense');
-        for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (touched.has(k)) { k.style.gridRowEnd = ''; touched.delete(k); } }
+        c.classList.remove(ON, 'nxm-dense', 'nxm-c1', 'nxm-c2', 'nxm-c4');
+        for (var i = 0; i < c.children.length; i++) { var k = c.children[i]; if (touched.has(k)) { k.style.gridRowEnd = ''; k.style.gridColumn = ''; touched.delete(k); } }
     }
     function layout(c) {
+        var i;
         if (!c.isConnected) { known.delete(c); return; }
         if (!c.getClientRects().length) return;                       // versteckt – später, wenn sichtbar (ResizeObserver)
         var cs = getComputedStyle(c);
         if (!/grid/.test(cs.display) || /column/.test(cs.gridAutoFlow)) { off(c); return; }
-        if (tracks(cs) < 2 || c.children.length < 2) { off(c); return; }
+        if ((!c.classList.contains(ON) && tracks(cs) < 2) || c.children.length < 2) { off(c); return; }
+        for (i = 0; i < c.children.length; i++) sizeFor(c.children[i]);   // Größe merken, bevor eigene Spalten gesetzt werden
         if (!c.classList.contains(ON)) { gaps.set(c, parseFloat(cs.rowGap) || 0); c.classList.add(ON); }
-        var gap = gaps.get(c) || 0, list = [], wide = false, i, k, kc, tw = parseFloat(cs.gridTemplateColumns.replace(/\[[^\]]*\]/g, ' ').trim()) || 1e9;
+        var cols = colsFor(c);
+        ['nxm-c1', 'nxm-c2', 'nxm-c4'].forEach(function (x) { c.classList.toggle(x, x === 'nxm-c' + cols); });
+        for (i = 0; i < c.children.length; i++) { var ch = c.children[i], sp = 'span ' + Math.min(cols, sizeFor(ch)); if (ch.style.gridColumn !== sp) ch.style.gridColumn = sp; touched.add(ch); }
+        cs = getComputedStyle(c);
+        var gap = gaps.get(c) || 0, list = [], wide = true, k, kc, tw = parseFloat(cs.gridTemplateColumns.replace(/\[[^\]]*\]/g, ' ').trim()) || 1e9;
         for (i = 0; i < c.children.length; i++) {
             k = c.children[i];
             if (!seen.has(k)) { seen.add(k); ro.observe(k); }
@@ -50,7 +73,7 @@
             if (kc.position === 'absolute' || kc.position === 'fixed') continue;
             if (!touched.has(k) && (k.style.gridRow || kc.gridRowStart !== 'auto' || kc.gridRowEnd !== 'auto')) continue;   // feste Zeile vom Layout – nicht anfassen
             var kr = k.getBoundingClientRect();
-            if (kr.width > tw * 1.5) wide = true;                       // Karte über mehrere Spalten
+            void tw;                                                    // 8.6: immer „dense“ – freie Plätze werden aufgefüllt
             list.push([k, kr.height + (parseFloat(kc.marginTop) || 0) + (parseFloat(kc.marginBottom) || 0)]);
         }
         // Karten über mehrere Spalten (z. B. grid-column: 1 / -1) würden über sich Lücken lassen → spätere Karten dürfen sie füllen
@@ -74,11 +97,28 @@
         });
         known.forEach(function (c) { dirty.add(c); });
     }
+    /** 8.6: Nachprüfung – liegt eine Karte über ihre Fläche hinaus (z. B. Inhalt nach dem Messen geändert, Aufklappen,
+     *  Schriften/Bilder später geladen), wird das Raster sofort neu berechnet → keine Überlappungen und keine Lücken */
+    function verify(c) {
+        if (!c.isConnected || !c.classList.contains(ON)) return;
+        for (var i = 0; i < c.children.length; i++) {
+            var k = c.children[i];
+            if (!touched.has(k) || !k.getClientRects().length) continue;
+            var span = parseInt(String(k.style.gridRowEnd).replace('span ', ''), 10) || 0, kc = getComputedStyle(k);
+            var h = k.getBoundingClientRect().height + (parseFloat(kc.marginTop) || 0) + (parseFloat(kc.marginBottom) || 0);
+            if (span && Math.abs(h - span * ROW) < 0.5) continue;      // füllt genau ihre Fläche (height: 100 %) → nicht hochschaukeln
+            var need = Math.ceil((h + (gaps.get(c) || 0)) / ROW);
+            if (need !== span) { k.style.gridRowEnd = 'span ' + Math.max(1, need); }
+        }
+    }
+    var checkT = 0;
     function run() {
         raf = 0;
         if (full) { full = false; scan(); }
         var l = Array.from(dirty); dirty.clear();
         for (var i = 0; i < l.length; i++) layout(l[i]);
+        clearTimeout(checkT);
+        checkT = setTimeout(function () { known.forEach(verify); }, 250);
     }
     function queue(c) { if (c) dirty.add(c); else full = true; if (!raf) raf = requestAnimationFrame(run); }
     var ro = new ResizeObserver(function (es) {
@@ -88,6 +128,10 @@
         for (var i = 0; i < ms.length; i++) { var m = ms[i]; if (m.type === 'childList' || !(m.target.classList && m.target.classList.contains(ON) && m.attributeName === 'class')) { queue(); return; } }
     }).observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'hidden', 'open'] });
     window.addEventListener('load', function () { queue(); });
+    // 8.6: Auf-/Zuklappen (<details>), nachgeladene Bilder und Schriften → neu berechnen
+    document.addEventListener('toggle', function () { queue(); }, true);
+    document.addEventListener('load', function (e) { if (e.target && e.target.tagName === 'IMG') queue(); }, true);
+    if (document.fonts && document.fonts.addEventListener) document.fonts.addEventListener('loadingdone', function () { queue(); });
     /** von außen: Raster sofort neu berechnen (z. B. nach eigenem Umsortieren) */
     window.nxMasonry = { refresh: function () { queue(); }, ROW: ROW };
     queue();

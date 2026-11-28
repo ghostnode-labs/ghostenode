@@ -166,6 +166,19 @@ $plan5 = [
 ];
 // Stand der Umsetzung (Vorgabe für alle, die der Bearbeitungsmodus nicht ausdrücklich anders gesetzt hat)
 $rm_default = [
+    // 9.0 (umgesetzt)
+    '4er-Raster für alle Seiten (Kacheln S / M / L / XL, keine Lücken, keine Überlappungen)' => 'done',
+    'Fenster und Popups immer zwischen den Seitenleisten' => 'done',
+    'Chatbox-Editor: Chatbox und Studio in einer Karte mit Live-Vorschau' => 'done',
+    'Profil-Fenster mit fester linker Spalte, Gruppen-Moderation zum Aufklappen' => 'done',
+    'SteamVR-Werkzeuge: Geräte & Akkus, Controller wiederfinden, Render-Auflösung, Spielbereich' => 'done',
+    'Stoppuhr & Timer mit Countdown in der Chatbox' => 'done',
+    'Schrift-Generator für Chatbox, Status und Bio' => 'done',
+    'VIP-Listen: ein Reiter je Liste, Sortierung, Ko-fi-Protokoll, Selbsttest und CSV-Import' => 'done',
+    'Poster-Platzhalter für leere und ausgeschaltete Poster' => 'done',
+    'Grafischer Muster-Editor mit Generatoren und Live-Test' => 'done',
+    'Verlaufs-Editor mit Stufen, Grenzen und Vorschau-Kurve' => 'done',
+
     // Ausblick 6.x (schon begonnen)
     'Dashboard-Baukasten: Widgets per Drag & Drop, Sichtbarkeit je Gast / angemeldet / Rolle' => 'done',
     'Nexus Client-API über WebSocket (lokal, mit Schlüssel und Rechten je App)' => 'done',
@@ -600,6 +613,22 @@ $planFuture = [
             'Musik-Visualisierung für Avatare über OSC',
             'Live-Untertitel als Overlay für Streams',
             'Vorlagen-Sammlung für Chatbox, Overlays und Tasten',
+            '4er-Raster für alle Seiten (Kacheln S / M / L / XL, keine Lücken, keine Überlappungen)',
+            'Fenster und Popups immer zwischen den Seitenleisten',
+            'Chatbox-Editor: Chatbox und Studio in einer Karte mit Live-Vorschau',
+            'Profil-Fenster mit fester linker Spalte, Gruppen-Moderation zum Aufklappen',
+            'SteamVR-Werkzeuge: Geräte & Akkus, Controller wiederfinden, Render-Auflösung, Spielbereich',
+            'Stoppuhr & Timer mit Countdown in der Chatbox',
+            'Schrift-Generator für Chatbox, Status und Bio',
+            'SteamVR: Spielbereich-Profile speichern und wechseln',
+            'SteamVR: Render-Auflösung automatisch je Welt',
+            'SteamVR: Tracker-Übersicht mit Zuordnung (Hüfte, Füße …) und Kalibrier-Hilfe',
+            'Controller- und Tracker-Akkus auf der Uhr und im HUD',
+            'Instanz-Warteschlange: automatisch beitreten, sobald ein Platz frei wird',
+            'Avatar automatisch je Welt wechseln',
+            'Merkliste für Welten mit Hinweis bei Updates',
+            'Offline-Modus mit Zwischenspeicher für Freunde, Welten und Avatare',
+            'Kachel-Größe auf jeder Seite selbst festlegen und merken',
         ],
         '🌐 Webseite' => [
             'Marktplatz 2.0: Plugins, Widgets, Themes, Automationen und Szenen an einem Ort',
@@ -617,6 +646,12 @@ $planFuture = [
             'Showcase-Seite mit wöchentlichen Highlights',
             'Statistiken für Creator-Seiten',
             'Newsletter für Creator-Neuigkeiten (Opt-in)',
+            'VIP-Listen: ein Reiter je Liste, Sortierung, Ko-fi-Protokoll, Selbsttest und CSV-Import',
+            'Poster-Platzhalter für leere und ausgeschaltete Poster',
+            'Event-Seiten mit Anmeldung, Erinnerung und Kalender-Export',
+            'Gruppen-Dashboard für Moderatoren im Web (Bans, Rollen, Protokoll)',
+            'VIP-Tafel 2.0: Abzeichen-Farben je Gruppe und Animationen',
+            'Profil-Widgets im 4er-Raster frei anordnen',
         ],
         '🔞 NSFW-Major' => [
             'Werkzeuge für 18+-Creator (Avatar-Systeme prüfen und testen)',
@@ -632,6 +667,11 @@ $planFuture = [
             'Melde-Werkzeuge für Creator',
             'Lizenz-Hinweise für 18+-Assets',
             'Test-Modus ohne echte Geräte',
+            'Grafischer Muster-Editor mit Generatoren und Live-Test',
+            'Verlaufs-Editor mit Stufen, Grenzen und Vorschau-Kurve',
+            'Muster am Musik-Takt ausrichten',
+            'Profile je Partner für Verlauf und Grenzen',
+            'Muster aus einer Aufnahme erzeugen und nachbearbeiten',
         ],
     ]],
     '10.0 – „Nexus OS“: alles aus einem Guss' => ['🌌', 'Langfristiges Ziel: ein zusammenhängendes System aus Client, Webseite, Uhr, Handy und Bot.', [

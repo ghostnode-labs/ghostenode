@@ -305,13 +305,11 @@ function vip_settings_view(array $lists, array $kc, string $base, bool $gist_on,
         . '<div class="vip-sync"><span>Letzter Abgleich: <b>' . e(setting('vip_gist_result', '–') ?: '–') . '</b></span>' . (setting('vip_gist_dirty', '0') === '1' ? vip_chip('Änderungen warten', 'warn') : '') . '</div>'
         . ($gist_tok === '' ? '<p class="muted small">Ohne Token: Gist von Hand auf gist.github.com anlegen, je Liste den Text mit „⧉ Text kopieren“ (im Reiter der Liste) einfügen und die „Raw“-Adresse (ohne Commit-Kennung) in Unity eintragen.</p>' : '')
         . '<div class="vip-actions"><button class="btn btn-gold">Speichern</button>'
-        . ($gist_on && $gist_tok !== '' ? '<button class="btn" form="vipSync">🔄 Jetzt abgleichen</button>' : '') . '</div></form></div>';
-    if ($gist_on && $gist_tok !== '') echo vip_form('vip_gist_sync', [], ' id="vipSync" hidden') . '</form>';
-    echo vip_form('vip_kofi_test', [], ' id="vipKofiTest" hidden') . '</form>';
+        . ($gist_on && $gist_tok !== '' ? '<button class="btn" form="vipSync">🔄 Jetzt abgleichen</button>' : '') . '</div></form>';
 
     // ---------- Protokoll + Import ----------
     $log = vip_kofi_log_list();
-    echo '<div class="grid2"><div class="panel"><div class="panel-title"><span>// 📜 Letzte Ko-fi-Zustellungen</span>'
+    echo '<div class="panel"><div class="panel-title"><span>// 📜 Letzte Ko-fi-Zustellungen</span>'
         . ($log ? vip_form('vip_kofi_log_clear', [], ' style="margin-left:auto"') . '<button class="btn btn-sm">Leeren</button></form>' : '') . '</div>';
     if (!$log) echo '<p class="muted small">Noch keine Zustellung angekommen. Dann erreicht Ko-fi die Webhook-Adresse nicht: Adresse in Ko-fi prüfen (genau wie oben, mit https), '
         . 'dort „Send Test“ drücken und hier neu laden. „🧪 Verbindung testen“ prüft, ob die Adresse von außen erreichbar ist.</p>';
@@ -332,4 +330,6 @@ function vip_settings_view(array $lists, array $kc, string $base, bool $gist_on,
         . '<label class="field">In diese Liste</label><select name="list">';
     foreach ($lists as $l) echo '<option value="' . (int)$l['id'] . '"' . ($kc['list'] === (int)$l['id'] ? ' selected' : '') . '>' . e($l['title']) . ' (' . e($l['slug']) . ')</option>';
     echo '</select><div class="vip-actions"><button class="btn btn-gold">📥 Importieren</button></div></form></div>';
+    if ($gist_on && $gist_tok !== '') echo vip_form('vip_gist_sync', [], ' id="vipSync" hidden') . '</form>';
+    echo vip_form('vip_kofi_test', [], ' id="vipKofiTest" hidden') . '</form>';
 }

@@ -2,7 +2,11 @@
 
 /* Mauerwerk-Raster (assets/js/masonry.js): feine Zeilen, jede Karte belegt so viele, wie sie hoch ist → keine Lücken unter kürzeren Karten */
 .nxm-on { grid-auto-rows: 4px !important; row-gap: 0 !important; align-items: start !important; }
-.nxm-on > * { align-self: start !important; }
+.nxm-on > * { align-self: start !important; height: auto !important; }   /* Karten wachsen immer mit ihrem Inhalt */
+/* GRUNDREGEL 4er-Raster: 4 gleich breite Spalten (schmal 2, Handy 1); Kacheln S=1, M=2 (Standard), L=3, XL=4 Spalten – Klassen sz-s/-m/-l/-xl */
+.nxm-on.nxm-c4 { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+.nxm-on.nxm-c2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+.nxm-on.nxm-c1 { grid-template-columns: minmax(0, 1fr) !important; }
 .nxm-on.nxm-dense { grid-auto-flow: row dense !important; }
 
 /* Inhalte immer über die volle Breite (zwischen Seitenleisten); Dialoge/Popups und Anmelde-Kästen bleiben schmal */
