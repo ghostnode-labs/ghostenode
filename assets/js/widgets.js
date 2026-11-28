@@ -28,7 +28,9 @@
     // Öffentliche Schnittstelle für widget.js-Dateien
     window.Widgets = {
         register(type, fn) { handlers[type] = fn; $$('.wg[data-type="' + type + '"]').forEach(mount); },
-        toast,
+        toast, call,
+        relayout: () => relayout(),
+        reload: el => reload(el),
     };
 
     // ---------- Mauerwerk-Raster: Höhe → Zeilen-Span, damit keine Lücken entstehen ----------
@@ -37,7 +39,7 @@
         const g = document.getElementById('wgGrid');
         if (!g) return;
         const cs = getComputedStyle(g), row = parseFloat(cs.gridAutoRows) || 4, gap = parseFloat(cs.columnGap) || 14;
-        const ws = $$('.wg', g);
+        const ws = $$('.wg', g).filter(el => !el.hidden && !el.classList.contains('g-out'));
         g.classList.add('ready');
         // 1. Spans nach Inhaltshöhe
         ws.forEach(el => { el.classList.remove('fill'); el.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil((el.offsetHeight + gap) / row)); });
@@ -109,18 +111,20 @@
     $$('.wg', grid).forEach(el => {
         mount(el);
         const sec = +el.dataset.refresh;
-        if (sec >= 30 && !EDIT) timers.set(el, setInterval(() => { if (!document.hidden) reload(el); }, sec * 1000));
+        if (sec >= 30 && !EDIT) timers.set(el, setInterval(() => { if (!document.hidden && !el.hidden && !el.classList.contains('g-out') && !el.classList.contains('min')) reload(el); }, sec * 1000));
     });
 
-    // Einklappen (pro Browser)
+    // Einklappen: angemeldet im Konto (alle Geräte), sonst pro Browser
+    const USER = !!(window.IDX && window.IDX.user);
     const mins = store.get('min', {});
-    $$('.wg', grid).forEach(el => { if (mins[el.dataset.uid]) el.classList.add('min'); });
+    if (!USER) $$('.wg', grid).forEach(el => { if (mins[el.dataset.uid]) el.classList.add('min'); });
     grid.addEventListener('click', e => {
         const b = e.target.closest('.wg-min');
         if (!b) return;
         const el = b.closest('.wg');
         el.classList.toggle('min');
         relayout();
+        if (USER && window.DashPrefs) return window.DashPrefs.save();
         mins[el.dataset.uid] = el.classList.contains('min');
         store.set('min', mins);
     });

@@ -140,7 +140,7 @@ $ST = ['pending' => '⏳ wartet auf Prüfung', 'approved' => '✅ freigegeben', 
     <?php endif; ?>
 
     <?php if ($canManage): ?>
-    <section class="mk-sec"><h2>🛡 Prüfung (<?= count($pending) ?>)</h2>
+    <section class="mk-sec" id="mk-review"><h2>🛡 Prüfung (<?= count($pending) ?>)</h2>
         <p class="mk-note">Vor der Freigabe: Paket herunterladen, Code lesen (besonders bei „Internet-Zugriff“ und „VRChat-Gruppen“), Rechte mit der Beschreibung vergleichen. Öffentlicher Signaturschlüssel des Katalogs: <code><?= e(mk_public_key()) ?></code></p>
         <?php if (!$pending): ?><p class="muted">Nichts zu prüfen.</p><?php endif; ?>
         <table class="mk-tbl">

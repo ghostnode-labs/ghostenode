@@ -4,6 +4,7 @@
  *   render  – Widget neu zeichnen (Auto-Aktualisierung)
  *   action  – Aktion eines Widgets ausführen (z. B. Aufgabe abhaken), danach neu zeichnen
  *   add / remove / size / settings / reorder – Anordnung ändern (Recht „widgets.manage“)
+ *   prefs / prefs_reset / prefs_export / prefs_import – 9.0: persönliche Ansicht je Konto (Reihenfolge, ausgeblendet, eingeklappt)
  */
 require_once __DIR__ . '/inc/core/common.php';
 require_once __DIR__ . '/inc/core/widgets.php';
@@ -23,6 +24,47 @@ try {
         if ($_SERVER['REQUEST_METHOD'] !== 'POST') throw new RuntimeException('Nur per POST.');
         widgets_mine_set(!empty($in['on']) && $in['on'] !== '0');
         echo json_encode(['ok' => true, 'mine' => widgets_mine()]); exit;
+    }
+    if (in_array($act, ['prefs', 'prefs_reset', 'prefs_import'], true)) {
+        if ($_SERVER['REQUEST_METHOD'] !== 'POST') throw new RuntimeException('Nur per POST.');
+        if (!is_logged_in()) throw new RuntimeException('Bitte anmelden – die persönliche Anordnung wird im Konto gespeichert.');
+        if ($act === 'prefs') {
+            $cur = widgets_prefs();
+            foreach (['order', 'hidden', 'min'] as $k) if (isset($in[$k])) $cur[$k] = (array)json_decode((string)$in[$k], true);
+            if (isset($in['group'])) $cur['group'] = (string)$in['group'];
+            echo json_encode(['ok' => true, 'prefs' => widgets_prefs_save($cur)]); exit;
+        }
+        if ($act === 'prefs_reset') { user_pref_delete((int)current_user()['id'], 'dash'); echo json_encode(['ok' => true]); exit; }
+        // Import: Datei aus „Exportieren“
+        $j = json_decode((string)($in['data'] ?? ''), true);
+        if (!is_array($j) || ($j['format'] ?? '') !== 'ghostnode-dashboard') throw new RuntimeException('Keine gültige Dashboard-Datei.');
+        $n = 0;
+        $prefs = (array)($j['prefs'] ?? []);
+        if (!empty($j['layout']) && is_array($j['layout'])) {   // Widgets der Datei ins eigene Dashboard (Baukasten) übernehmen
+            $avail = widgets_available();
+            $lay = []; $map = [];
+            foreach (array_slice($j['layout'], 0, 40) as $w) {
+                $t = (string)($w['type'] ?? '');
+                if (!isset($avail[$t]) || !empty($avail[$t]['error'])) continue;
+                $new = substr(bin2hex(random_bytes(6)), 0, 10);   // immer neue IDs: nie fremde Inhalte übernehmen
+                $map[(string)($w['uid'] ?? '')] = $new;
+                $lay[] = ['uid' => $new, 'type' => $t,
+                          'size' => isset(WIDGET_SIZES[$w['size'] ?? '']) ? $w['size'] : $avail[$t]['size'], 'cfg' => widget_clean_cfg($avail[$t], (array)($w['cfg'] ?? []))];
+            }
+            if ($lay) { widgets_mine_set(true); widgets_layout_save($lay); $n = count($lay);
+                foreach (['order', 'hidden', 'min'] as $k) $prefs[$k] = array_values(array_filter(array_map(function ($x) use ($map) { return $map[(string)$x] ?? ''; }, (array)($prefs[$k] ?? []))));
+            }
+        }
+        widgets_prefs_save($prefs);
+        audit('Dashboard importiert', $n ? $n . ' Widgets' : 'nur Ansicht');
+        echo json_encode(['ok' => true, 'widgets' => $n]); exit;
+    }
+    if ($act === 'prefs_export') {
+        if (!is_logged_in()) throw new RuntimeException('Bitte anmelden.');
+        header('Content-Disposition: attachment; filename="ghostnode-dashboard_' . date('Y-m-d') . '.json"');
+        $exp = ['format' => 'ghostnode-dashboard', 'version' => 1, 'exported' => date('c'), 'prefs' => widgets_prefs()];
+        if (widgets_mine()) $exp['layout'] = widgets_layout();   // nur das eigene Dashboard – die gemeinsame Anordnung gehört allen
+        echo json_encode($exp, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES); exit;
     }
     $uid = preg_replace('/\W/', '', (string)($in['uid'] ?? ''));
     $layout = widgets_layout();
@@ -58,6 +100,7 @@ try {
             $layout = array_values(array_filter($layout, function ($w) use ($uid) { return $w['uid'] !== $uid; }));
             widgets_layout_save($layout);
             set_setting('widget_state_' . $uid, '');
+            if ($uid !== '') site_db()->prepare('DELETE FROM user_kv WHERE pkey = ?')->execute(['ws:' . $uid]);   // private Inhalte aller Konten
             break;
         case 'size':
             $keys = array_keys(WIDGET_SIZES);

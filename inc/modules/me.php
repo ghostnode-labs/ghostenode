@@ -134,6 +134,19 @@ function me_notes(array $u): array {
         require_once APP_ROOT . '/inc/modules/changelog.php';
         foreach (array_slice(cl_fetch(), 0, 6) as $r) if (!$r['pre']) $out[] = ['t' => strtotime($r['date']) ?: 0, 'icon' => '📦', 'title' => 'VRC Nexus ' . cl_ver($r['v']) . ' ist erschienen', 'href' => 'changelog.php#v' . $r['v']];
     } catch (Throwable $e) { /* GitHub nicht erreichbar */ }
+    try {   // 9.0: auch D2 Nexus und der Discord-Bot
+        require_once APP_ROOT . '/inc/modules/releases.php';
+        foreach (['d2', 'bot'] as $pid) foreach (array_slice(array_values(array_filter(rel_fetch($pid), fn($r) => !$r['pre'])), 0, 3) as $r)
+            $out[] = ['t' => strtotime($r['date']) ?: 0, 'icon' => REL_PROJECTS[$pid][0], 'title' => REL_PROJECTS[$pid][1] . ' v' . $r['v'] . ' ist erschienen', 'href' => $pid === 'd2' ? 'downloads.php#more' : REL_PROJECTS[$pid][4]];
+    } catch (Throwable $e) { /* GitHub nicht erreichbar */ }
+    try {   // 9.0: Störungen der GhostNode-Dienste (letzte 7 Tage)
+        require_once APP_ROOT . '/inc/modules/status.php';
+        foreach (array_slice(st_summary()['incidents'], 0, 5) as $inc) {
+            if ((int)$inc['start'] < time() - 7 * 86400) continue;
+            $out[] = ['t' => (int)($inc['end'] ?: $inc['start']), 'icon' => $inc['end'] ? '✅' : '⚠️', 'title' => $inc['name'] . ($inc['end'] ? ' läuft wieder' : ' ist gestört'),
+                      'sub' => $inc['end'] ? 'Störung von ' . date('d.m. H:i', (int)$inc['start']) . ' bis ' . date('H:i', (int)$inc['end']) : (string)$inc['msg'], 'href' => 'status.php'];
+        }
+    } catch (Throwable $e) { /* Status optional */ }
     try {
         require_once APP_ROOT . '/inc/modules/calendar.php';
         $now = new DateTimeImmutable('now');
@@ -273,6 +286,7 @@ function me_export(array $u): array {
     $p = me_get($uid);
     $out = ['exported' => date('c'), 'site' => acc_base_url(), 'account' => $row, 'preferences' => $p['d'], 'public_profile' => ['address' => $p['slug'], 'public' => (bool)$p['public']],
         'sessions' => $sess->fetchAll(), 'activity' => $log->fetchAll()];
+    try { $out['dashboard'] = user_kv_all($uid); } catch (Throwable $e) { /* 9.0: Dashboard-Anordnung, Notizbuch, Lesezeichen … */ }
     try {
         require_once APP_ROOT . '/inc/modules/vrchat.php';
         $acc = vrc_account($uid);

@@ -235,12 +235,27 @@ $access_icon = ['public' => '', 'users' => '🔑', 'members' => '🔒', 'roles' 
 
 // ---------- Widgets ----------
 $wg_avail = widgets_available();
+$wg_prefs = (!$wg_edit && $user) ? widgets_prefs() : ['order' => [], 'hidden' => [], 'min' => [], 'group' => ''];
 $wg_layout = array_values(array_filter(widgets_layout(), function ($w) use ($wg_avail, $wg_edit) {
     $m = $wg_avail[$w['type']] ?? null;
     return $m ? widget_allowed($m) && ($wg_edit || widget_visible($w)) : $wg_edit;
 }));
+if (!$wg_edit) $wg_layout = widgets_apply_prefs($wg_layout, $wg_prefs);   // 9.0: persönliche Reihenfolge je Konto
 $wg_assets = [];
-foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type']] = $wg_avail[$w['type']];
+foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']]) && !in_array($w['uid'], $wg_prefs['hidden'], true)) $wg_assets[$w['type']] = $wg_avail[$w['type']];
+$wg_groups = [];   // Gruppen, die tatsächlich vorkommen (Filter-Leiste)
+foreach ($wg_layout as $w) { $g = widget_group($w['type'], $wg_avail[$w['type']] ?? null); $wg_groups[$g] = ($wg_groups[$g] ?? 0) + 1; }
+$wg_groups = array_intersect_key(WIDGET_GROUPS, $wg_groups);
+
+// ---------- 9.0: Kopfzeile (Begrüßung & Status) ----------
+$hour = (int)date('G');
+$greet = $hour < 5 ? 'Gute Nacht' : ($hour < 11 ? 'Guten Morgen' : ($hour < 17 ? 'Guten Tag' : ($hour < 22 ? 'Guten Abend' : 'Gute Nacht')));
+$wd = ['Sonntag', 'Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'][(int)date('w')];
+$mo = ['', 'Januar', 'Februar', 'März', 'April', 'Mai', 'Juni', 'Juli', 'August', 'September', 'Oktober', 'November', 'Dezember'][(int)date('n')];
+$svc = null;
+try { require_once __DIR__ . '/inc/modules/status.php'; $svc = st_summary(); if (!$svc['services']) $svc = null; } catch (Throwable $e) { $svc = null; }
+$hero_pfp = '';
+if ($user) { try { require_once __DIR__ . '/inc/modules/furhub.php'; $hero_pfp = (string)fh_avatar_img((int)$user['id'], 'ub-pfp'); } catch (Throwable $e) { $hero_pfp = ''; } }
 ?>
 <!DOCTYPE html>
 <html lang="de">
@@ -253,72 +268,63 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
     <link rel="stylesheet" href="assets/css/index.css">
     <link rel="stylesheet" href="assets/css/format.css">
     <link rel="stylesheet" href="assets/css/widgets.css">
+    <link rel="stylesheet" href="assets/css/dashboard.css">
     <?php foreach ($wg_assets as $t => $m): if ($m['has_css']): ?><link rel="stylesheet" href="widgets/<?php echo e($t); ?>/widget.css?v=<?php echo (int)$m['mtime']; ?>">
     <?php endif; endforeach; ?>
 </head>
-<body class="<?php echo $edit || $wg_edit ? 'editing' : ''; ?>">
+<body class="dash <?php echo $edit || $wg_edit ? 'editing' : ''; ?>">
 <?php site_banners(); ?>
-<div class="wrapper idx">
-    <div class="telemetry-bar">
-        <div class="telemetry-item">STATUS: <span><?php echo $settings['maintenance'] ? 'WARTUNG' : 'ONLINE // SECURE'; ?></span></div>
-        <div class="telemetry-item">NODES: <span><?php echo $visible_count; ?></span> · LINKS: <span><?php echo count($global_links); ?></span></div>
-        <div class="telemetry-item">TIME: <span id="liveClock">--:--:--</span></div>
-    </div>
+<div class="wrapper idx dash-shell">
+    <header class="dash-hero">
+        <div class="dh-top">
+            <div class="dh-id">
+                <?php if ($user): ?>
+                    <a href="me.php" class="dh-avatar<?php echo $hero_pfp ? ' has-pfp' : ''; ?>" style="--rc: <?php echo e($user['role_color']); ?>;" title="Mein Bereich"><?php echo $hero_pfp ?: e(mb_strtoupper(mb_substr(user_label($user), 0, 1))); ?></a>
+                <?php else: ?><span class="dh-avatar">👋</span><?php endif; ?>
+                <div class="dh-text">
+                    <div class="hud-tag"><?php echo e($settings['site_title']); ?> // Dashboard</div>
+                    <h1 id="dashGreet"><?php echo e($greet . ($user ? ', ' . user_label($user) : '')); ?></h1>
+                    <p class="dh-sub"><?php echo e($wd . ', ' . date('j') . '. ' . $mo . ' ' . date('Y')); ?> · KW <?php echo (int)date('W'); ?> · <span id="liveClock">--:--:--</span>
+                        <?php if ($user): ?> · <span class="dh-role" style="--rc: <?php echo e($user['role_color']); ?>;"><?php echo e($user['role_name']); ?></span><?php endif; ?></p>
+                </div>
+            </div>
+            <div class="dh-actions">
+                <?php if ($user): ?>
+                    <?php if (!$wg_edit): ?><button type="button" class="dh-btn" id="wgCustomize" title="Widgets für dich sortieren und ausblenden (Taste A)">🎛 Anpassen</button><?php endif; ?>
+                    <?php if ($can_manage): ?><a href="dashboard.php<?php echo $edit ? '' : '?edit=1'; ?>" class="dh-btn <?php echo $edit ? 'on' : ''; ?>" title="Index bearbeiten (Taste E)"><?php echo $edit ? '✓ Fertig' : '✎ Bearbeiten'; ?></a>
+                    <?php elseif (widgets_can_arrange()): ?><a href="dashboard.php<?php echo $wg_edit ? '' : '?widgets=1'; ?>" class="dh-btn <?php echo $wg_edit ? 'on' : ''; ?>" title="Widgets anordnen"><?php echo $wg_edit ? '✓ Fertig' : '🧩 Widgets'; ?></a><?php endif; ?>
+                    <button type="button" class="dh-btn <?php echo widgets_mine() ? 'on' : ''; ?>" id="wgMine" data-on="<?php echo widgets_mine() ? '1' : '0'; ?>" title="<?php echo widgets_mine() ? 'Eigenes Dashboard aus – wieder die gemeinsame Anordnung zeigen' : 'Eigenes Dashboard: Widgets nur für dich zusammenstellen (Baukasten)'; ?>">🧱 <?php echo widgets_mine() ? 'Mein Dashboard' : 'Baukasten'; ?></button>
+                    <button type="button" class="dh-btn" id="cmdOpen" title="Befehlspalette (Strg+K)">⌘ <kbd>Strg K</kbd></button>
+                    <?php if (can('settings.nsfw')): ?>
+                        <form method="POST" action="admin.php" class="nsfw-form dh-nsfw">
+                            <input type="hidden" name="action" value="toggle_nsfw"><input type="hidden" name="back" value="dashboard.php">
+                            <span class="nsfw-label">NSFW</span>
+                            <button type="submit" class="mini-switch <?php echo $show_nsfw ? 'on' : ''; ?>" role="switch" aria-checked="<?php echo $show_nsfw ? 'true' : 'false'; ?>" title="NSFW-Links für Besucher <?php echo $show_nsfw ? 'ausblenden' : 'anzeigen'; ?>"></button>
+                        </form>
+                    <?php endif; ?>
+                    <?php if (can('admin.access')): ?><a href="admin.php" class="dh-btn ic-only" title="Admin-Zentrale">⚙</a><?php endif; ?>
+                    <form method="POST" action="admin.php" class="dh-form"><input type="hidden" name="action" value="logout"><button type="submit" class="dh-btn ic-only danger" title="Abmelden">⏻</button></form>
+                <?php else: ?>
+                    <button type="button" class="dh-btn" id="cmdOpen" title="Befehlspalette (Strg+K)">⌘ <kbd>Strg K</kbd></button>
+                    <a href="admin.php?next=dashboard.php" class="dh-btn gold">🔒 Anmelden</a>
+                <?php endif; ?>
+            </div>
+        </div>
 
-    <?php if ($settings['maintenance']): ?><div class="maint-bar">🛠️ Wartungsmodus ist aktiv – Besucher sehen nur den Wartungshinweis.</div><?php endif; ?>
-
-    <?php if ($soon): ?>
-        <a href="calendar.php?view=agenda" class="soon-bar" title="Zum Kalender">
-            <span class="soon-label">📅 Nächste 24 Std.</span>
-            <?php foreach (array_slice($soon, 0, 4) as $it): ?>
-                <span class="soon-item" style="--c: <?php echo e($it['color']); ?>;">
-                    <b><?php echo $it['all_day'] ? 'heute' : ($it['start'] <= new DateTimeImmutable() ? 'jetzt' : e($it['start']->format('H:i'))); ?></b>
-                    <?php echo e(($it['icon'] ?? '') . ' ' . $it['title']); ?>
-                </span>
-            <?php endforeach; ?>
-            <?php if (count($soon) > 4): ?><span class="soon-more">+<?php echo count($soon) - 4; ?></span><?php endif; ?>
-        </a>
-    <?php endif; ?>
-
-    <!-- Benutzer-Leiste -->
-    <div class="user-bar <?php echo $user ? 'in' : ''; ?>">
-        <?php if ($user): ?>
-            <a href="admin.php" class="ub-user" title="<?php echo e($user['role_name']); ?>">
-                <?php require_once __DIR__ . '/inc/modules/furhub.php'; $pfp = fh_avatar_img((int)$user['id'], 'ub-pfp'); ?>
-                <span class="ub-avatar<?php echo $pfp ? ' has-pfp' : ''; ?>" style="--rc: <?php echo e($user['role_color']); ?>;"><?php echo $pfp ?: e(mb_strtoupper(mb_substr(user_label($user), 0, 1))); ?></span>
-                <span><?php echo e(user_label($user)); ?><small><?php echo e($user['role_name']); ?></small></span>
-            </a>
-            <?php if (can('settings.nsfw')): ?>
-                <form method="POST" action="admin.php" class="nsfw-form">
-                    <input type="hidden" name="action" value="toggle_nsfw"><input type="hidden" name="back" value="dashboard.php">
-                    <span class="nsfw-label">NSFW für Besucher</span>
-                    <button type="submit" class="mini-switch <?php echo $show_nsfw ? 'on' : ''; ?>" role="switch" aria-checked="<?php echo $show_nsfw ? 'true' : 'false'; ?>" title="NSFW-Links für Besucher <?php echo $show_nsfw ? 'ausblenden' : 'anzeigen'; ?>"></button>
-                    <span class="nsfw-state"><?php echo $show_nsfw ? 'AN' : 'AUS'; ?></span>
-                </form>
+        <div class="dh-status">
+            <span class="dh-chip <?php echo $settings['maintenance'] ? 'warn' : 'ok'; ?>"><i></i><?php echo $settings['maintenance'] ? 'Wartung' : 'Online'; ?></span>
+            <span class="dh-chip"><b><?php echo $visible_count; ?></b> Seiten</span>
+            <span class="dh-chip"><b><?php echo count($global_links); ?></b> Links</span>
+            <?php if ($svc): ?><a class="dh-chip <?php echo $svc['ok'] ? 'ok' : 'bad'; ?>" href="status.php" title="Status aller Dienste"><i></i><?php echo $svc['ok'] ? 'Alle Dienste ok' : $svc['down'] . ' Dienst' . ($svc['down'] > 1 ? 'e' : '') . ' gestört'; ?></a><?php endif; ?>
+            <?php if ($soon): ?>
+                <a href="calendar.php?view=agenda" class="dh-chip soon" title="Termine der nächsten 24 Stunden">📅
+                    <?php foreach (array_slice($soon, 0, 3) as $i => $it): ?><?php echo $i ? ' · ' : ''; ?><b><?php echo $it['all_day'] ? 'heute' : ($it['start'] <= new DateTimeImmutable() ? 'jetzt' : e($it['start']->format('H:i'))); ?></b> <?php echo e(($it['icon'] ?? '') . ' ' . $it['title']); ?><?php endforeach; ?>
+                    <?php if (count($soon) > 3): ?> <em>+<?php echo count($soon) - 3; ?></em><?php endif; ?>
+                </a>
             <?php endif; ?>
-            <span class="ub-actions">
-                <?php if ($can_manage): ?><a href="dashboard.php<?php echo $edit ? '' : '?edit=1'; ?>" class="ub-btn <?php echo $edit ? 'on' : ''; ?>" title="Index bearbeiten (Taste E)"><?php echo $edit ? '✓ Fertig' : '✎ Bearbeiten'; ?></a>
-                <?php elseif (widgets_can_arrange()): ?><a href="dashboard.php<?php echo $wg_edit ? '' : '?widgets=1'; ?>" class="ub-btn <?php echo $wg_edit ? 'on' : ''; ?>" title="Widgets anordnen"><?php echo $wg_edit ? '✓ Fertig' : '🧩 Widgets'; ?></a><?php endif; ?>
-                <button type="button" class="ub-btn <?php echo widgets_mine() ? 'on' : ''; ?>" id="wgMine" data-on="<?php echo widgets_mine() ? '1' : '0'; ?>" title="<?php echo widgets_mine() ? 'Eigenes Dashboard aus – wieder die gemeinsame Anordnung zeigen' : 'Eigenes Dashboard: Widgets nur für dich zusammenstellen (Baukasten)'; ?>">🧱 <?php echo widgets_mine() ? 'Mein Dashboard' : 'Baukasten'; ?></button>
-                <?php if (can('admin.access')): ?><a href="admin.php" class="ub-btn" title="Admin-Zentrale">⚙</a><?php endif; ?>
-                <form method="POST" action="admin.php" style="margin: 0;"><input type="hidden" name="action" value="logout"><button type="submit" class="ub-btn danger" title="Abmelden">⏻</button></form>
-            </span>
-        <?php else: ?>
-            <a href="admin.php?next=dashboard.php" class="ub-login">🔒 Anmelden</a>
-        <?php endif; ?>
-    </div>
+        </div>
 
-    <header>
-        <div class="hud-tag">System // Central Terminal</div>
-        <h1><?php echo e($settings['site_title']); ?></h1>
-        <p class="subtitle" id="greeting"><?php echo e($settings['site_tagline']); ?></p>
-    </header>
-
-    <?php if (!empty($_GET['msg'])): ?><div class="idx-flash ok"><?php echo e($_GET['msg']); ?></div><?php endif; ?>
-    <?php if (!empty($_GET['error'])): ?><div class="idx-flash err"><?php echo e($_GET['error']); ?></div><?php endif; ?>
-
-    <div class="search-box">
-        <form id="searchForm" action="https://www.google.com/search" method="GET" class="search-form" role="search">
+        <form id="searchForm" action="https://www.google.com/search" method="GET" class="search-form dh-search" role="search">
             <div class="search-controls">
                 <select id="search-engine" aria-label="Suchmaschine">
                     <option value="google" selected>Google</option>
@@ -327,12 +333,16 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
                     <option value="bing">Bing</option>
                     <option value="internal">// Lokal</option>
                 </select>
-                <input type="search" id="searchInput" name="q" class="search-input" placeholder="Suchbegriff eingeben..." <?php echo $edit ? '' : 'autofocus'; ?> autocomplete="off" aria-label="Suchbegriff">
+                <input type="search" id="searchInput" name="q" class="search-input" placeholder="Suchbegriff eingeben..." autocomplete="off" aria-label="Suchbegriff">
                 <button type="submit" id="searchBtn" class="search-btn">Suchen</button>
             </div>
             <div class="search-hint" id="searchHint"></div>
         </form>
-    </div>
+    </header>
+
+    <?php if ($settings['maintenance']): ?><div class="maint-bar">🛠️ Wartungsmodus ist aktiv – Besucher sehen nur den Wartungshinweis.</div><?php endif; ?>
+    <?php if (!empty($_GET['msg'])): ?><div class="idx-flash ok"><?php echo e($_GET['msg']); ?></div><?php endif; ?>
+    <?php if (!empty($_GET['error'])): ?><div class="idx-flash err"><?php echo e($_GET['error']); ?></div><?php endif; ?>
 
     <?php if ($edit): ?>
         <div class="edit-bar">
@@ -346,16 +356,34 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
     <?php endif; ?>
 
     <?php if ($wg_layout || $wg_edit): ?>
-        <section class="wg-area" id="wgArea">
-            <div class="wg-area-head">
-                <h2>🧩 Widgets<?php if (widgets_mine()): ?> <small style="font-size:.7rem;color:var(--accent-gold);letter-spacing:1px">· MEIN DASHBOARD</small><?php endif; ?></h2>
-                <span>
+        <section class="wg-area" id="wgArea" data-group="<?php echo e($wg_prefs['group']); ?>">
+            <div class="wg-toolbar">
+                <h2>🧩 Widgets<?php if (widgets_mine()): ?> <small class="wg-mine-tag">Mein Dashboard</small><?php endif; ?></h2>
+                <?php if (count($wg_groups) > 1 && !$wg_edit): ?>
+                    <nav class="wg-groups" id="wgGroups" aria-label="Widget-Gruppen">
+                        <button type="button" data-g="" class="<?php echo $wg_prefs['group'] === '' ? 'on' : ''; ?>">Alle</button>
+                        <?php foreach ($wg_groups as $g => [$gi, $gl]): ?><button type="button" data-g="<?php echo e($g); ?>" class="<?php echo $wg_prefs['group'] === $g ? 'on' : ''; ?>"><?php echo $gi . ' ' . e($gl); ?></button><?php endforeach; ?>
+                    </nav>
+                <?php endif; ?>
+                <span class="wg-tb-right">
                     <?php if ($wg_edit): ?><button type="button" class="btn btn-sm btn-gold" id="wgAdd">＋ Widget</button>
                     <?php else: ?><button type="button" class="wg-link" id="wgToggle">▾ ausblenden</button><?php endif; ?>
                 </span>
             </div>
+            <?php if (!$wg_edit && $user): ?>
+                <div class="wg-tray" id="wgTray" hidden>
+                    <div class="wg-tray-head"><b>🎛 Anpassen</b> <span>Widgets am Griff ⠿ ziehen, mit 👁 ausblenden. Wird in deinem Konto gespeichert – auf jedem Gerät.</span></div>
+                    <div class="wg-tray-list" id="wgTrayList"></div>
+                    <div class="wg-tray-actions">
+                        <a class="btn btn-sm" href="widgets.php?act=prefs_export">⬇ Exportieren</a>
+                        <label class="btn btn-sm">⬆ Importieren<input type="file" id="wgImport" accept="application/json,.json" hidden></label>
+                        <button type="button" class="btn btn-sm" id="wgReset">↺ Zurücksetzen</button>
+                        <button type="button" class="btn btn-sm btn-gold" id="wgDone">✓ Fertig</button>
+                    </div>
+                </div>
+            <?php endif; ?>
             <div class="wg-grid" id="wgGrid">
-                <?php foreach ($wg_layout as $w) echo widget_card($w, $wg_edit); ?>
+                <?php foreach ($wg_layout as $w) echo widget_card($w, $wg_edit, ['hidden' => in_array($w['uid'], $wg_prefs['hidden'], true), 'min' => in_array($w['uid'], $wg_prefs['min'], true)]); ?>
                 <?php if (!$wg_layout): ?><div class="wg-empty-grid">Noch keine Widgets – „＋ Widget“ klicken.</div><?php endif; ?>
             </div>
         </section>
@@ -504,10 +532,24 @@ foreach ($wg_layout as $w) if (isset($wg_avail[$w['type']])) $wg_assets[$w['type
 </div>
 <?php endif; ?>
 
-<script>window.IDX = { user: <?php echo $user ? json_encode(['id' => (int)$user['id'], 'name' => user_label($user)]) : 'null'; ?>, edit: <?php echo $edit ? 'true' : 'false'; ?>, wgEdit: <?php echo $wg_edit ? 'true' : 'false'; ?>, canManage: <?php echo $can_manage ? 'true' : 'false'; ?> };</script>
+<?php
+// 9.0: Befehlspalette (Strg+K) – Seiten, die die Person öffnen darf, plus Aktionen
+$cmd = [];
+foreach ($groups as $g) foreach ($g['pages'] as $p) if (!$p['locked']) $cmd[] = ['i' => $p['icon'] ?: '📄', 't' => $p['title'], 's' => $g['cat']['name'], 'h' => $p['href']];
+foreach ([['🔍', 'Globale Suche', 'search.php', null], ['⬇', 'Downloads', 'downloads.php', null], ['📜', 'Changelog', 'changelog.php', null], ['🩺', 'Status der Dienste', 'status.php', null],
+          ['👤', 'Mein Bereich', 'me.php', 'login'], ['🔔', 'Benachrichtigungen', 'me.php?tab=notes', 'login'], ['🔐', 'Mein Konto (Passwort, 2FA, Geräte)', 'admin.php?tab=account', 'login'],
+          ['👥', 'Admin: Benutzer', 'admin.php?tab=users', 'users.view'], ['📋', 'Admin: Protokoll', 'admin.php?tab=audit', 'audit.view'], ['🛡', 'Admin: Sicherheit', 'admin.php?tab=security', 'security.manage'],
+          ['🖥', 'Admin: System', 'admin.php?tab=system', 'system.manage'], ['🗓', 'Admin: Wartungsfenster', 'admin.php?tab=system#maint-plan', 'system.manage']] as [$i, $t, $h, $need]) {
+    if ($need === 'login' ? !$user : ($need !== null && !can($need))) continue;
+    $cmd[] = ['i' => $i, 't' => $t, 's' => 'Gehe zu', 'h' => $h];
+}
+?>
+<script>window.IDX = { user: <?php echo $user ? json_encode(['id' => (int)$user['id'], 'name' => user_label($user)]) : 'null'; ?>, edit: <?php echo $edit ? 'true' : 'false'; ?>, wgEdit: <?php echo $wg_edit ? 'true' : 'false'; ?>, canManage: <?php echo $can_manage ? 'true' : 'false'; ?>,
+    prefs: <?php echo json_encode($wg_prefs, JSON_UNESCAPED_SLASHES); ?>, cmd: <?php echo json_encode($cmd, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP); ?> };</script>
 <script src="assets/js/index.js"></script>
 <script src="assets/js/dash-plus.js"></script>
 <script src="assets/js/widgets.js"></script>
+<script src="assets/js/dash-ux.js"></script>
 <?php foreach ($wg_assets as $t => $m): if ($m['has_js']): ?><script src="widgets/<?php echo e($t); ?>/widget.js?v=<?php echo (int)$m['mtime']; ?>"></script>
 <?php endif; endforeach; ?>
 <script src="assets/js/gender.js"></script>

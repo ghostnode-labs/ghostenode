@@ -12,6 +12,18 @@ require_once __DIR__ . '/format.php';
 
 const WIDGETS_DIR = APP_ROOT . '/widgets';
 const WIDGET_SIZES = ['s' => 'klein', 'm' => 'mittel', 'l' => 'breit', 'xl' => 'ganze Zeile'];
+/** 9.0: Gruppen fürs Dashboard (Filter-Leiste). Ein Widget kann im Manifest 'group' => '…' setzen, sonst gilt diese Zuordnung. */
+const WIDGET_GROUPS = ['overview' => ['🧭', 'Übersicht'], 'plan' => ['📅', 'Planung'], 'personal' => ['📝', 'Persönlich'], 'projects' => ['🚀', 'Projekte'],
+                       'community' => ['🫂', 'Community'], 'system' => ['🛠', 'System'], 'fun' => ['🎲', 'Freizeit']];
+const WIDGET_GROUP_DEFAULT = [
+    'clock' => 'overview', 'weather' => 'overview', 'quote' => 'overview', 'progress' => 'overview', 'block' => 'overview', 'buttons' => 'overview', 'quicklinks' => 'overview', 'sunmoon' => 'overview', 'notify' => 'overview',
+    'calendar' => 'plan', 'countdowns' => 'plan', 'todo' => 'plan', 'con' => 'plan', 'budget' => 'plan', 'currency' => 'plan', 'pomodoro' => 'plan', 'habits' => 'plan',
+    'notes' => 'personal', 'notebook' => 'personal', 'bookmarks' => 'personal', 'snippets' => 'personal', 'accountcheck' => 'personal', 'photo' => 'personal',
+    'nexus' => 'projects', 'releases' => 'projects', 'dlstats' => 'projects', 'market' => 'projects', 'services' => 'projects',
+    'vrchat' => 'community', 'vrclive' => 'community', 'today' => 'community', 'discord' => 'community', 'feed' => 'community', 'rss' => 'community',
+    'system' => 'system', 'adminq' => 'system', 'online' => 'system', 'auditlive' => 'system',
+    'boop' => 'fun', 'random' => 'fun',
+];
 
 /** Kontext, den jedes Widget beim Rendern bekommt */
 final class WidgetCtx {
@@ -39,6 +51,20 @@ final class WidgetCtx {
 
     public function save_state(array $state): void {
         set_setting('widget_state_' . $this->uid, json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+    }
+
+    /** 9.0: privater Inhalt dieser Instanz für das angemeldete Konto (Notizbuch, Lesezeichen …) – jedes Konto sieht nur seinen eigenen */
+    public function user_state(): array {
+        $u = current_user();
+        if (!$u) return [];
+        $v = json_decode(user_pref((int)$u['id'], 'ws:' . $this->uid, '{}'), true);
+        return is_array($v) ? $v : [];
+    }
+
+    public function save_user_state(array $state): void {
+        $u = current_user();
+        if (!$u) throw new RuntimeException('Bitte anmelden.');
+        user_pref_set((int)$u['id'], 'ws:' . $this->uid, json_encode($state, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
     }
 
     /** Darf der aktuelle Benutzer Inhalte dieses Widgets ändern? (Standard: Recht „pages.edit“) */
@@ -167,6 +193,58 @@ function widget_ctx(array $inst): ?WidgetCtx {
     return $m ? new WidgetCtx($inst['uid'], $inst['type'], (array)($inst['cfg'] ?? []), $m) : null;
 }
 
+/** Gruppe eines Widget-Typs (für die Filter-Leiste) */
+function widget_group(string $type, ?array $m = null): string {
+    $g = (string)($m['group'] ?? '');
+    if (isset(WIDGET_GROUPS[$g])) return $g;
+    return WIDGET_GROUP_DEFAULT[$type] ?? 'overview';
+}
+
+// ---------- 9.0: persönliche Dashboard-Ansicht (Reihenfolge, ausgeblendet, eingeklappt – je Konto) ----------
+
+/** Persönliche Ansicht: ['order' => [uid…], 'hidden' => [uid…], 'min' => [uid…], 'group' => ''] */
+function widgets_prefs(): array {
+    $u = current_user();
+    $d = ['order' => [], 'hidden' => [], 'min' => [], 'group' => ''];
+    if (!$u) return $d;
+    $j = json_decode(user_pref((int)$u['id'], 'dash', ''), true);
+    return is_array($j) ? widgets_prefs_clean($j) : $d;
+}
+
+/** Eingaben prüfen (nur IDs, begrenzte Länge) */
+function widgets_prefs_clean(array $in): array {
+    $ids = function ($v) { return array_values(array_unique(array_slice(array_filter(array_map(function ($x) { return preg_replace('/\W/', '', (string)$x); }, (array)$v), 'strlen'), 0, 80))); };
+    $g = (string)($in['group'] ?? '');
+    return ['order' => $ids($in['order'] ?? []), 'hidden' => $ids($in['hidden'] ?? []), 'min' => $ids($in['min'] ?? []), 'group' => isset(WIDGET_GROUPS[$g]) ? $g : ''];
+}
+
+function widgets_prefs_save(array $p): array {
+    $u = current_user();
+    if (!$u) throw new RuntimeException('Bitte anmelden – die persönliche Anordnung wird im Konto gespeichert.');
+    $p = widgets_prefs_clean($p);
+    user_pref_set((int)$u['id'], 'dash', json_encode($p, JSON_UNESCAPED_SLASHES));
+    return $p;
+}
+
+/** Anordnung in der persönlichen Reihenfolge; neue Widgets (noch nicht in „order“) behalten ihre Stelle relativ zum Original */
+function widgets_apply_prefs(array $layout, array $prefs): array {
+    if (!$prefs['order']) return $layout;
+    $pos = array_flip($prefs['order']);
+    $keyed = [];
+    foreach (array_values($layout) as $i => $w) $keyed[] = [$pos[$w['uid']] ?? null, $i, $w];
+    // bekannte nach persönlicher Reihenfolge, unbekannte hinter ihren Vorgänger im Original
+    $known = array_values(array_filter($keyed, function ($k) { return $k[0] !== null; }));
+    usort($known, function ($a, $b) { return $a[0] <=> $b[0]; });
+    $out = array_map(function ($k) { return $k[2]; }, $known);
+    foreach ($keyed as $k) {
+        if ($k[0] !== null) continue;
+        $at = count($out);
+        if ($k[1] > 0) { $prev = $layout[$k[1] - 1]['uid'] ?? ''; foreach ($out as $j => $w) if ($w['uid'] === $prev) { $at = $j + 1; break; } }
+        array_splice($out, $at, 0, [$k[2]]);
+    }
+    return $out;
+}
+
 /** Inhalt eines Widgets (Fehler werden im Widget angezeigt, nie die ganze Seite) */
 function widget_body(array $inst): string {
     $m = widgets_available()[$inst['type']] ?? null;
@@ -184,12 +262,13 @@ function widget_body(array $inst): string {
 }
 
 /** Komplette Widget-Karte */
-function widget_card(array $inst, bool $edit): string {
+function widget_card(array $inst, bool $edit, array $flags = []): string {
     $m = widgets_available()[$inst['type']] ?? ['name' => $inst['type'], 'icon' => '❔', 'refresh' => 0, 'settings' => []];
     $title = trim((string)($inst['cfg']['_title'] ?? '')) ?: $m['name'];
     $size = isset(WIDGET_SIZES[$inst['size'] ?? '']) ? $inst['size'] : ($m['size'] ?? 's');
-    $h = '<section class="wg wg-' . e($size) . ' wg-type-' . e($inst['type']) . '" data-uid="' . e($inst['uid']) . '" data-type="' . e($inst['type']) . '" data-refresh="' . (int)($m['refresh'] ?? 0) . '"'
-        . ($edit ? ' draggable="true"' : '') . '>';
+    $group = widget_group($inst['type'], $m);
+    $h = '<section class="wg wg-' . e($size) . ' wg-type-' . e($inst['type']) . (!empty($flags['hidden']) ? ' is-off' : '') . (!empty($flags['min']) ? ' min' : '') . '" data-uid="' . e($inst['uid']) . '" data-type="' . e($inst['type']) . '" data-group="' . e($group) . '" data-name="' . e($title) . '" data-icon="' . e($m['icon']) . '" data-refresh="' . (int)($m['refresh'] ?? 0) . '"'
+        . ($edit ? ' draggable="true"' : '') . (!empty($flags['hidden']) ? ' hidden' : '') . '>';
     $h .= '<header class="wg-head"><span class="wg-icon">' . e($m['icon']) . '</span><h3>' . e($title) . '</h3>';
     if ($edit) {
         $h .= '<span class="wg-tools"><span class="wg-drag" title="Ziehen zum Sortieren">⠿</span>'
@@ -197,9 +276,12 @@ function widget_card(array $inst, bool $edit): string {
             . '<button type="button" class="ic" data-wg-settings title="Einstellungen">⚙</button>'
             . '<button type="button" class="ic danger" data-wg-remove title="Entfernen">✕</button></span>';
     } else {
-        $h .= '<button type="button" class="wg-min" title="Einklappen" aria-label="Einklappen">–</button>';
+        $h .= '<span class="wg-tools wg-own"><span class="wg-drag" title="Ziehen zum Sortieren (nur für dich)">⠿</span>'
+            . '<button type="button" class="ic" data-wg-hide title="Für mich ausblenden" aria-label="Ausblenden">👁</button></span>'
+            . '<button type="button" class="wg-min" title="Einklappen" aria-label="Einklappen">–</button>';
     }
-    $h .= '</header><div class="wg-body">' . widget_body($inst) . '</div></section>';
+    // ausgeblendete Widgets erst beim Einblenden laden (spart Abrufe fremder Dienste)
+    $h .= '</header><div class="wg-body"' . (!empty($flags['hidden']) ? ' data-lazy="1">' : '>' . widget_body($inst)) . '</div></section>';
     return $h;
 }
 

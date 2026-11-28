@@ -77,6 +77,21 @@ function sv_bar(float $pct): string {
     return '<div class="sv-bar"><i style="width:' . round($pct, 1) . '%;background:' . $c . '"></i></div>';
 }
 
+/** 9.0: htop-artige Prozessanzeige (Daten: admin.php?sv_procs=1, Skript: assets/js/sv-procs.js) – nur Anzeige */
+function sv_procs_panel(): string {
+    return '<div class="panel sv-procs" id="svProcs"><div class="panel-title"><span>// Prozesse</span><span class="sv-p-state muted small" id="svpState">lädt …</span></div>'
+        . '<div class="sv-p-head"><div class="sv-p-cores" id="svpCores"></div><div class="sv-p-sum">'
+        . '<div class="sv-k"><span>Load 1 / 5 / 15</span><b id="svpLoad">–</b></div><div class="sv-k"><span>Arbeitsspeicher</span><b id="svpMemT">–</b></div><div class="sv-bar"><i id="svpMem"></i></div>'
+        . '<div class="sv-k"><span>Swap</span><b id="svpSwapT">–</b></div><div class="sv-bar"><i id="svpSwap"></i></div>'
+        . '<div class="sv-k"><span>Prozesse / Threads</span><b id="svpTasks">–</b></div><div class="sv-k"><span>Läuft seit</span><b id="svpUp">–</b></div></div></div>'
+        . '<div class="sv-p-tools"><input type="search" id="svpQ" placeholder="Filtern (Befehl, Benutzer, PID) …" aria-label="Prozesse filtern" maxlength="60">'
+        . '<label class="small muted"><input type="checkbox" id="svpPause"> Pause</label></div>'
+        . '<div class="sv-p-scroll"><table class="sv-t sv-p-t"><thead><tr>'
+        . '<th data-s="pid">PID</th><th>Benutzer</th><th data-s="cpu" class="on">CPU %</th><th data-s="mem">RAM %</th><th>RSS</th><th data-s="time">Laufzeit</th><th data-s="name">Befehl</th>'
+        . '</tr></thead><tbody id="svpRows"><tr><td colspan="7" class="muted">lädt …</td></tr></tbody></table></div>'
+        . '<p class="muted small">Top 30 · alle 3 s · nur Anzeige (Prozesse werden hier nie beendet).</p></div>';
+}
+
 function admin_server_view(): void {
     $s = sv_status();
     $res = sv_results(); $pend = sv_pending();
@@ -96,12 +111,27 @@ function admin_server_view(): void {
         .sv-ok{color:var(--accent-green,#51e57e)}.sv-bad{color:#ff5c5c}.sv-warn{color:var(--accent-gold)}
         .sv-log{font-family:monospace;font-size:.75rem;white-space:pre-wrap;max-height:280px;overflow:auto;background:rgba(0,0,0,.25);padding:8px;margin:6px 0 0}
         .sv-actions{display:flex;flex-wrap:wrap;gap:6px}
+        .sv-procs{grid-column:span 2;min-width:0}
+        .panel details summary,.sv-t code{overflow-wrap:anywhere;word-break:break-word}
+        @media (max-width:760px){.sv-procs{grid-column:auto}}
+        .sv-p-head{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:14px;margin-bottom:10px}
+        @media (max-width:560px){.sv-p-head{grid-template-columns:1fr}}
+        .sv-p-cores{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:2px 12px;align-content:start;font-family:monospace;font-size:.74rem}
+        .sv-p-core{display:grid;grid-template-columns:22px 1fr 44px;align-items:center;gap:4px}.sv-p-core .sv-bar{margin:0}.sv-p-core b{text-align:right;font-weight:400}
+        .sv-p-tools{display:flex;gap:10px;align-items:center;margin-bottom:6px}.sv-p-tools input[type=search]{flex:1;min-width:0;padding:6px 10px;font-size:.82rem}
+        .sv-p-scroll{overflow-x:auto;max-height:520px;overflow-y:auto;border:1px solid rgba(56,213,230,.12)}
+        .sv-p-t{font-family:monospace;font-size:.76rem;white-space:nowrap}.sv-p-t th{position:sticky;top:0;background:#0a1018;text-align:left;padding:5px 6px;color:var(--text-muted);font-weight:700;cursor:default}
+        .sv-p-t th[data-s]{cursor:pointer}.sv-p-t th[data-s]:hover{color:#fff}.sv-p-t th.on{color:var(--accent-gold)}.sv-p-t th.on::after{content:" ▾"}
+        .sv-p-t td{padding:3px 6px}.sv-p-t td.n{text-align:right}.sv-p-t td.cmd{max-width:520px;overflow:hidden;text-overflow:ellipsis}
+        .sv-p-t tr.hot td{color:var(--accent-gold)}.sv-p-t tr.r td:first-child{box-shadow:inset 2px 0 0 var(--accent-green,#51e57e)}
     </style>
     <?php if (!$s): ?>
         <div class="panel"><div class="panel-title"><span>// Server</span></div>
             <p>Das Server-Dashboard gibt es auf dem <b>GhostNode-Root-Server</b>. Der Agent schreibt jede Minute den Status, und diese Seite liest ihn.</p>
             <p class="muted">Hier wurde kein Status gefunden (<code><?= e(SV_DIR) ?>/status.json</code>). Auf Plesk oder einem normalen Webhosting steht er nicht zur Verfügung.
                 Auf dem Root-Server richtest du ihn so ein: <code>bash /root/ghostenode/server/ghostnode-root.sh update</code></p></div>
+        <div class="sv-grid"><?= sv_procs_panel() ?></div>
+        <script src="assets/js/sv-procs.js?v=<?= (int)@filemtime(APP_ROOT . '/assets/js/sv-procs.js') ?>"></script>
         <?php return; endif;
     $age = time() - (int)($s['time'] ?? 0);
     $mem = $s['mem'] ?? ['total' => 0, 'avail' => 0]; $memUsed = max(0, $mem['total'] - $mem['avail']);
@@ -172,7 +202,9 @@ function admin_server_view(): void {
             <?php endforeach; if (empty($s['backups'])): ?><tr><td class="muted">noch keine</td></tr><?php endif; ?>
             </table>
         </div>
+        <?= sv_procs_panel() ?>
     </div>
+    <script src="assets/js/sv-procs.js?v=<?= (int)@filemtime(APP_ROOT . '/assets/js/sv-procs.js') ?>"></script>
 
     <?php $ssh = $s['ssh'] ?? null; ?>
     <div class="sv-grid" style="margin-top:12px">

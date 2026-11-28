@@ -8,7 +8,7 @@
  */
 require_once __DIR__ . '/common.php';
 
-const SITE_SCHEMA_VERSION = 2;
+const SITE_SCHEMA_VERSION = 3;
 
 /** Alle Rechte, die Rollen haben können: key => [Beschreibung, Gruppe] */
 const PERMISSIONS = [
@@ -186,6 +186,18 @@ function site_migrate(PDO $db): void {
             foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $rid) foreach ($new as $p) $ins->execute([$rid, $p]);
         }
     }
+    if ($version < 3) {
+        // 9.0: persönliche Einstellungen je Konto (Tabelle user_kv – „user_prefs“ gehört „Mein Bereich“) (Dashboard-Anordnung, ausgeblendete Widgets, private Widget-Inhalte)
+        $db->exec("
+            CREATE TABLE IF NOT EXISTS user_kv (
+                user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                pkey    TEXT NOT NULL,
+                value   TEXT NOT NULL,
+                updated TEXT NOT NULL DEFAULT (datetime('now','localtime')),
+                PRIMARY KEY (user_id, pkey)
+            );
+        ");
+    }
     $db->exec('PRAGMA user_version = ' . SITE_SCHEMA_VERSION);
     $db->commit();
 
@@ -244,6 +256,38 @@ function set_setting(string $key, string $value): void {
     site_db()->prepare('INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')->execute([$key, $value]);
     $cache = &setting_cache();
     $cache[$key] = $value;
+}
+
+// ---------- Persönliche Einstellungen (je Konto) ----------
+
+/** Wert einer persönlichen Einstellung (z. B. „dash“ = Dashboard-Anordnung, „ws:<widget>“ = privater Widget-Inhalt) */
+function user_pref(int $uid, string $key, string $default = ''): string {
+    if ($uid <= 0) return $default;
+    $st = site_db()->prepare('SELECT value FROM user_kv WHERE user_id = ? AND pkey = ?');
+    $st->execute([$uid, mb_substr($key, 0, 120)]);
+    $v = $st->fetchColumn();
+    return $v === false ? $default : (string)$v;
+}
+
+function user_pref_set(int $uid, string $key, string $value): void {
+    if ($uid <= 0) throw new RuntimeException('Bitte anmelden.');
+    if (strlen($value) > 600000) throw new RuntimeException('Zu viele Daten (max. 600 KB).');
+    site_db()->prepare("INSERT INTO user_kv (user_id, pkey, value, updated) VALUES (?, ?, ?, datetime('now','localtime'))
+                        ON CONFLICT(user_id, pkey) DO UPDATE SET value = excluded.value, updated = excluded.updated")
+             ->execute([$uid, mb_substr($key, 0, 120), $value]);
+}
+
+function user_pref_delete(int $uid, string $key): void {
+    site_db()->prepare('DELETE FROM user_kv WHERE user_id = ? AND pkey = ?')->execute([$uid, $key]);
+}
+
+/** Alle persönlichen Einstellungen eines Kontos (für den Datenexport) */
+function user_kv_all(int $uid): array {
+    $st = site_db()->prepare('SELECT pkey, value, updated FROM user_kv WHERE user_id = ? ORDER BY pkey');
+    $st->execute([$uid]);
+    $out = [];
+    foreach ($st->fetchAll() as $r) { $j = json_decode((string)$r['value'], true); $out[$r['pkey']] = $j ?? $r['value']; }
+    return $out;
 }
 
 // 8.2.1: Domain-Schutz nachholen, falls common.php ihn während des Ladens dieser Datei zurückgestellt hat
