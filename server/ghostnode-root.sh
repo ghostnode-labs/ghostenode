@@ -105,6 +105,8 @@ ${b}Einstellungen${z}
   secrets           Schlüssel (Discord, HypeRate, SMTP …) ändern und übernehmen
   bungie            Bungie-Werte für D2 Nexus eintragen
   certs             Zertifikate (erneut) holen
+  scriptload        eigene Skripte aus server/scripts (Git) auf den Server spielen → Befehle gn-NAME
+  scripts           installierte eigene Skripte anzeigen      script NAME [arg]  eines ausführen
   musik-login [neu|aus]   YouTube-Anmeldung für die Bot-Musik („This video requires login“)
 
 ${b}Notfall & Umzug${z}
@@ -137,7 +139,7 @@ install_cli() {   # /usr/local/bin/ghostnode → dieses Script (bleibt nach Upda
 _ghostnode() {
     local cur=${COMP_WORDS[COMP_CWORD]} prev=${COMP_WORDS[1]:-}
     if [ "$COMP_CWORD" -eq 1 ]; then
-        COMPREPLY=($(compgen -W "update bot check bericht crons backup secrets bungie certs musik-login login usedb olddb migrate install cli help" -- "$cur"))
+        COMPREPLY=($(compgen -W "update bot check bericht crons backup secrets bungie certs scriptload scripts script musik-login login usedb olddb migrate install cli help" -- "$cur"))
     elif [ "$prev" = musik-login ] && [ "$COMP_CWORD" -eq 2 ]; then
         COMPREPLY=($(compgen -W "neu aus" -- "$cur"))
     elif [ "$prev" = login ] && [ "$COMP_CWORD" -eq 2 ]; then
@@ -170,7 +172,7 @@ for a in "$@"; do
         --src-port=*) MIG_SRC_PORT=${a#--src-port=} ;;
         --force|--neu) ;;   # für olddb
         -h|--help) show_help; exit 0 ;;
-        *) [ "$CMD" = login ] || [ "$CMD" = musik-login ] || die "Unbekannte Option: $a (Hilfe: --help)" ;;   # login: Unterbefehl + Benutzername
+        *) [ "$CMD" = login ] || [ "$CMD" = musik-login ] || [ "$CMD" = script ] || die "Unbekannte Option: $a (Hilfe: --help)" ;;   # login: Unterbefehl + Benutzername
     esac
 done
 want() {   # want <teil> → läuft dieser Teil?
@@ -1628,6 +1630,63 @@ EOF2
     ok "Wächter alle 5 min (Neustart nach 2 Fehlschlägen)$([ "${AUTO_UPDATE:-1}" = 1 ] && echo ", Auto-Update von GitHub täglich 04:41")"
     ok "Übersicht: $0 crons · Protokoll: /var/log/ghostnode-cron.log"
 }
+# ---------------------------------------------------------------- eigene Skripte (server/scripts → Server)
+SCRIPTS_DST=${GN_SCRIPTS_DST:-/opt/ghostnode/scripts}; SCRIPTS_BIN=${GN_SCRIPTS_BIN:-/usr/local/bin}; SCRIPTS_CRON=${GN_SCRIPTS_CRON:-/etc/cron.d/ghostnode-scripts}; SCRIPTS_STATE=${GN_SCRIPTS_STATE:-/var/lib/ghostnode}
+scripts_src() { echo "$(cd "$(dirname "$(readlink -f "$0")")" && pwd)/scripts"; }
+script_meta() { sed -n "s/^#[[:space:]]*gn-$2:[[:space:]]*//p" "$1" | head -1; }   # script_meta DATEI schlüssel → Wert aus „# gn-schlüssel: …“
+scripts_sync() {   # Skripte aus dem Git-Ordner server/scripts installieren, Befehle gn-NAME, Cron und Einmal-Ausführung
+    local src; src=$(scripts_src)
+    step "Eigene Skripte (server/scripts)"
+    [ -d "$src" ] || { ok "kein Ordner $src – nichts zu tun"; return 0; }
+    install -d -m 0755 "$SCRIPTS_DST" "$SCRIPTS_STATE"
+    local f name n=0 bad=0 cron="" state=$SCRIPTS_STATE/scripts.done keep=" "
+    touch "$state"; chmod 600 "$state"
+    for f in "$src"/*; do
+        [ -f "$f" ] || continue
+        name=$(basename "$f")
+        case "$name" in _*|*.md|*.txt|README*) continue ;; esac          # _name = ausgeschaltet, Doku wird übersprungen
+        [[ "$name" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { warn "übersprungen (Name): $name"; bad=$((bad+1)); continue; }
+        [ -L "$f" ] && { warn "übersprungen (symbolischer Link): $name"; bad=$((bad+1)); continue; }
+        case "$name" in
+            *.sh) bash -n "$f" 2>/dev/null || { warn "Syntaxfehler – nicht installiert: $name (bash -n $f)"; bad=$((bad+1)); continue; } ;;
+            *.py) python3 -m py_compile "$f" 2>/dev/null || { warn "Syntaxfehler – nicht installiert: $name"; bad=$((bad+1)); continue; } ;;
+        esac
+        head -1 "$f" | grep -q '^#!' || { warn "übersprungen (erste Zeile braucht #!/bin/bash o. ä.): $name"; bad=$((bad+1)); continue; }
+        install -m 0755 "$f" "$SCRIPTS_DST/$name"
+        local cmd="gn-${name%.*}"
+        ln -sfn "$SCRIPTS_DST/$name" "$SCRIPTS_BIN/$cmd"
+        keep+="$name "
+        local c r h; c=$(script_meta "$f" cron); r=$(script_meta "$f" run)
+        if [ -n "$c" ]; then
+            if [[ "$c" =~ ^(@(hourly|daily|weekly|monthly|reboot)|[0-9*/,-]+[[:space:]]+[0-9*/,-]+[[:space:]]+[0-9*/,-]+[[:space:]]+[0-9*/,-]+[[:space:]]+[0-9*/,-]+)$ ]]; then
+                cron+="$c root $SCRIPTS_DST/$name >> /var/log/ghostnode-scripts.log 2>&1"$'\n'
+            else warn "$name: ungültige Zeitangabe „gn-cron: $c“ – kein Cron"; fi
+        fi
+        h=$(sha256sum "$f" | cut -c1-16)
+        if [ "$r" = always ] || { [ "$r" = once ] && ! grep -qx "$name $h" "$state"; }; then
+            if "$SCRIPTS_DST/$name" >> "${GN_SCRIPTS_LOG:-/var/log/ghostnode-scripts.log}" 2>&1; then ok "$name ausgeführt ($r)"; else warn "$name ($r) endete mit Fehler – /var/log/ghostnode-scripts.log"; fi
+            [ "$r" = once ] && { grep -v "^$name " "$state" > "$state.tmp" || true; echo "$name $h" >> "$state.tmp"; mv "$state.tmp" "$state"; }
+        fi
+        n=$((n+1)); ok "$cmd${c:+  · Cron: $c}${r:+  · Ausführen: $r}"
+    done
+    # entfernte Skripte aufräumen (nur, was wir selbst installiert haben)
+    for f in "$SCRIPTS_DST"/*; do
+        [ -f "$f" ] || continue; name=$(basename "$f")
+        [[ "$keep" == *" $name "* ]] && continue
+        rm -f "$f" "$SCRIPTS_BIN/gn-${name%.*}"; ok "entfernt: $name"
+    done
+    if [ -n "$cron" ]; then { echo "# erzeugt von ghostnode-root.sh (ghostnode scriptload) – Quelle: server/scripts im Git"; echo "SHELL=/bin/bash"; echo "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"; printf '%s' "$cron"; } > "$SCRIPTS_CRON"; chmod 644 "$SCRIPTS_CRON"
+    else rm -f "$SCRIPTS_CRON"; fi
+    ok "$n Skript(e) installiert$([ $bad -gt 0 ] && echo ", $bad übersprungen")"
+}
+cmd_scripts() {   # Liste der installierten eigenen Skripte
+    local f
+    [ -d "$SCRIPTS_DST" ] && ls "$SCRIPTS_DST" >/dev/null 2>&1 || { echo "Noch keine eigenen Skripte (Ordner server/scripts, dann: ghostnode scriptload)."; return 0; }
+    for f in "$SCRIPTS_DST"/*; do [ -f "$f" ] || continue
+        printf '  %-22s %s%s%s\n' "gn-$(basename "${f%.*}")" "$(script_meta "$f" desc)" "$(c=$(script_meta "$f" cron); [ -n "$c" ] && echo "  [Cron: $c]")" "$(r=$(script_meta "$f" run); [ -n "$r" ] && echo "  [$r]")"
+    done
+}
+
 cmd_crons() {
     step "Geplante Aufgaben"
     local n st t rc
@@ -1795,7 +1854,7 @@ check_all() {
         for p in "/data/config.php" "/inc/core/common.php" "/.git/config" "/tools/db.php" "/server/ghostnode-root.sh"; do
             c=$(http_code "$DOMAIN" "$p"); [[ "$c" =~ ^(403|404)$ ]] && ok "gesperrt: $p ($c)" || fail "NICHT gesperrt: $p → $c"
         done
-        c=$(lcurl "$DOMAIN" "/api.php?r=me" -H "Authorization: Bearer gnk_0000000000000000000000000000000000000000" 2>/dev/null || true)
+        c=$(lcurl "$DOMAIN" "/api.php?r=me" -H "Authorization: Bearer gnk_$(printf "%040d" 0)" 2>/dev/null || true)
         [[ "$c" == *"Ungültiger API-Schlüssel"* ]] && ok "Authorization-Kopfzeile kommt bei PHP an (API-Schlüssel)" || fail "Authorization-Kopfzeile kommt nicht an: $c"
         runuser -u "$APP_USER" -- php -r 'chdir($argv[1]); $_SERVER["REMOTE_ADDR"]="127.0.0.1"; require "inc/core/pages.php"; echo site_db()->getAttribute(PDO::ATTR_DRIVER_NAME);' "$WEB_DIR" 2>/dev/null | grep -E 'sqlite|mysql' >/dev/null \
             && ok "Datenbank erreichbar ($DB_ENGINE)" || fail "Datenbank nicht erreichbar"
@@ -2055,6 +2114,7 @@ case "$CMD" in
         want bot && setup_bot
         want cron && setup_cron   # Wächter/Backup/Auto-Update mit dem neuesten Stand
         want fw   && setup_firewall   # nur hinzufügen, nie zurücksetzen; fail2ban mit passender Protokollquelle
+        scripts_sync || true          # eigene Skripte aus server/scripts
         install_cli
         check_all ;;
     bot)   # nur der Discord-Bot: Code holen (Git oder Release-ZIP), Einstellungen schreiben, neu starten, prüfen
@@ -2118,6 +2178,10 @@ case "$CMD" in
         [[ " ${ARGS[*]} " == *" --force "* ]] && rm -f /var/lib/ghostnode/old-db-imported
         setup_olddb; want cron && setup_cron ;;
     backup) [ -x /usr/local/sbin/ghostnode-backup ] || die "Backup nicht eingerichtet."; /usr/local/sbin/ghostnode-backup && ok "Backup: $(ls -t /var/backups/ghostnode/ghostnode-*.tar | head -1)" ;;
+    scriptload) self_update scriptload; scripts_sync ;;
+    scripts) cmd_scripts ;;
+    script) n=${ARGS[0]:-}; [ -n "$n" ] || die "Aufruf: ghostnode script NAME [Argumente]"; [ -x "$SCRIPTS_DST/$n" ] || n=$(cd "$SCRIPTS_DST" 2>/dev/null && ls | grep -m1 "^${n}\\." || true)
+        [ -n "$n" ] && [ -x "$SCRIPTS_DST/$n" ] || die "Skript nicht gefunden: ${ARGS[0]} (Liste: ghostnode scripts)"; exec "$SCRIPTS_DST/$n" "${ARGS[@]:1}" ;;
     musik-login) [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"; cmd_musik_login ;;
     cli) install_cli; ok "Befehl angelegt: ghostnode → $(readlink -f "$0")"; echo "  Tab-Vervollständigung gilt ab der nächsten Anmeldung (oder sofort: source /etc/bash_completion.d/ghostnode)." ;;
     *) die "Unbekannter Befehl: $CMD – Hilfe: ghostnode help" ;;

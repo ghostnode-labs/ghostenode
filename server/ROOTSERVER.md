@@ -115,6 +115,10 @@ Nach `install` oder `update` gibt es den Befehl `ghostnode` (Link auf dieses Scr
 ghostnode update    ghostnode bot    ghostnode check    ghostnode bericht    ghostnode login liste
 ```
 
+## Eigene Skripte
+
+Eigene Skripte in `server/scripts/` (im Git) legen, dann `ghostnode scriptload` – sie werden geprüft, nach `/opt/ghostnode/scripts/` kopiert und sind als `gn-NAME` aufrufbar; Zeitpläne und Einmal-Ausführung über Steuerzeilen. Details: `server/scripts/README.md`. `ghostnode update` spielt sie ebenfalls ein.
+
 ## Später
 
 ```bash
