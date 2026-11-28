@@ -444,3 +444,13 @@ code.wrap { word-break: break-all; display: inline-block; }
     .vip-search { width: 100% !important; margin-left: 0; }
     .vip-entries .panel-title { flex-wrap: wrap; }
 }
+.vip-move { display: flex; gap: 4px; align-self: flex-start; }
+.vip-move form, .vip-ord form { display: inline; }
+.vip-ord { display: inline-flex; gap: 2px; margin-right: 6px; padding-right: 6px; border-right: 1px solid var(--border-color); }
+.vip-sort { display: flex; align-items: center; gap: 8px; margin-left: auto; font-size: .75rem; color: var(--text-muted); letter-spacing: 1px; text-transform: none; }
+.vip-sort select { width: auto !important; padding: 5px 8px !important; }
+.vip-sort + .vip-search { margin-left: 0; }
+.vip-warnbox { margin-top: 12px; padding: 10px 12px; font-size: .82rem; color: var(--accent-gold); border: 1px solid rgba(243, 194, 98, .45); background: rgba(243, 194, 98, .07); }
+.vip-warnbox ul { margin: 6px 0 0 18px; padding: 0; }
+.vip-log td { font-size: .8rem; }
+@media (max-width: 900px) { .vip-sort { margin-left: 0; width: 100%; } }

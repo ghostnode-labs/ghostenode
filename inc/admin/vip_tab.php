@@ -6,7 +6,7 @@
 require_once __DIR__ . '/../modules/vip.php';
 
 const VIP_ADMIN_TABS = ['vip' => ['⭐', 'VIP-Listen', 'vip.manage']];
-const VIP_ADMIN_ACTIONS = ['vip_list_save', 'vip_list_delete', 'vip_entry_save', 'vip_entry_delete', 'vip_entry_approve', 'vip_kofi_settings', 'vip_gist_settings', 'vip_gist_sync'];
+const VIP_ADMIN_ACTIONS = ['vip_list_save', 'vip_list_delete', 'vip_entry_save', 'vip_entry_delete', 'vip_entry_approve', 'vip_kofi_settings', 'vip_gist_settings', 'vip_gist_sync', 'vip_list_move', 'vip_list_sort', 'vip_entry_move', 'vip_kofi_test', 'vip_kofi_import', 'vip_kofi_log_clear'];
 
 function admin_vip_post(string $act, array $in): string {
     vip_schema();
@@ -33,6 +33,46 @@ function admin_vip_post(string $act, array $in): string {
                 'expires' => vip_parse_date((string)($in['expires'] ?? '')), 'status' => $old ? (string)$old['status'] : 'ok', 'source' => $old ? (string)$old['source'] : 'admin']);
             audit('VIP-Eintrag gespeichert', vip_clean_name((string)($in['name'] ?? '')));
             return $old ? 'Eintrag gespeichert.' : 'Eintrag hinzugefügt.';
+        case 'vip_list_move':
+            vip_list_move((int)($in['id'] ?? 0), (int)($in['dir'] ?? 1));
+            $_SESSION['vip_list'] = (int)($in['id'] ?? 0);
+            return 'Reihenfolge der Reiter geändert.';
+        case 'vip_list_sort':
+            $l = vip_list((int)($in['id'] ?? 0));
+            if (!$l) throw new InvalidArgumentException('Liste nicht gefunden.');
+            $sort = (string)($in['sort'] ?? '');
+            if (!isset(VIP_SORTS[$sort])) throw new InvalidArgumentException('Unbekannte Sortierung.');
+            vip_list_save(['id' => (int)$l['id'], 'slug' => $l['slug'], 'title' => $l['title'], 'world' => $l['world'], 'grp' => $l['grp'], 'kofi' => (int)$l['kofi'], 'gist' => (int)$l['gist'], 'sort' => $sort]);
+            $_SESSION['vip_list'] = (int)$l['id'];
+            return 'Sortierung: ' . VIP_SORTS[$sort] . '.';
+        case 'vip_entry_move':
+            $en = vip_entry((int)($in['id'] ?? 0));
+            if (!$en) throw new InvalidArgumentException('Eintrag nicht gefunden.');
+            vip_entry_move((int)$en['id'], (int)($in['dir'] ?? 1));
+            $_SESSION['vip_list'] = (int)$en['list_id'];
+            return 'Reihenfolge geändert.';
+        case 'vip_kofi_test':
+            $_SESSION['vip_list'] = 'settings';
+            if ($p = vip_kofi_problems()) throw new InvalidArgumentException(implode(' ', $p));
+            [$ok, $txt] = vip_kofi_selftest();
+            if (!$ok) throw new InvalidArgumentException($txt);
+            return $txt;
+        case 'vip_kofi_log_clear':
+            $_SESSION['vip_list'] = 'settings';
+            set_setting('vip_kofi_log', '[]');
+            return 'Protokoll geleert.';
+        case 'vip_kofi_import':
+            $_SESSION['vip_list'] = 'settings';
+            $csv = (string)($in['csv'] ?? '');
+            $f = $_FILES['csvfile'] ?? null;
+            if (is_array($f) && ($f['error'] ?? 4) === UPLOAD_ERR_OK && is_uploaded_file((string)$f['tmp_name'])) {
+                if ((int)$f['size'] > 2 * 1024 * 1024) throw new InvalidArgumentException('Die CSV ist zu groß (max. 2 MB).');
+                $csv = (string)file_get_contents((string)$f['tmp_name']);
+            }
+            if (trim($csv) === '') throw new InvalidArgumentException('Bitte eine CSV-Datei wählen oder den Inhalt einfügen.');
+            $r = vip_kofi_import_csv($csv, (int)($in['list'] ?? 0));
+            audit('VIP-Listen: Ko-fi-Import', $r['added'] . ' neu, ' . $r['updated'] . ' verlängert');
+            return 'Ko-fi-Import: ' . $r['added'] . ' neu, ' . $r['updated'] . ' verlängert, ' . $r['skipped'] . ' übersprungen (abgelaufen oder schon aktuell).';
         case 'vip_entry_delete':
         case 'vip_entry_approve':
             $en = vip_entry((int)($in['id'] ?? 0));
@@ -167,12 +207,20 @@ function admin_vip_view(): void {
         . '<div class="vip-chips">' . vip_chip('/' . e($cur['slug'])) . ($cur['world'] !== '' ? vip_chip('🌍 ' . e($cur['world'])) : '') . vip_chip('Gruppe ' . e($cur['grp']))
         . ((int)$cur['kofi'] ? vip_chip('💖 empfängt Ko-fi', 'pink') : '') . ((int)$cur['gist'] ? vip_chip('🐙 im Gist', 'ok') : vip_chip('nicht im Gist')) . '</div></div>'
         . '<div class="vip-stats"><div><b>' . (int)$cur['n'] . '</b><small>aktiv</small></div><div' . ((int)$cur['pending'] ? ' class="warn"' : '') . '><b>' . (int)$cur['pending'] . '</b><small>warten</small></div>'
-        . '<div' . ($expired ? ' class="bad"' : '') . '><b>' . $expired . '</b><small>abgelaufen</small></div></div></div>';
+        . '<div' . ($expired ? ' class="bad"' : '') . '><b>' . $expired . '</b><small>abgelaufen</small></div></div>'
+        . (count($lists) > 1 ? '<div class="vip-move" title="Reiter verschieben">' . vip_form('vip_list_move', ['id' => $id, 'dir' => -1]) . '<button class="btn btn-sm" aria-label="Reiter nach links">◀</button></form>'
+            . vip_form('vip_list_move', ['id' => $id, 'dir' => 1]) . '<button class="btn btn-sm" aria-label="Reiter nach rechts">▶</button></form></div>' : '') . '</div>';
 
     // ---------- Einträge (volle Breite) ----------
-    echo '<div class="panel vip-entries"><div class="panel-title"><span>// 👥 Einträge (' . count($rows) . ')</span>'
+    $sort = isset(VIP_SORTS[$cur['sort'] ?? '']) ? (string)$cur['sort'] : 'group';
+    $manual = $sort === 'manual';
+    $sel = vip_form('vip_list_sort', ['id' => $id], ' class="vip-sort"') . '<label for="vipSort">↕ Sortierung</label><select id="vipSort" name="sort" onchange="this.form.submit()">';
+    foreach (VIP_SORTS as $k => $lbl) $sel .= '<option value="' . e($k) . '"' . ($k === $sort ? ' selected' : '') . '>' . e($lbl) . '</option>';
+    $sel .= '</select><noscript><button class="btn btn-sm">OK</button></noscript></form>';
+    echo '<div class="panel vip-entries"><div class="panel-title"><span>// 👥 Einträge (' . count($rows) . ')</span>' . $sel
         . ($rows ? '<input type="search" class="vip-search" data-vip-filter="#vipTbl" placeholder="🔍 Suchen …" aria-label="Einträge durchsuchen">' : '') . '</div>'
-        . '<p class="muted small">Anzeigename genau wie in VRChat (Groß/Klein und Leerzeichen am Rand sind egal). Ablauf leer = dauerhaft. Abgelaufene und ungeprüfte Einträge erscheinen nicht in der Welt. Notizen bleiben intern.</p>'
+        . '<p class="muted small">Anzeigename genau wie in VRChat (Groß/Klein und Leerzeichen am Rand sind egal). Ablauf leer = dauerhaft. Abgelaufene und ungeprüfte Einträge erscheinen nicht in der Welt. Notizen bleiben intern. '
+        . 'Die Sortierung gilt auch für die Tafel in der Welt' . ($manual ? ' – Reihenfolge mit ▲ ▼ ändern (⤒ ⤓ = ganz nach oben/unten)' : '; ▲ ▼ schaltet auf „Eigene Reihenfolge“ um') . '.</p>'
         . '<div class="tbl-wrap"><table class="tbl vip-tbl" id="vipTbl"><thead><tr><th>Anzeigename</th><th>Gruppe</th><th>Notiz (intern)</th><th>läuft ab</th><th>Status</th><th></th></tr></thead><tbody>'
         . '<tr class="vip-addrow"><td><input form="vipnew" type="text" name="name" maxlength="64" placeholder="＋ VRChat-Anzeigename" required></td>'
         . '<td><input form="vipnew" type="text" name="grp" value="' . e($cur['grp']) . '" maxlength="20" class="vip-grp"></td>'
@@ -187,6 +235,10 @@ function admin_vip_view(): void {
             . '<td><input form="' . $fid . '" type="text" name="note" value="' . e($r['note']) . '" maxlength="200"></td>'
             . '<td><input form="' . $fid . '" type="date" name="expires" value="' . ((int)$r['expires'] ? e(date('Y-m-d', (int)$r['expires'])) : '') . '"></td>'
             . '<td>' . $state . ($r['source'] === 'kofi' ? ' ' . vip_chip('💖', 'pink') : '') . '</td><td class="vip-act">'
+            . '<span class="vip-ord">' . ($manual ? vip_form('vip_entry_move', ['id' => (int)$r['id'], 'dir' => -2]) . '<button class="btn btn-sm" title="ganz nach oben">⤒</button></form>' : '')
+            . vip_form('vip_entry_move', ['id' => (int)$r['id'], 'dir' => -1]) . '<button class="btn btn-sm" title="nach oben">▲</button></form>'
+            . vip_form('vip_entry_move', ['id' => (int)$r['id'], 'dir' => 1]) . '<button class="btn btn-sm" title="nach unten">▼</button></form>'
+            . ($manual ? vip_form('vip_entry_move', ['id' => (int)$r['id'], 'dir' => 2]) . '<button class="btn btn-sm" title="ganz nach unten">⤓</button></form>' : '') . '</span>'
             . vip_form('vip_entry_save', ['list' => $id, 'id' => (int)$r['id']], ' id="' . $fid . '"') . '<button class="btn btn-sm" title="Speichern">💾</button></form>'
             . ($r['status'] === 'pending' ? vip_form('vip_entry_approve', ['id' => (int)$r['id']]) . '<button class="btn btn-sm btn-gold">✔ Freigeben</button></form>' : '')
             . vip_form('vip_entry_delete', ['id' => (int)$r['id']], ' onsubmit="return confirm(\'Eintrag entfernen?\')"') . '<button class="btn btn-sm" title="Entfernen">🗑</button></form></td></tr>';
@@ -233,10 +285,12 @@ function vip_settings_view(array $lists, array $kc, string $base, bool $gist_on,
         . '<div><label class="field">Einmalig: sichtbar für … Tage (0 = dauerhaft)</label><input type="number" name="don_days" min="0" max="3650" value="' . $kc['don_days'] . '"></div></div>'
         . '<label class="field">Diese Arten übernehmen</label><div class="vip-checks">';
     foreach (VIP_KOFI_TYPES as $t) echo '<label class="check"><input type="checkbox" name="types[]" value="' . e($t) . '"' . (in_array($t, $kc['types'], true) ? ' checked' : '') . '> ' . e($t) . '</label>';
+    $probs = vip_kofi_problems();
     echo '</div><label class="check"><input type="checkbox" name="review" value="1"' . ($kc['review'] ? ' checked' : '') . '> erst prüfen (neue Einträge warten auf „Freigeben“)</label>'
+        . ($probs ? '<div class="vip-warnbox"><b>⚠ Ko-fi kommt so noch nicht an:</b><ul><li>' . implode('</li><li>', array_map('e', $probs)) . '</li></ul></div>' : '')
         . '<p class="muted small">Name: steht in der Ko-fi-Nachricht z. B. <code>vrc: DeinName</code>, wird dieser genommen, sonst der Ko-fi-Name. Gespeichert werden nur Name, Art/Stufe und Datum – keine E-Mail, kein Betrag, keine Nachricht. '
         . 'Private Unterstützungen warten immer auf Prüfung. Doppelte Zustellungen werden erkannt.</p>'
-        . '<div class="vip-actions"><button class="btn btn-gold">Speichern</button></div></form>';
+        . '<div class="vip-actions"><button class="btn" form="vipKofiTest" title="schickt eine Test-Zustellung übers Internet an kofi.php">🧪 Verbindung testen</button><button class="btn btn-gold">Speichern</button></div></form>';
 
     $gid = setting('vip_gist_id', '');
     echo vip_form('vip_gist_settings', [], ' class="panel" autocomplete="off"') . '<div class="panel-title"><span>// 🐙 Gist-Spiegel</span>' . $src($gist_tok) . '</div>'
@@ -253,4 +307,29 @@ function vip_settings_view(array $lists, array $kc, string $base, bool $gist_on,
         . '<div class="vip-actions"><button class="btn btn-gold">Speichern</button>'
         . ($gist_on && $gist_tok !== '' ? '<button class="btn" form="vipSync">🔄 Jetzt abgleichen</button>' : '') . '</div></form></div>';
     if ($gist_on && $gist_tok !== '') echo vip_form('vip_gist_sync', [], ' id="vipSync" hidden') . '</form>';
+    echo vip_form('vip_kofi_test', [], ' id="vipKofiTest" hidden') . '</form>';
+
+    // ---------- Protokoll + Import ----------
+    $log = vip_kofi_log_list();
+    echo '<div class="grid2"><div class="panel"><div class="panel-title"><span>// 📜 Letzte Ko-fi-Zustellungen</span>'
+        . ($log ? vip_form('vip_kofi_log_clear', [], ' style="margin-left:auto"') . '<button class="btn btn-sm">Leeren</button></form>' : '') . '</div>';
+    if (!$log) echo '<p class="muted small">Noch keine Zustellung angekommen. Dann erreicht Ko-fi die Webhook-Adresse nicht: Adresse in Ko-fi prüfen (genau wie oben, mit https), '
+        . 'dort „Send Test“ drücken und hier neu laden. „🧪 Verbindung testen“ prüft, ob die Adresse von außen erreichbar ist.</p>';
+    else {
+        echo '<div class="tbl-wrap"><table class="tbl vip-log"><thead><tr><th>Zeit</th><th>Ergebnis</th><th>Art</th><th>Name</th></tr></thead><tbody>';
+        foreach ($log as $x) {
+            $c = (int)($x['c'] ?? 0);
+            echo '<tr><td>' . e(date('d.m. H:i:s', (int)($x['t'] ?? 0))) . '</td><td>' . vip_chip($c . ' · ' . e((string)($x['m'] ?? '')), $c === 200 ? 'ok' : ($c === 401 || $c >= 500 ? 'bad' : 'warn')) . '</td>'
+                . '<td>' . e((string)($x['y'] ?? '')) . '</td><td>' . e((string)($x['n'] ?? '')) . '</td></tr>';
+        }
+        echo '</tbody></table></div><p class="muted small">401 = Token in Ko-fi und hier verschieden · 503 = kein Token eingerichtet · „Art ignoriert“ = Art oben nicht angehakt · „Schon verarbeitet“ = Ko-fi hat doppelt zugestellt.</p>';
+    }
+    echo '</div>' . vip_form('vip_kofi_import', [], ' class="panel" enctype="multipart/form-data"') . '<div class="panel-title"><span>// 📥 Frühere Unterstützer importieren</span></div>'
+        . '<p class="muted small">Der Webhook meldet nur neue Zahlungen. Ältere holst du so: Ko-fi → Payments/Transactions → „Export CSV“ und hier hochladen. '
+        . 'Erkannt werden die Spalten Name (From), Art (Type), Datum und Nachricht (<code>vrc: Name</code>). Ablauf wie oben eingestellt, ab dem Zahlungsdatum; Abgelaufenes wird übersprungen. Gespeichert werden nur Name, Art und Datum.</p>'
+        . '<label class="field">Ko-fi-CSV</label><input type="file" name="csvfile" accept=".csv,text/csv">'
+        . '<label class="field">… oder Inhalt einfügen</label><textarea name="csv" rows="4" placeholder="DateTime (UTC),From,Message,…"></textarea>'
+        . '<label class="field">In diese Liste</label><select name="list">';
+    foreach ($lists as $l) echo '<option value="' . (int)$l['id'] . '"' . ($kc['list'] === (int)$l['id'] ? ' selected' : '') . '>' . e($l['title']) . ' (' . e($l['slug']) . ')</option>';
+    echo '</select><div class="vip-actions"><button class="btn btn-gold">📥 Importieren</button></div></form></div>';
 }

@@ -393,7 +393,7 @@ base_packages() {
     [ -z "$(ls -A /var/lib/dpkg/updates 2>/dev/null)$(dpkg --audit 2>/dev/null)" ] || { dpkg --configure -a && apt-get -f install -y -qq >/dev/null; } || die "Paketverwaltung defekt – „dpkg --configure -a“ von Hand ausführen."
     timedatectl set-timezone "$TZ_NAME" 2>/dev/null || ln -sf "/usr/share/zoneinfo/$TZ_NAME" /etc/localtime
     apt-get update -qq
-    apt-get install -y -qq ca-certificates curl gnupg git unzip zip acl openssl cron logrotate >/dev/null
+    apt-get install -y -qq ca-certificates curl gnupg git unzip zip acl openssl cron logrotate fonts-dejavu-core >/dev/null
     id "$APP_USER" >/dev/null 2>&1 || useradd --system --create-home --home-dir /home/$APP_USER --shell /bin/bash "$APP_USER"
     ok "Grundpakete, Benutzer „$APP_USER“, Zeitzone $TZ_NAME"
 }
@@ -2115,6 +2115,7 @@ case "$CMD" in
         [ -f "$CONF" ] || die "Noch nicht eingerichtet – zuerst: $0 install"
         self_update update
         if want web; then step "Webseite"; git_as -C "$WEB_DIR" pull --ff-only || die "git pull der Webseite fehlgeschlagen."; ok "aktuell: $(git_as -C "$WEB_DIR" log -1 --format='%h %s')"; svc reload apache2 || true; fi
+        want web && { dpkg -s fonts-dejavu-core >/dev/null 2>&1 || apt-get install -y -qq fonts-dejavu-core >/dev/null 2>&1 || true; }   # Schrift für Poster-Platzhalter
         want web && [ "$RUN_MODE" = systemd ] && setup_live
         want hr  && setup_hr
         want bot && setup_bot

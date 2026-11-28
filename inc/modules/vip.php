@@ -17,7 +17,9 @@
 require_once __DIR__ . '/../core/crypto.php';
 require_once __DIR__ . '/nexuswarn.php';   // nw_rate_over (Bremse je IP)
 
-const VIP_SCHEMA = '1';
+const VIP_SCHEMA = '2';
+/** Sortierung der Einträge je Liste (in der Welt und im Admin) */
+const VIP_SORTS = ['group' => 'Gruppe, dann Name', 'name' => 'Name A–Z', 'new' => 'Neueste zuerst', 'old' => 'Am längsten dabei zuerst', 'expires' => 'Läuft bald ab zuerst', 'manual' => 'Eigene Reihenfolge'];
 const VIP_RATE = 60;          // Abrufe von vip.php je Minute und IP
 const VIP_KOFI_RATE = 30;     // Webhook-Zustellungen je Minute und IP
 const VIP_MAX_ENTRIES = 2000; // je Liste in der Ausgabe
@@ -42,6 +44,11 @@ function vip_schema(): void {
         source TEXT NOT NULL DEFAULT 'admin', created INTEGER NOT NULL DEFAULT 0, updated INTEGER NOT NULL DEFAULT 0, UNIQUE (list_id, nkey))");
     $db->exec('CREATE INDEX IF NOT EXISTS idx_vip_entries_list ON vip_entries (list_id, status)');
     $db->exec("CREATE TABLE IF NOT EXISTS vip_kofi_seen (mid TEXT PRIMARY KEY, ts INTEGER NOT NULL DEFAULT 0)");
+    // Migration 2: Sortierung (je Liste) + eigene Reihenfolge (Einträge und Reiter)
+    $lc = db_columns($db, 'vip_lists');
+    if (!in_array('sort', $lc, true)) $db->exec("ALTER TABLE vip_lists ADD COLUMN sort TEXT NOT NULL DEFAULT 'group'");
+    if (!in_array('pos', $lc, true)) $db->exec('ALTER TABLE vip_lists ADD COLUMN pos INTEGER NOT NULL DEFAULT 0');
+    if (!in_array('pos', db_columns($db, 'vip_entries'), true)) $db->exec('ALTER TABLE vip_entries ADD COLUMN pos INTEGER NOT NULL DEFAULT 0');
     set_setting('vip_schema', VIP_SCHEMA);
 }
 
@@ -82,7 +89,7 @@ function vip_base_url(): string {
 function vip_lists(): array {
     vip_schema();
     return vip_db()->query("SELECT l.*, (SELECT COUNT(*) FROM vip_entries e WHERE e.list_id = l.id AND e.status = 'ok') AS n,
-        (SELECT COUNT(*) FROM vip_entries e WHERE e.list_id = l.id AND e.status = 'pending') AS pending FROM vip_lists l ORDER BY l.world, l.title, l.id")->fetchAll(PDO::FETCH_ASSOC);
+        (SELECT COUNT(*) FROM vip_entries e WHERE e.list_id = l.id AND e.status = 'pending') AS pending FROM vip_lists l ORDER BY l.pos, l.world, l.title, l.id")->fetchAll(PDO::FETCH_ASSOC);
 }
 function vip_list(int $id): ?array {
     vip_schema();
@@ -109,11 +116,17 @@ function vip_list_save(array $in): int {
     if ($st->fetchColumn()) throw new InvalidArgumentException('Die Kurzadresse „' . $slug . '“ gibt es schon.');
     $row = [$slug, $title !== '' ? $title : $slug, mb_substr(trim((string)($in['world'] ?? '')), 0, 80), vip_clean_grp((string)($in['grp'] ?? '')),
             !empty($in['kofi']) ? 1 : 0, !empty($in['gist']) ? 1 : 0, time()];
+    $old = $id > 0 ? vip_list($id) : null;
+    if ($id > 0 && !$old) throw new InvalidArgumentException('Liste nicht gefunden.');
+    $sort = isset($in['sort']) ? (string)$in['sort'] : (string)($old['sort'] ?? 'group');
+    if (!isset(VIP_SORTS[$sort])) $sort = 'group';
+    $row[] = $sort;
     if ($id > 0) {
-        if (!vip_list($id)) throw new InvalidArgumentException('Liste nicht gefunden.');
-        $db->prepare('UPDATE vip_lists SET slug = ?, title = ?, world = ?, grp = ?, kofi = ?, gist = ?, updated = ? WHERE id = ?')->execute(array_merge($row, [$id]));
+        $db->prepare('UPDATE vip_lists SET slug = ?, title = ?, world = ?, grp = ?, kofi = ?, gist = ?, updated = ?, sort = ? WHERE id = ?')->execute(array_merge($row, [$id]));
+        if ($sort === 'manual' && ($old['sort'] ?? '') !== 'manual') vip_entries_freeze($id, (string)($old['sort'] ?? 'group'));
     } else {
-        $db->prepare('INSERT INTO vip_lists (slug, title, world, grp, kofi, gist, updated, created) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')->execute(array_merge($row, [time()]));
+        $pos = (int)$db->query('SELECT COALESCE(MAX(pos), 0) FROM vip_lists')->fetchColumn() + 1;
+        $db->prepare('INSERT INTO vip_lists (slug, title, world, grp, kofi, gist, updated, sort, created, pos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')->execute(array_merge($row, [time(), $pos]));
         $id = (int)$db->lastInsertId();
     }
     if (!empty($in['kofi'])) {   // nur eine Liste empfängt Ko-fi
@@ -122,6 +135,18 @@ function vip_list_save(array $in): int {
     } elseif (setting('vip_kofi_list', '') === (string)$id) set_setting('vip_kofi_list', '');
     vip_changed();
     return $id;
+}
+/** Reiter-Reihenfolge: Liste um eine Stelle nach links (-1) oder rechts (+1) schieben */
+function vip_list_move(int $id, int $dir): void {
+    vip_schema();
+    $ids = array_map(fn($l) => (int)$l['id'], vip_lists());
+    $i = array_search($id, $ids, true);
+    if ($i === false) throw new InvalidArgumentException('Liste nicht gefunden.');
+    $j = $i + ($dir < 0 ? -1 : 1);
+    if ($j < 0 || $j >= count($ids)) return;
+    [$ids[$i], $ids[$j]] = [$ids[$j], $ids[$i]];
+    $up = vip_db()->prepare('UPDATE vip_lists SET pos = ? WHERE id = ?');
+    foreach ($ids as $k => $lid) $up->execute([$k + 1, $lid]);
 }
 function vip_list_delete(int $id): void {
     vip_schema();
@@ -133,11 +158,52 @@ function vip_list_delete(int $id): void {
 
 // ---------- Einträge ----------
 
+/** ORDER BY für eine Sortierart (gleich in Welt und Admin) */
+function vip_order_sql(string $sort): string {
+    return match ($sort) {
+        'name' => 'nkey, id',
+        'new' => 'created DESC, id DESC',
+        'old' => 'created, id',
+        'expires' => 'CASE WHEN expires = 0 THEN 1 ELSE 0 END, expires, nkey',
+        'manual' => 'pos, id',
+        default => 'grp, nkey, id',
+    };
+}
+function vip_list_sort(int $list_id): string {
+    $l = vip_list($list_id);
+    $s = (string)($l['sort'] ?? 'group');
+    return isset(VIP_SORTS[$s]) ? $s : 'group';
+}
+/** Wechsel auf „eigene Reihenfolge“: bisherige Sortierung als Startreihenfolge übernehmen */
+function vip_entries_freeze(int $list_id, string $from): void {
+    $st = vip_db()->prepare('SELECT id FROM vip_entries WHERE list_id = ? ORDER BY ' . vip_order_sql($from));
+    $st->execute([$list_id]);
+    $up = vip_db()->prepare('UPDATE vip_entries SET pos = ? WHERE id = ?');
+    foreach ($st->fetchAll(PDO::FETCH_COLUMN) as $k => $eid) $up->execute([$k + 1, (int)$eid]);
+}
 function vip_entries(int $list_id): array {
     vip_schema();
-    $st = vip_db()->prepare("SELECT * FROM vip_entries WHERE list_id = ? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, grp, nkey");
+    $st = vip_db()->prepare("SELECT * FROM vip_entries WHERE list_id = ? ORDER BY CASE status WHEN 'pending' THEN 0 ELSE 1 END, " . vip_order_sql(vip_list_sort($list_id)));
     $st->execute([$list_id]);
     return $st->fetchAll(PDO::FETCH_ASSOC);
+}
+/** eigene Reihenfolge: Eintrag eine Stelle hoch (-1) / runter (+1), ganz nach oben (-2) / unten (+2) */
+function vip_entry_move(int $id, int $dir): void {
+    vip_schema();
+    $en = vip_entry($id);
+    if (!$en) throw new InvalidArgumentException('Eintrag nicht gefunden.');
+    $lid = (int)$en['list_id'];
+    if (vip_list_sort($lid) !== 'manual') { vip_entries_freeze($lid, vip_list_sort($lid)); vip_db()->prepare("UPDATE vip_lists SET sort = 'manual' WHERE id = ?")->execute([$lid]); }
+    $st = vip_db()->prepare('SELECT id FROM vip_entries WHERE list_id = ? ORDER BY pos, id');
+    $st->execute([$lid]);
+    $ids = array_map('intval', $st->fetchAll(PDO::FETCH_COLUMN));
+    $i = array_search($id, $ids, true);
+    array_splice($ids, $i, 1);
+    $j = match (true) { $dir <= -2 => 0, $dir >= 2 => count($ids), default => max(0, min(count($ids), $i + ($dir < 0 ? -1 : 1))) };
+    array_splice($ids, $j, 0, [$id]);
+    $up = vip_db()->prepare('UPDATE vip_entries SET pos = ? WHERE id = ?');
+    foreach ($ids as $k => $eid) $up->execute([$k + 1, $eid]);
+    vip_changed();
 }
 function vip_entry(int $id): ?array {
     vip_schema();
@@ -172,8 +238,11 @@ function vip_entry_save(int $list_id, array $in): int {
         $db->prepare('UPDATE vip_entries SET name = ?, nkey = ?, grp = ?, note = ?, expires = ?, status = ?, updated = ? WHERE id = ? AND list_id = ?')
            ->execute([$name, $key, $grp, $note, $exp, $status, time(), $id, $list_id]);
     } else {
-        $db->prepare('INSERT INTO vip_entries (list_id, name, nkey, grp, note, expires, status, source, created, updated) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
-           ->execute([$list_id, $name, $key, $grp, $note, $exp, $status, $source, time(), time()]);
+        $pos = $db->prepare('SELECT COALESCE(MAX(pos), 0) FROM vip_entries WHERE list_id = ?');
+        $pos->execute([$list_id]);
+        $created = (int)($in['created'] ?? 0) > 0 ? min(time(), (int)$in['created']) : time();
+        $db->prepare('INSERT INTO vip_entries (list_id, name, nkey, grp, note, expires, status, source, created, updated, pos) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+           ->execute([$list_id, $name, $key, $grp, $note, $exp, $status, $source, $created, time(), (int)$pos->fetchColumn() + 1]);
         $id = (int)$db->lastInsertId();
     }
     vip_changed();
@@ -198,7 +267,7 @@ function vip_active(int $list_id, string $grp = ''): array {
     $sql = "SELECT name, grp FROM vip_entries WHERE list_id = ? AND status = 'ok' AND (expires = 0 OR expires > ?)";
     $args = [$list_id, time()];
     if ($grp !== '') { $sql .= ' AND grp = ?'; $args[] = vip_clean_grp($grp); }
-    $st = vip_db()->prepare($sql . ' ORDER BY grp, nkey LIMIT ' . VIP_MAX_ENTRIES);
+    $st = vip_db()->prepare($sql . ' ORDER BY ' . vip_order_sql(vip_list_sort($list_id)) . ' LIMIT ' . VIP_MAX_ENTRIES);
     $st->execute($args);
     return array_map(fn($r) => [(string)$r['name'], (string)$r['grp']], $st->fetchAll(PDO::FETCH_ASSOC));
 }
@@ -260,7 +329,7 @@ function vip_kofi_handle(string $data): array {
     if ($token === '') return [503, 'Ko-fi ist nicht eingerichtet.'];
     $j = json_decode($data, true);
     if (!is_array($j)) return [400, 'Ungültige Daten.'];
-    if (!hash_equals($token, (string)($j['verification_token'] ?? ''))) return [401, 'Falsches Token.'];
+    if (!hash_equals($token, trim((string)($j['verification_token'] ?? '')))) return [401, 'Falsches Token.'];
     $mid = (string)($j['message_id'] ?? '');
     if ($mid === '' || strlen($mid) > 100) return [400, 'message_id fehlt.'];
     $h = hash('sha256', 'kofi|' . $mid);
@@ -272,12 +341,113 @@ function vip_kofi_handle(string $data): array {
     try { return vip_kofi_apply($j); }
     catch (Throwable $e) { $db->prepare('DELETE FROM vip_kofi_seen WHERE mid = ?')->execute([$h]); throw $e; }   // Fehler → Ko-fi darf erneut zustellen
 }
+const VIP_KOFI_SELFTEST = 'GhostNode-Selbsttest';
+/** Rohdaten einer Zustellung: Formularfeld „data“ (so sendet Ko-fi), sonst Rohtext (JSON oder „data=…“) */
+function vip_kofi_body(array $post, string $raw): string {
+    $d = (string)($post['data'] ?? '');
+    if ($d !== '') return $d;
+    $raw = trim($raw);
+    if ($raw === '') return '';
+    if ($raw[0] === '{') return $raw;
+    parse_str($raw, $p);
+    return (string)($p['data'] ?? '');
+}
+/** Protokoll der letzten Zustellungen (Admin → VIP-Listen → Einstellungen) – nur Zeit, Ergebnis, Art und Name; keine E-Mail, kein Betrag, kein Token */
+function vip_kofi_log(int $code, string $msg, string $data = ''): void {
+    $j = json_decode($data, true);
+    $j = is_array($j) ? $j : [];
+    $name = $code === 200 && isset($j['from_name']) ? (vip_kofi_vrc_name((string)($j['message'] ?? '')) ?? vip_clean_name((string)$j['from_name'])) : '';
+    $log = json_decode(setting('vip_kofi_log', '[]'), true);
+    $log = is_array($log) ? $log : [];
+    array_unshift($log, ['t' => time(), 'c' => $code, 'm' => mb_substr($msg, 0, 80), 'y' => mb_substr(vip_clean_name((string)($j['type'] ?? '')), 0, 30), 'n' => mb_substr($name, 0, 64)]);
+    set_setting('vip_kofi_log', json_encode(array_slice($log, 0, 25), JSON_UNESCAPED_UNICODE));
+}
+function vip_kofi_log_list(): array {
+    $l = json_decode(setting('vip_kofi_log', '[]'), true);
+    return is_array($l) ? $l : [];
+}
+/** Was fehlt, damit Ko-fi-Zustellungen in einer Liste landen? → Liste von Hinweisen (leer = alles eingerichtet) */
+function vip_kofi_problems(): array {
+    $c = vip_kofi_cfg();
+    $p = [];
+    if (vip_secret('kofi') === '') $p[] = 'Verification Token fehlt (Ko-fi → API/Webhooks → „Advanced“ → Verification Token).';
+    if (!$c['list'] || !vip_list($c['list'])) $p[] = 'Keine Liste gewählt, in der neue Unterstützer landen.';
+    if (!$c['types']) $p[] = 'Keine Art (Donation, Subscription …) zum Übernehmen angehakt.';
+    return $p;
+}
+/** Selbsttest: schickt eine Test-Zustellung über das Internet an die eigene kofi.php → [ok, Text] (legt keinen Eintrag an) */
+function vip_kofi_selftest(): array {
+    $tok = vip_secret('kofi');
+    if ($tok === '') return [false, 'Erst den Verification Token eintragen.'];
+    $url = vip_base_url() . '/kofi.php';
+    $body = http_build_query(['data' => json_encode(['verification_token' => $tok, 'message_id' => 'selftest-' . bin2hex(random_bytes(8)), 'type' => VIP_KOFI_SELFTEST, 'from_name' => 'GhostNode'])]);
+    [$code, $out] = vip_http('POST', $url, ['Content-Type: application/x-www-form-urlencoded', 'User-Agent: GhostNode-Selbsttest'], $body);
+    $out = trim(mb_substr((string)$out, 0, 120));
+    if ($code === 200 && str_starts_with($out, 'Selbsttest OK')) return [true, 'Selbsttest erfolgreich: ' . $url . ' ist erreichbar und der Token stimmt.'];
+    if ($code === 0) return [false, 'Selbsttest: ' . $url . ' war nicht erreichbar (DNS/HTTPS/Firewall?). Ko-fi kann die Adresse dann auch nicht erreichen.'];
+    return [false, 'Selbsttest: ' . $url . ' antwortete mit HTTP ' . $code . ($out !== '' ? ' („' . $out . '“)' : '') . '.'];
+}
+/**
+ * Frühere Unterstützer aus dem Ko-fi-Export (CSV, Ko-fi → Payments/Transactions → Export) übernehmen.
+ * Spalten werden über die Kopfzeile erkannt (Name: From/Name/Supporter, Art: Type, Datum: Date, Nachricht: Message).
+ * Ablauf wie beim Webhook, aber ab dem Datum der Zahlung; schon abgelaufene Zahlungen werden übersprungen.
+ * → ['added' => n, 'updated' => n, 'skipped' => n]
+ */
+function vip_kofi_import_csv(string $csv, int $list_id): array {
+    $list = vip_list($list_id);
+    if (!$list) throw new InvalidArgumentException('Bitte eine Liste wählen.');
+    $csv = preg_replace('/^\xEF\xBB\xBF/', '', str_replace("\r\n", "\n", $csv)) ?? '';
+    $lines = array_values(array_filter(explode("\n", $csv), fn($l) => trim($l) !== ''));
+    if (count($lines) < 2) throw new InvalidArgumentException('Die CSV braucht eine Kopfzeile und mindestens eine Zeile.');
+    $sep = substr_count($lines[0], ';') > substr_count($lines[0], ',') ? ';' : ',';
+    $head = array_map(fn($h) => strtolower(trim((string)$h)), str_getcsv($lines[0], $sep, '"', ''));
+    $find = function (array $want) use ($head) { foreach ($head as $i => $h) foreach ($want as $w) if ($h === $w || str_starts_with($h, $w)) return $i; return null; };
+    $ci = ['name' => $find(['from', 'name', 'supporter', 'buyer', 'customer']), 'type' => $find(['transactiontype', 'transaction type', 'type']),
+           'date' => $find(['datetime', 'date', 'timestamp', 'time']), 'msg' => $find(['message', 'note'])];
+    if ($ci['name'] === null) throw new InvalidArgumentException('Keine Namensspalte gefunden (erwartet z. B. „From“ oder „Name“).');
+    $c = vip_kofi_cfg();
+    $best = [];
+    foreach (array_slice($lines, 1, 5000) as $line) {
+        $r = str_getcsv($line, $sep, '"', '');
+        $msg = $ci['msg'] !== null ? (string)($r[$ci['msg']] ?? '') : '';
+        $name = vip_kofi_vrc_name($msg) ?? vip_clean_name((string)($r[$ci['name']] ?? ''));
+        if ($name === '' || vip_nkey($name) === 'ko-fi supporter') continue;
+        $type = $ci['type'] !== null ? trim((string)($r[$ci['type']] ?? '')) : 'Donation';
+        $sub = stripos($type, 'sub') !== false || stripos($type, 'member') !== false;
+        $ts = $ci['date'] !== null ? (int)strtotime((string)($r[$ci['date']] ?? '') . ' UTC') : 0;
+        if ($ts <= 0 || $ts > time()) $ts = time();
+        $exp = $sub ? $ts + $c['sub_days'] * 86400 : ($c['don_days'] === 0 ? 0 : $ts + $c['don_days'] * 86400);
+        $k = vip_nkey($name);
+        $prev = $best[$k] ?? null;
+        $first = $prev ? min($prev['first'], $ts) : $ts;
+        if (!$prev || $exp === 0 || ($prev['exp'] !== 0 && $exp > $prev['exp'])) $best[$k] = ['name' => $name, 'exp' => $exp, 'sub' => $sub, 'first' => $first];
+        else $best[$k]['first'] = $first;
+    }
+    $res = ['added' => 0, 'updated' => 0, 'skipped' => 0];
+    $GLOBALS['__vip_batch'] = true;
+    try {
+        foreach ($best as $k => $b) {
+            if ($b['exp'] !== 0 && $b['exp'] <= time()) { $res['skipped']++; continue; }
+            $st = vip_db()->prepare('SELECT * FROM vip_entries WHERE list_id = ? AND nkey = ?');
+            $st->execute([$list_id, $k]);
+            $old = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+            if ($old && ((int)$old['expires'] === 0 || ($b['exp'] !== 0 && (int)$old['expires'] >= $b['exp']))) { $res['skipped']++; continue; }
+            vip_entry_save($list_id, ['id' => $old ? (int)$old['id'] : 0, 'name' => $old ? (string)$old['name'] : $b['name'], 'grp' => $old ? (string)$old['grp'] : $c['grp'],
+                'note' => 'Ko-fi-Import ' . ($b['sub'] ? 'Abo' : 'Unterstützung') . ' · seit ' . date('d.m.Y', $b['first']), 'expires' => $b['exp'],
+                'status' => $old ? (string)$old['status'] : 'ok', 'source' => 'kofi', 'created' => $b['first']]);
+            $res[$old ? 'updated' : 'added']++;
+        }
+    } finally { unset($GLOBALS['__vip_batch']); }
+    vip_changed();
+    return $res;
+}
 /** Zustellung (Token geprüft, nicht doppelt) in die Ko-fi-Liste übernehmen */
 function vip_kofi_apply(array $j): array {
     $db = vip_db();
     $c = vip_kofi_cfg();
     $type = (string)($j['type'] ?? '');
-    if (!in_array($type, $c['types'], true)) return [200, 'Art ignoriert.'];
+    if ($type === VIP_KOFI_SELFTEST) return [200, 'Selbsttest OK.'];
+    if (!in_array($type, $c['types'], true)) return [200, 'Art ignoriert (' . mb_substr(vip_clean_name($type), 0, 30) . ').'];
     $list = $c['list'] > 0 ? vip_list($c['list']) : null;
     if (!$list) return [200, 'Keine Ko-fi-Liste gewählt.'];
     $vrc = vip_kofi_vrc_name((string)($j['message'] ?? ''));
@@ -335,7 +505,7 @@ function vip_gist_raw_url(string $file): string {
 /** Nach jeder Änderung: Gist als „geändert“ markieren und (gedrosselt) gleich abgleichen */
 function vip_changed(): void {
     set_setting('vip_gist_dirty', '1');
-    if (setting('vip_gist_on', '0') === '1' && vip_secret('gist') !== '' && time() - (int)setting('vip_gist_last', '0') >= VIP_GIST_MIN_GAP && empty($GLOBALS['__vip_no_autosync'])) {
+    if (setting('vip_gist_on', '0') === '1' && vip_secret('gist') !== '' && time() - (int)setting('vip_gist_last', '0') >= VIP_GIST_MIN_GAP && empty($GLOBALS['__vip_no_autosync']) && empty($GLOBALS['__vip_batch'])) {
         try { vip_gist_sync(); } catch (Throwable $e) { set_setting('vip_gist_result', 'Fehler: ' . mb_substr($e->getMessage(), 0, 200)); }
     }
 }

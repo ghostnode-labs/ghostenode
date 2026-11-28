@@ -50,6 +50,8 @@ const step = async (name, fn) => { try { await fn(); oks++; console.log('✔', n
         slot = (await u.api('create', { title: 'Club Eingang', folder: 'Testwelt', visibility: 'users' })).slot;
         slug = slot.slug;
         assert.ok(/^[a-z0-9]/.test(slug) && slot.url.includes('/p.php/' + slug + '.png'));
+        const ph = await (await user('guest')).p.request.get(B + 'p.php/' + slug + '.png');
+        assert.strictEqual(ph.status(), 200, 'leerer Slot: Platzhalter statt 404'); assert.strictEqual(ph.headers()['x-poster-state'], 'empty');
         const r = await u.api('upload', { id: slot.id, activate: '1' }, ['t1', 't2', 't1']);
         assert.strictEqual(r.added, 2); assert.strictEqual(r.dupes, 1);
         const d = await u.api('slot', { id: slot.id });
@@ -154,7 +156,17 @@ const step = async (name, fn) => { try { await fn(); oks++; console.log('✔', n
         for (const i of d.images.slice(1)) await a.api('image_save', { img: i.id, end_at: '2000-01-01T00:00:00Z', enabled: '1' });
         const live = (await a.api('slot', { id: slot.id })).images.filter(i => i.live_now);
         assert.strictEqual(live.length, 1);
-        assert.strictEqual((await (await user('guest')).p.request.get(B + 'p.php/' + slug + '.png?i=1')).status(), 404, 'nur ein gültiges Bild');
+        const r404 = await (await user('guest')).p.request.get(B + 'p.php/' + slug + '.png?i=1');
+        assert.strictEqual(r404.headers()['x-poster-state'], 'empty', 'nur ein gültiges Bild – sonst Platzhalter');
+    });
+    await step('Ausgeschaltet → Platzhalter „Image unavailable“ (200, PNG), wieder an → Bild', async () => {
+        const a = await user('posteradmin');
+        await a.api('save', { id: slot.id, enabled: '0' });
+        const g = await user('guest');
+        const r = await g.p.request.get(B + 'p.php/' + slug + '.png');
+        assert.strictEqual(r.status(), 200); assert.strictEqual(r.headers()['x-poster-state'], 'off'); assert.match(r.headers()['content-type'], /image\//);
+        await a.api('save', { id: slot.id, enabled: '1' });
+        assert.strictEqual((await g.p.request.get(B + 'p.php/' + slug + '.png')).headers()['x-poster-state'], undefined);
     });
     await step('Öffentlich schalten → Gast sieht Slot (nur ansehen), kann nicht hochladen', async () => {
         const a = await user('posteradmin');

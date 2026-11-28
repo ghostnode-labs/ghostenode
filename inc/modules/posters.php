@@ -481,12 +481,109 @@ function ps_render(array $s, array $img): array {
     return [$out, $mime];
 }
 
+/** Texte der Platzhalter (englisch, weil international in VRChat gezeigt) */
+const PS_PLACEHOLDER = [
+    'empty' => ['COMING SOON', 'No image has been added to this poster yet.', 'Please check back later.'],
+    'off'   => ['IMAGE UNAVAILABLE', 'This image is currently not available.', 'Please check back later.'],
+];
+/** Schrift für Platzhalter: eine vorhandene Systemschrift (fett), sonst die eingebaute GD-Pixelschrift */
+function ps_font(): ?string {
+    static $f = false;
+    if ($f !== false) return $f;
+    foreach (['/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf', '/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf', '/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf',
+              '/usr/share/fonts/liberation-sans/LiberationSans-Bold.ttf', '/usr/share/fonts/truetype/noto/NotoSans-Bold.ttf', '/usr/share/fonts/TTF/DejaVuSans-Bold.ttf'] as $c)
+        if (is_readable($c)) return $f = $c;
+    return $f = null;
+}
+/**
+ * Platzhalter-Bild für einen Slot ohne Bild ('empty') oder ausgeschaltet ('off') → [Datei, MIME] oder null (ohne GD).
+ * Größe/Format wie der Slot (Zielbreite/-höhe, sonst 1024×1024), im GhostNode-Look; wird im Cache-Ordner abgelegt.
+ */
+function ps_placeholder(array $s, string $kind): ?array {
+    if (!function_exists('imagecreatetruecolor') || !isset(PS_PLACEHOLDER[$kind])) return null;
+    $tw = (int)$s['tw']; $th = (int)$s['th'];
+    if ($tw <= 0 && $th <= 0) { $tw = $th = 1024; } elseif ($tw <= 0) { $tw = $th; } elseif ($th <= 0) { $th = $tw; }
+    $tw = max(64, min(2048, $tw)); $th = max(64, min(2048, $th));
+    $fmt = $s['format'] === 'jpg' ? 'jpg' : 'png';
+    $font = ps_font();
+    $out = ps_dir('cache') . '/ph2_' . $kind . '_' . $tw . 'x' . $th . ($font ? '_t' : '_g') . '.' . $fmt;
+    $mime = $fmt === 'jpg' ? 'image/jpeg' : 'image/png';
+    if (is_file($out)) return [$out, $mime];
+    $im = imagecreatetruecolor($tw, $th);
+    $acc = $kind === 'off' ? [255, 85, 85] : [56, 213, 230];
+    // Hintergrund: dunkler Verlauf + feines Raster
+    for ($y = 0; $y < $th; $y++) {
+        $f = $y / max(1, $th - 1);
+        imageline($im, 0, $y, $tw, $y, imagecolorallocate($im, (int)(6 + 8 * $f), (int)(9 + 12 * $f), (int)(14 + 18 * $f)));
+    }
+    $grid = imagecolorallocatealpha($im, $acc[0], $acc[1], $acc[2], 118);
+    $step = max(16, (int)round(min($tw, $th) / 24));
+    for ($x = 0; $x < $tw; $x += $step) imageline($im, $x, 0, $x, $th, $grid);
+    for ($y = 0; $y < $th; $y += $step) imageline($im, 0, $y, $tw, $y, $grid);
+    // Rahmen mit abgeschrägter Ecke
+    $m = (int)round(min($tw, $th) * 0.05); $cut = (int)round(min($tw, $th) * 0.06);
+    $c = imagecolorallocate($im, $acc[0], $acc[1], $acc[2]);
+    imagesetthickness($im, max(2, (int)round(min($tw, $th) / 220)));
+    imagepolygon($im, [$m, $m, $tw - $m - $cut, $m, $tw - $m, $m + $cut, $tw - $m, $th - $m, $m, $th - $m], $c);
+    $white = imagecolorallocate($im, 235, 245, 250); $muted = imagecolorallocate($im, 140, 160, 175); $gold = imagecolorallocate($im, 243, 194, 98);
+    [$t1, $t2, $t3] = PS_PLACEHOLDER[$kind];
+    $u = min($tw, $th);
+    $lines = [[$kind === 'off' ? '!' : '?', $c, $u * 0.16], [$t1, $white, $u * 0.075], [$t2, $muted, $u * 0.036], [$t3, $muted, $u * 0.036], ['GHOSTNODE · POSTER', $gold, $u * 0.026]];
+    $gaps = [0.05, 0.05, 0.02, 0.08];
+    if ($font) {
+        // Schriftgröße verkleinern, bis jede Zeile in den Rahmen passt
+        $maxw = $tw - 2 * $m - 2 * $cut;
+        $box = function (string $t, float $sz) use ($font) { $b = imagettfbbox($sz, 0, $font, $t); return [abs($b[2] - $b[0]), abs($b[7] - $b[1])]; };
+        foreach ($lines as &$l) { while ($box($l[0], $l[2])[0] > $maxw && $l[2] > 6) $l[2] *= 0.92; } unset($l);
+        $lines[2][2] = $lines[3][2] = min($lines[2][2], $lines[3][2]);   // beide Hinweiszeilen gleich groß
+        $hs = array_map(fn($l) => $box($l[0], $l[2])[1], $lines);
+        $total = array_sum($hs) + $u * array_sum($gaps);
+        $y = ($th - $total) / 2;
+        foreach ($lines as $i => [$t, $col, $sz]) {
+            $y += $hs[$i];
+            imagettftext($im, $sz, 0, (int)round(($tw - $box($t, $sz)[0]) / 2), (int)round($y), $col, $font, $t);
+            $y += $u * ($gaps[$i] ?? 0);
+        }
+    } else {
+        // ohne Systemschrift: GD-Pixelschrift klein zeichnen und vergrößern
+        $y = (int)($th * 0.3);
+        foreach ($lines as $i => [$t, $col, $sz]) {
+            $t = str_replace('·', '-', $t);
+            $sw = imagefontwidth(5) * strlen($t); $sh = imagefontheight(5);
+            $tmp = imagecreatetruecolor($sw, $sh);
+            imagefill($tmp, 0, 0, imagecolorallocate($tmp, 0, 0, 0)); imagecolortransparent($tmp, imagecolorallocate($tmp, 0, 0, 0));
+            $rgb = imagecolorsforindex($im, $col);
+            imagestring($tmp, 5, 0, 0, $t, imagecolorallocate($tmp, $rgb['red'], $rgb['green'], $rgb['blue']));
+            $k = max(1, min((int)floor(($tw - 2 * $m - 2 * $cut) / max(1, $sw)), (int)round($sz / $sh * 1.4)));
+            imagecopyresized($im, $tmp, (int)(($tw - $sw * $k) / 2), $y, 0, 0, $sw * $k, $sh * $k, $sw, $sh);
+            imagedestroy($tmp);
+            $y += $sh * $k + (int)($u * ($gaps[$i] ?? 0));
+        }
+    }
+    $fmt === 'jpg' ? imagejpeg($im, $out, 90) : imagepng($im, $out, 6);
+    imagedestroy($im);
+    return is_file($out) ? [$out, $mime] : null;
+}
+
 /** Öffentliche Auslieferung (p.php) – für VRChat, Browser & Co. */
 function ps_serve(string $slug, ?int $idx = null): void {
     $s = ps_slot_by_slug($slug);
-    if (!$s || !(int)$s['enabled']) { http_response_code(404); header('Cache-Control: no-store'); exit('Poster nicht gefunden.'); }
-    $img = ps_pick($s, $idx);
-    if (!$img || !is_file(ps_dir('img') . '/' . $img['file'])) { http_response_code(404); header('Cache-Control: max-age=30'); exit('Noch kein Bild.'); }
+    if (!$s) { http_response_code(404); header('Cache-Control: no-store'); exit('Poster nicht gefunden.'); }
+    // ausgeschaltet bzw. noch leer: Platzhalter-Bild (englisch, für VRChat-Besucher) statt Fehler – die Welt zeigt dann einen Hinweis statt nichts
+    $img = (int)$s['enabled'] ? ps_pick($s, $idx) : null;
+    if (!$img || !is_file(ps_dir('img') . '/' . $img['file'])) {
+        $ph = ps_placeholder($s, (int)$s['enabled'] ? 'empty' : 'off');
+        if (!$ph) { http_response_code(404); header('Cache-Control: max-age=30'); exit((int)$s['enabled'] ? 'Noch kein Bild.' : 'Poster nicht verfügbar.'); }
+        [$file, $mime] = $ph;
+        header('X-Poster-State: ' . ((int)$s['enabled'] ? 'empty' : 'off'));
+        header('Content-Type: ' . $mime);
+        header('Access-Control-Allow-Origin: *');
+        header('X-Content-Type-Options: nosniff');
+        header('Cache-Control: public, max-age=60');
+        header('Content-Length: ' . filesize($file));
+        if (($_SERVER['REQUEST_METHOD'] ?? 'GET') !== 'HEAD') readfile($file);
+        exit;
+    }
     [$file, $mime] = ps_render($s, $img);
     $etag = '"' . substr(sha1($file . filemtime($file)), 0, 20) . '"';
     // Abrufe zählen (je Tag) – billig, ohne Benutzerdaten

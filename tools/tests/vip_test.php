@@ -102,7 +102,7 @@ t($rr['status'] === 'pending' && $pp['status'] === 'pending' && !str_contains(vi
 vip_entry_approve((int)$rr['id']);
 t(str_contains(vip_text(vip_list($kofi)), 'KOFI|Review Rita'), 'nach „Freigeben“ in der Liste');
 set_setting('vip_kofi_types', 'Subscription');
-t(vip_kofi_handle($mk(['from_name' => 'Nur Spende']))[1] === 'Art ignoriert.', 'nicht gewählte Art wird ignoriert (trotzdem 200)');
+t(vip_kofi_handle($mk(['from_name' => 'Nur Spende']))[1] === 'Art ignoriert (Donation).', 'nicht gewählte Art wird ignoriert (trotzdem 200)');
 set_setting('vip_kofi_types', implode(',', VIP_KOFI_TYPES));
 
 // ---------- Gist-Spiegel (gemocktes HTTP) ----------
@@ -173,6 +173,68 @@ t(($_SESSION['vip_list'] ?? '') === 'settings', 'nach dem Speichern der Ko-fi-Ei
 $perm = (string)file_get_contents(__DIR__ . '/../../admin.php');
 t(str_contains($perm, "array_fill_keys(VIP_ADMIN_ACTIONS, 'vip.manage')") && str_contains($perm, 'admin_vip_post'), 'Admin-Aktionen laufen über guard_post mit Recht vip.manage (Herkunftsprüfung wie alle Reiter)');
 
+// ---------- Sortierung + Reihenfolge ----------
+$so = vip_list_save(['title' => 'Sort', 'slug' => 'sort-' . $sfx, 'grp' => 'VIP']);
+vip_entry_save($so, ['name' => 'Charlie', 'grp' => 'VIP', 'created' => time() - 300]);
+vip_entry_save($so, ['name' => 'alpha', 'grp' => 'ZED', 'created' => time() - 100, 'expires' => time() + 86400]);
+vip_entry_save($so, ['name' => 'Bravo', 'grp' => 'VIP', 'created' => time() - 200, 'expires' => time() + 3600]);
+$names = fn() => array_map(fn($r) => $r[0], vip_active($so));
+t($names() === ['Bravo', 'Charlie', 'alpha'], 'Standard: Gruppe, dann Name');
+$srt = function (string $k) use ($so) { $l = vip_list($so); vip_list_save(['id' => $so, 'slug' => $l['slug'], 'title' => $l['title'], 'grp' => $l['grp'], 'gist' => 1, 'sort' => $k]); };
+$srt('name'); t($names() === ['alpha', 'Bravo', 'Charlie'], 'Sortierung „Name A–Z“ (Groß/Klein egal)');
+$srt('new'); t($names() === ['alpha', 'Bravo', 'Charlie'], 'Sortierung „Neueste zuerst“');
+$srt('old'); t($names() === ['Charlie', 'Bravo', 'alpha'], 'Sortierung „Am längsten dabei zuerst“');
+$srt('expires'); t($names() === ['Bravo', 'alpha', 'Charlie'], 'Sortierung „Läuft bald ab zuerst“ (dauerhaft zuletzt)');
+t(str_contains(vip_text(vip_list($so)), "VIP|Bravo\nZED|alpha\nVIP|Charlie"), 'Sortierung gilt auch für den Text der Welt');
+$srt('manual'); t($names() === ['Bravo', 'alpha', 'Charlie'], 'Wechsel auf „Eigene Reihenfolge“ übernimmt die bisherige Reihenfolge');
+$idOf = function (string $n) use ($so) { foreach (vip_entries($so) as $r) if ($r['name'] === $n) return (int)$r['id']; return 0; };
+vip_entry_move($idOf('Charlie'), -1); t($names() === ['Bravo', 'Charlie', 'alpha'], '▲ eine Stelle nach oben');
+vip_entry_move($idOf('alpha'), -2); t($names() === ['alpha', 'Bravo', 'Charlie'], '⤒ ganz nach oben');
+vip_entry_move($idOf('alpha'), 2); t($names() === ['Bravo', 'Charlie', 'alpha'], '⤓ ganz nach unten');
+vip_entry_save($so, ['name' => 'Delta']); t(end(array_values($names())) === 'Delta' || $names()[3] === 'Delta', 'neuer Eintrag landet bei eigener Reihenfolge am Ende');
+$srt('name'); vip_entry_move($idOf('Charlie'), -1); t(vip_list_sort($so) === 'manual', '▲ bei anderer Sortierung schaltet auf „Eigene Reihenfolge“');
+$ord = fn() => array_map(fn($l) => (int)$l['id'], vip_lists());
+$before = $ord(); $i = array_search($so, $before, true);
+vip_list_move($so, -1); $after = $ord();
+t($i > 0 && array_search($so, $after, true) === $i - 1, 'Reiter einer Liste nach links schieben');
+vip_list_move($so, 1); t($ord() === $after ? false : array_search($so, $ord(), true) === $i, 'und wieder nach rechts');
+admin_vip_post('vip_list_sort', ['id' => $so, 'sort' => 'old']);
+t(vip_list_sort($so) === 'old' && ($_SESSION['vip_list'] ?? 0) === $so, 'Admin: Sortierung per Auswahl ändern');
+$_GET['list'] = (string)$so; ob_start(); admin_vip_view(); $html = ob_get_clean(); unset($_GET['list']);
+t(str_contains($html, 'name="sort"') && str_contains($html, 'vip_entry_move') && str_contains($html, 'vip_list_move'), 'Admin-Ansicht: Sortier-Auswahl, ▲▼ je Eintrag, Reiter verschieben');
+
+// ---------- Ko-fi: Rohdaten, Protokoll, Hinweise, CSV-Import ----------
+t(vip_kofi_body(['data' => '{"a":1}'], '') === '{"a":1}' && vip_kofi_body([], '{"b":2}') === '{"b":2}' && vip_kofi_body([], 'data=' . rawurlencode('{"c":3}')) === '{"c":3}', 'Zustellung: Feld data, JSON-Rohtext oder data=… werden erkannt');
+set_setting('vip_kofi_log', '[]');
+vip_kofi_log(200, 'OK', $mk(['from_name' => 'Log Lena']));
+vip_kofi_log(401, 'Falsches Token.', $mk());
+$lg = vip_kofi_log_list();
+t(count($lg) === 2 && $lg[0]['c'] === 401 && $lg[1]['n'] === 'Log Lena' && $lg[0]['n'] === '' && !str_contains(setting('vip_kofi_log'), 'example.invalid') && !str_contains(setting('vip_kofi_log'), $tok) && !str_contains(setting('vip_kofi_log'), '3.00'), 'Protokoll: Ergebnis + Name, keine E-Mail, kein Betrag, kein Token');
+for ($k = 0; $k < 30; $k++) vip_kofi_log(200, 'OK');
+t(count(vip_kofi_log_list()) === 25, 'Protokoll hält höchstens 25 Einträge');
+$keep = [setting('vip_kofi_list'), setting('vip_kofi_types')];
+set_setting('vip_kofi_list', '0');
+t(count(vip_kofi_problems()) === 1 && str_contains(vip_kofi_problems()[0], 'Liste'), 'Hinweis: keine Ziel-Liste gewählt');
+set_setting('vip_kofi_list', $keep[0]);
+t(vip_kofi_problems() === [], 'keine Hinweise, wenn alles eingerichtet ist');
+t(vip_kofi_handle($mk(['type' => VIP_KOFI_SELFTEST]))[1] === 'Selbsttest OK.', 'Selbsttest-Zustellung legt nichts an und meldet OK');
+$im = vip_list_save(['title' => 'Import', 'slug' => 'imp-' . $sfx, 'grp' => 'VIP']);
+set_setting('vip_kofi_sub_days', '35'); set_setting('vip_kofi_don_days', '0');
+$csv = "\xEF\xBB\xBF" . 'DateTime (UTC),From,Message,Item,Received,Given,Currency,TransactionType,TransactionId' . "\r\n"
+    . gmdate('Y-m-d H:i', time() - 5 * 86400) . ',Sub Sam,,,5.00,5.00,EUR,Subscription,t1' . "\r\n"
+    . gmdate('Y-m-d H:i', time() - 90 * 86400) . ',Old Sub,,,5.00,5.00,EUR,Subscription,t2' . "\r\n"
+    . gmdate('Y-m-d H:i', time() - 400 * 86400) . ',Ko-fi Supporter,"vrc: Real Rita",,3.00,3.00,EUR,Donation,t3' . "\r\n"
+    . gmdate('Y-m-d H:i', time() - 2 * 86400) . ',Ko-fi Supporter,,,3.00,3.00,EUR,Donation,t4' . "\r\n";
+$r = vip_kofi_import_csv($csv, $im);
+$imn = array_map(fn($r) => $r['name'], vip_entries($im));
+t($r['added'] === 2 && $r['skipped'] === 1 && in_array('Sub Sam', $imn, true) && in_array('Real Rita', $imn, true) && !in_array('Old Sub', $imn, true), 'CSV-Import: Abo aktiv, Name aus Nachricht, abgelaufenes Abo und namenlose Zeile übersprungen');
+$ss = null; foreach (vip_entries($im) as $x) if ($x['name'] === 'Sub Sam') $ss = $x;
+t($ss && abs((int)$ss['expires'] - (time() + 30 * 86400)) < 120 && $ss['source'] === 'kofi' && $ss['grp'] === 'KOFI', 'CSV-Import: Ablauf ab Zahlungsdatum, Gruppe KOFI, Quelle Ko-fi');
+t(vip_kofi_import_csv($csv, $im)['added'] === 0, 'CSV-Import zweimal: keine doppelten Einträge');
+t(vip_kofi_import_csv("Datum;Name;Art\n" . date('d.m.Y') . ";Semi Colon;Donation\n", $im)['added'] === 1, 'CSV mit Semikolon und deutschen Spaltennamen');
+$bad = false; try { vip_kofi_import_csv("foo,bar\n1,2\n", $im); } catch (InvalidArgumentException $x) { $bad = true; }
+t($bad, 'CSV ohne Namensspalte: verständlicher Fehler');
+
 // ---------- Endpunkte über einen eingebauten PHP-Server ----------
 file_put_contents($tmp . '/cfg.json', json_encode($cfg));
 $router = $tmp . '/router.php';
@@ -209,6 +271,23 @@ try {
     t($r1['code'] === 200 && $r2['code'] === 200 && str_contains($r2['body'], 'Schon') && $q->fetch(PDO::FETCH_ASSOC), 'kofi.php: richtiges Token → 200 + Eintrag, Wiederholung → 200 „Schon verarbeitet“');
     t(req('/kofi.php', ['nodata' => 1])['code'] === 400, 'kofi.php: ohne Feld data → 400');
     t(str_contains(req('/vip.php?l=kofih-' . $sfx)['body'], 'KOFI|Http Hanna'), 'neuer Unterstützer sofort in der Liste');
+    // Protokoll + Selbsttest über HTTP
+    $q->closeCursor();   // offener Lesezeiger hält sonst (SQLite) einen alten Stand fest
+    $ls = site_db()->prepare('SELECT value FROM settings WHERE key = ?'); $ls->execute(['vip_kofi_log']);
+    $lg = json_decode((string)$ls->fetchColumn(), true) ?: []; $ls->closeCursor();   // vom Server-Prozess geschrieben (nicht aus dem Zwischenspeicher)
+    t(($lg[0]['c'] ?? 0) === 400 && in_array(401, array_column($lg, 'c'), true) && in_array('Http Hanna', array_column($lg, 'n'), true), 'kofi.php schreibt jede Zustellung ins Protokoll (auch 400/401)');
+    $r = req('/kofi.php', null, ['Content-Type: application/json']);
+    $ch = curl_init('http://127.0.0.1:' . $port . '/kofi.php');
+    curl_setopt_array($ch, [CURLOPT_RETURNTRANSFER => true, CURLOPT_POSTFIELDS => $mk(['from_name' => 'Json Jay']), CURLOPT_HTTPHEADER => ['Content-Type: application/json']]);
+    curl_exec($ch); $jc = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+    t($jc === 200, 'kofi.php nimmt auch reines JSON an');
+    $GLOBALS['__vip_http'] = function ($m, $u, $h, $b) { parse_str((string)$b, $p); $x = req(parse_url($u, PHP_URL_PATH), $p); return [$x['code'], $x['body']]; };
+    set_setting('vip_public_url', 'https://example.invalid');
+    [$ok, $txt] = vip_kofi_selftest();
+    t($ok && str_contains($txt, 'erfolgreich'), 'Selbsttest: Zustellung an die eigene kofi.php kommt an');
+    $GLOBALS['__vip_http'] = fn() => [0, ''];
+    t(vip_kofi_selftest()[0] === false && str_contains(vip_kofi_selftest()[1], 'nicht erreichbar'), 'Selbsttest: nicht erreichbar wird verständlich gemeldet');
+    unset($GLOBALS['__vip_http']); set_setting('vip_public_url', '');
     $got = false;
     for ($j = 0; $j < VIP_RATE + 5 && !$got; $j++) $got = req('/vip.php?l=vip-' . $sfx)['code'] === 429;
     t($got, 'Rate-Limit greift (429)');
