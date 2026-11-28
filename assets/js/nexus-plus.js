@@ -162,7 +162,7 @@
     function badges(holder) {
         if (!holder) return;
         api('nxp_profile_extra', { id: holder.dataset.badges }).then(d => {
-            holder.innerHTML = d.badges.map(x => '<span class="nxp-badge" title="' + esc(x.desc) + '">' + esc(x.icon) + ' ' + esc(x.title) + '</span>').join('')
+            holder.innerHTML = d.badges.map(x => '<span class="nxp-badge' + (x.tag ? ' nxp-tag' : '') + '" title="' + esc(x.desc) + '"' + (/^#[0-9a-f]{6}$/i.test(x.color || '') ? ' style="--tc:' + x.color + '"' : '') + '>' + esc(x.icon) + ' ' + esc(x.title) + '</span>').join('')
                 + (d.score ? '<div class="nxp-score"><span>Profil zu <b>' + d.score.percent + ' %</b> vollständig</span><span class="nxp-meter"><i style="width:' + d.score.percent + '%"></i></span>'
                     + (d.score.missing.length ? '<span class="nw-muted">Fehlt noch: ' + d.score.missing.map(esc).join(', ') + '</span>' : '<span>🎉 Alles ausgefüllt!</span>') + '</div>' : '');
         }).catch(() => { holder.remove(); });

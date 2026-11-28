@@ -214,3 +214,5 @@ body.nav-side .nxp-stopbar { left: calc(50% + var(--nw-side) / 2); }
 .nxp-modal > .nw-card { max-width: 720px; width: 100%; max-height: 80vh; overflow: auto; }
 .nxp-log { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
 .nxp-log td { padding: 4px 6px; border-bottom: 1px solid var(--nw-line); vertical-align: top; }
+/* 8.4: Tags als Abzeichen (Farbe je Tag) */
+.nxp-badge.nxp-tag { border-color: var(--tc, rgba(243, 194, 98, 0.5)); color: var(--tc, var(--accent-gold)); background: color-mix(in srgb, var(--tc, #f3c262) 12%, transparent); font-weight: 600; }

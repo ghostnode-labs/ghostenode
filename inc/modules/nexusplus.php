@@ -265,7 +265,10 @@ function nxp_badges(string $id): array {
     elseif ($followers >= 10) $b[] = ['⭐', 'Beliebt', 'Mindestens 10 Folgende'];
     if ($founder) $b[] = ['🏠', 'Club-Gründer:in', 'Hat einen Club gegründet'];
     if ($events >= 5) $b[] = ['🎉', 'Event-Gänger:in', 'Bei mindestens 5 Club-Events zugesagt'];
-    return array_map(fn($x) => ['icon' => $x[0], 'title' => $x[1], 'desc' => $x[2]], $b);
+    $out = array_map(fn($x) => ['icon' => $x[0], 'title' => $x[1], 'desc' => $x[2]], $b);
+    // 8.4: Tags (Supporter, Moderator, VIP …) vorne – nur Anzeige
+    try { require_once __DIR__ . '/nexuslic.php'; $out = array_merge(nl_tag_badges($id), $out); } catch (Throwable $e) { /* ohne Tags */ }
+    return $out;
 }
 /** Wie vollständig ist mein Profil? (nur für mich) */
 function nxp_profile_score(array $p): array {

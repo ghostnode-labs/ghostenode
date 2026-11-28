@@ -46,3 +46,16 @@ php my.php tools/tests/nexuschat_test.php       # gleiche Tests gegen ein lokale
 
 Geprüft werden Migration 21 (neue Spalten/Tabellen), alte Clients (ohne `protos`) unverändert, Bindung der libsignal-Identität an `ik_sig`,
 Einmal-EC- und Einmal-Kyber-Schlüssel (verbraucht, danach Kyber-Last-Resort), Zähler zum Nachlegen, Rückfall bei fehlerhaftem signal-v1-Teil und Entfernen.
+
+## Nexus-Lizenzen / Tags (nexuslic.php, 8.4: automatische Zustellung über `a=mine`)
+
+Reine PHP-Tests mit einem Wegwerf-Ed25519-Testschlüssel (keine echten Konten, nie der Besitzer-Schlüssel); starten kurz einen eingebauten PHP-Server auf einem freien Port:
+
+```bash
+php tools/tests/nexuslic_test.php               # SQLite in einem Wegwerf-Ordner
+php my.php tools/tests/nexuslic_test.php        # gleiche Tests gegen ein lokales Test-MySQL ($GLOBALS['__db_cfg'] in my.php setzen)
+```
+
+Geprüft werden Migration 2 (Spalte `token` in `lic_keys`), dass beim Abgleich nur echt unterschriebene, passende Schlüssel ohne Moderator-Rolle gespeichert werden,
+dass `mine` nur Schlüssel der eigenen VRChat-ID liefert (fremde ID bekommt nichts, auch nicht bei falsch abgelegten Einträgen), 401 bei ungültigem/unbekanntem/gesperrtem Konto-Token,
+Entziehen, `sync` nur für die Besitzerin, Profil-Tags ohne Besitzer-Abzeichen aus Schlüsseln und das Rate-Limit.

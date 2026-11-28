@@ -141,6 +141,8 @@ function nc_profile(array $who, string $id): array {
     $f->execute([$id, $id, $who['vrc_id'], $id]);
     [$out['followers'], $out['following'], $out['i_follow']] = array_map('intval', $f->fetch(PDO::FETCH_NUM));
     $out['i_follow'] = (bool)$out['i_follow'];
+    // 8.4: von der Besitzerin vergebene Tags als Abzeichen (nur Anzeige, keine Rechte; 👑 nur über den Owner-Lock)
+    try { require_once __DIR__ . '/nexuslic.php'; $out['tags'] = nl_tags_for($id); } catch (Throwable $e) { $out['tags'] = []; }
     return $out;
 }
 function nc_profile_save(array $who, array $in): array {
