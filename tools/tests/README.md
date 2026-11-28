@@ -59,3 +59,16 @@ php my.php tools/tests/nexuslic_test.php        # gleiche Tests gegen ein lokale
 Geprüft werden Migration 2 (Spalte `token` in `lic_keys`), dass beim Abgleich nur echt unterschriebene, passende Schlüssel ohne Moderator-Rolle gespeichert werden,
 dass `mine` nur Schlüssel der eigenen VRChat-ID liefert (fremde ID bekommt nichts, auch nicht bei falsch abgelegten Einträgen), 401 bei ungültigem/unbekanntem/gesperrtem Konto-Token,
 Entziehen, `sync` nur für die Besitzerin, Profil-Tags ohne Besitzer-Abzeichen aus Schlüsseln und das Rate-Limit.
+
+## Zweites Stream-Deck-Plugin (nexusdeck.php, inc/modules/sdadult.php)
+
+Reine PHP-Tests mit Testkonten (kein echtes VRChat-Konto); starten kurz einen eingebauten PHP-Server, die Anmeldung läuft über einen Haken im Wegwerf-Router:
+
+```bash
+php tools/tests/sdadult_test.php                # SQLite in einem Wegwerf-Ordner
+php my.php tools/tests/sdadult_test.php         # gleiche Tests gegen ein lokales Test-MySQL ($GLOBALS['__db_cfg'] in my.php setzen)
+```
+
+Geprüft werden: Paket aus der Quelle (ZipArchive, eigener ZIP-Schreiber, vorgebautes Paket) ist ein gültiges `.streamDeckPlugin` (ein `*.sdPlugin`-Ordner, Manifest, Bilder in beiden Größen, Neo-Layout),
+Sperre der Quelle per `.htaccess`, kein Link auf öffentlichen Seiten, 403 ohne Anmeldung / ohne Nexus-Web-Recht / ohne VRChat / ohne Verified 18+ / mit NSFW aus, 200 + gültiges Paket mit Freigabe,
+Zähler ohne Benutzer/IP und das Rate-Limit (429). Die Quelle kommt aus dem App-Repo: `node apps/vrc-nexus/streamdeck-adult/tools/sync-web.js <Pfad zu dieser Arbeitskopie>`.

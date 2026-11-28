@@ -351,7 +351,7 @@
         if (!a.verified18) return gate(box, '🔞 Nur mit Verified 18+', 'Schließe in VRChat die Altersverifizierung (18+) ab und mach sie im Profil sichtbar – danach hier neu laden.');
         box.innerHTML = '<div class="nw-erp-hero"><div class="nw-row"><div style="flex:1"><h2>❤️ 18+ / ERP</h2><span class="nw-muted">Nur für dich sichtbar, weil dein Konto Verified 18+ ist. Inhalte bleiben im 18+-Bereich – nichts davon erscheint im normalen Feed.</span></div>'
             + '<label class="vx-auto"><input type="checkbox" id="nwNsfwOn"' + (me.nsfw ? ' checked' : '') + '> NSFW-Inhalte anzeigen</label></div></div>'
-            + (me.nsfw ? '<div class="nw-row">' + [['feed', '🔞 NSFW-Feed'], ['links', '💌 Anfragen & Consent'], ['reddit', '👽 r/VRchatERP'], ['profile', '👤 Mein 18+-Profil'], ['couple', '💞 Paar-Profil'], ['tpl', '📚 Vorlagen'], ['toys', '🎮 Spielzeug'], ['tips', '🛡 Sicherheit & Regeln']].map(([k, l]) => '<button type="button" class="chip' + (erpSub === k ? ' on' : '') + '" data-esub="' + k + '">' + l + '</button>').join('') + '</div><div id="nwErpBody" class="nw"></div>'
+            + (me.nsfw ? '<div class="nw-row">' + [['feed', '🔞 NSFW-Feed'], ['links', '💌 Anfragen & Consent'], ['reddit', '👽 r/VRchatERP'], ['profile', '👤 Mein 18+-Profil'], ['couple', '💞 Paar-Profil'], ['tpl', '📚 Vorlagen'], ['toys', '🎮 Spielzeug'], ['deck', '🎛 Stream Deck'], ['tips', '🛡 Sicherheit & Regeln']].map(([k, l]) => '<button type="button" class="chip' + (erpSub === k ? ' on' : '') + '" data-esub="' + k + '">' + l + '</button>').join('') + '</div><div id="nwErpBody" class="nw"></div>'
                 : '<div class="nw-card nw-gate"><b>NSFW ist aus</b><span class="nw-muted">Schalte oben „NSFW-Inhalte anzeigen“ ein. Das gilt auch in der App (gleiches Nexus-Konto) und lässt sich jederzeit wieder ausschalten.</span></div>');
         $('#nwNsfwOn', box).onchange = e => api('nw_nsfw', { on: e.target.checked ? '1' : '0' }).then(d => { toast(d.msg); meP = null; return ME(); }).then(openErp).catch(x => { e.target.checked = !e.target.checked; toast('⚠ ' + x.message, true); });
         $$('[data-esub]', box).forEach(b => { b.onclick = () => { erpSub = b.dataset.esub; openErp(); }; });
@@ -363,6 +363,7 @@
         if (erpSub === 'profile') { cs.box = body; return showProfile(a.vrc_id, body); }
         if ((erpSub === 'couple' || erpSub === 'tpl') && window.NexusAdult) return window.NexusAdult.render(body, erpSub);   // 7.3.2
         if (erpSub === 'toys' && window.NexusToyWeb) return window.NexusToyWeb.render(body);   // 8.2: Spielzeug im Browser, Partner-Links
+        if (erpSub === 'deck') return openDeck(body);   // zweites Stream-Deck-Plugin – nur hier (Server prüft Verified 18+ und NSFW bei jedem Download)
         body.innerHTML = '<div class="nw-tiles">' + [
             ['🤝', 'Einverständnis zuerst', 'Klärt Grenzen vorher. „Nein“ und Safewords gelten sofort – auch mitten in einer Szene.'],
             ['🔒', 'Privatsphäre', 'Keine echten Namen, Adressen oder Gesichtsbilder posten. Screenshots anderer nur mit deren Erlaubnis.'],
@@ -370,6 +371,20 @@
             ['🛡', 'Melden & Blockieren', 'Jeder Beitrag hat ⚠ Melden. Die Moderation sieht Meldungen sofort.'],
             ['🆘', 'Panik in der App', 'In der Desktop-App beendet der Panik-Knopf (auch von der Uhr) sofort alles NSFW.'],
         ].map(([i, t, s]) => '<div class="nw-tile"><span>' + i + '</span><b>' + t + '</b><span class="nw-muted" style="font-size:.8rem">' + s + '</span></div>').join('') + '</div>';
+    }
+
+    function openDeck(body) {
+        body.innerHTML = '<div class="nw-muted">Lade …</div>';
+        fetch('nexusdeck.php?info=1', { credentials: 'same-origin' }).then(r => r.ok ? r.json() : r.text().then(t => { throw new Error(t || ('Fehler ' + r.status)); })).then(d => {
+            body.innerHTML = '<div class="nw-card"><h3>🎛 Stream-Deck-Plugin „VRC Nexus 🔞“</h3>'
+                + '<p class="nw-muted">Zweites Plugin für die Stream-Deck-App – gibt es nur hier, nicht im normalen Download. Tasten: 🚨 Panik, ⏹ Stopp, 🛑 Safeword, 🚦 Ampel, Stärke (Tasten und Stream-Deck-+-Regler), Muster (auch Labor-Muster), Überraschung, Privat-Modus, „folgt meinem Avatar“, Szenen, Ausklingen, Live-Anzeige (Lust-Meter/Stärke) und die Infoleiste des Stream Deck Neo. Auf Wunsch diskret: neutrale Wörter statt 18+-Begriffen.</p>'
+                + (d.available ? '<div class="nw-row"><a class="btn btn-gold" href="nexusdeck.php" rel="nofollow">⬇ ' + esc(d.file) + (d.version ? ' · v' + esc(d.version) : '') + '</a></div>' : '<p class="nw-muted">Gerade nicht verfügbar.</p>')
+                + '<ol class="nw-muted" style="line-height:1.7;margin:12px 0 0 18px;padding:0">'
+                + '<li>Datei herunterladen und doppelklicken – die Stream-Deck-App (ab Version 7.6) installiert das Plugin.</li>'
+                + '<li>In VRC Nexus: Werkzeuge → Stream Deck → lokale Schnittstelle an (wie beim ersten Plugin) und „🔞 Stream Deck (zweites Plugin)“ bewusst erlauben. Der Schalter erscheint nur mit Verified 18+ und NSFW an.</li>'
+                + '<li>Eine Taste aus „VRC Nexus 🔞“ aufs Stream Deck ziehen und unter „Verbindung“ denselben Port und Zugangsschlüssel wie im Plugin „VRC Nexus“ eintragen – einmal reicht für alle Tasten.</li></ol>'
+                + '<p class="nw-muted" style="margin-top:10px">Ohne Freigabe (18+ aus, Panik, Recht nicht erlaubt) zeigen die Tasten „gesperrt“. Panik, Stopp, Safeword und Ampel-Rot funktionieren immer.</p></div>';
+        }).catch(x => { body.innerHTML = '<div class="vx-error">' + esc(x.message) + '</div>'; });
     }
 
     // =====================================================================
