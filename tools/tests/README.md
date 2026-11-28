@@ -25,3 +25,12 @@ node tools/tests/poster_test.js        # optional: SHOT_DIR=/ordner für Screens
 ```
 
 `PS_ALLOW_LOCAL=1` erlaubt Bildlinks auf 127.0.0.1 (nur Test), `PS_FTP_NOW=1` übernimmt FTP-Dateien ohne 20-s-Wartezeit. Geprüft werden u. a. Rechte (Gast, ohne Recht, Ansehen, Hochladen, Bearbeiten, Verwalten, Freigaben je Slot und je Bild), Upload mit Duplikat-Erkennung, Poster-URL inkl. Zielgröße, URL-Änderung, Bildlink, FTP-Eingang, Token-Schnittstelle, Rotation/Zeitplan und Schutz gegen fremde Herkunft.
+
+## Webseite 9.0 (Dashboard, neue Widgets, Prozessanzeige, Releases)
+
+Reine PHP-Tests mit Mocks (Mock-`/proc`, Mock-GitHub), legen einen Wegwerf-Datenordner an – kein Netz, keine echten Konten:
+
+```bash
+php tools/tests/site9_test.php                  # SQLite
+php my.php tools/tests/site9_test.php           # gleiche Tests gegen ein lokales Test-MySQL ($GLOBALS['__db_cfg'] in my.php setzen)
+```

@@ -1290,6 +1290,47 @@ def f2b_info():
         b = re.search(r'Banned IP list:\s*(.*)', o2); t = re.search(r'Total banned:\s*(\d+)', o2)
         out.append({'jail': j, 'banned': (b.group(1).split() if b else [])[:50], 'total': int(t.group(1)) if t else 0})
     return out
+def procs_snapshot(top=40):
+    # 9.0: Top-Prozesse nach CPU für die Prozessanzeige der Webseite (Rückfall, wenn PHP /proc nicht lesen darf)
+    import pwd
+    hz = os.sysconf('SC_CLK_TCK'); page = os.sysconf('SC_PAGE_SIZE')
+    def cpu():
+        out = []
+        for l in open('/proc/stat'):
+            if not l.startswith('cpu'): continue
+            v = [int(x) for x in l.split()[1:9]]; v += [0] * (8 - len(v))
+            out.append((sum(v) - v[3] - v[4], sum(v)))
+        return out
+    def plist():
+        r = {}
+        for d in os.listdir('/proc'):
+            if not d.isdigit(): continue
+            try:
+                raw = open('/proc/%s/stat' % d).read(); i = raw.rindex(')'); f = raw[i + 2:].split()
+                r[int(d)] = (int(f[11]) + int(f[12]), int(f[19]), int(f[17]), int(f[21]), f[0], raw[raw.index('(') + 1:i])
+            except Exception: pass
+        return r
+    c1, p1 = cpu(), plist(); time.sleep(1); c2, p2 = cpu(), plist()
+    cores = [round(max(0.0, min(100.0, (b[0] - a[0]) * 100.0 / max(1, b[1] - a[1]))), 1) for a, b in zip(c1[1:], c2[1:])]
+    wall = max(1, (c2[0][1] - c1[0][1]) / max(1, len(cores)))
+    up = float(open('/proc/uptime').read().split()[0])
+    mt = 1
+    for l in open('/proc/meminfo'):
+        if l.startswith('MemTotal:'): mt = int(l.split()[1]) * 1024
+    rows = []; threads = 0; running = 0
+    mask = re.compile(r'(--?(?:pass(?:word)?|pwd|token|secret|api[-_]?key|key|auth)(?:=|\s+))\S+', re.I)
+    for pid, (ticks, thr, start, rss, st, comm) in p2.items():
+        threads += thr; running += st == 'R'
+        old = p1.get(pid)
+        pc = (ticks - old[0]) * 100.0 / wall if old and old[2] == start else 0.0
+        try: uid = os.stat('/proc/%d' % pid).st_uid; user = pwd.getpwuid(uid).pw_name
+        except Exception: user = '?'
+        try: cmd = open('/proc/%d/cmdline' % pid, 'rb').read().replace(b'\0', b' ').decode('utf-8', 'replace').strip()
+        except Exception: cmd = ''
+        rows.append({'pid': pid, 'user': user, 'cpu': round(pc, 1), 'mem': round(rss * page * 100.0 / mt, 1), 'rss': rss * page,
+                     'time': max(0, int(up - start / hz)), 'state': st, 'threads': thr, 'cmd': mask.sub(r'\1•••', cmd or '[%s]' % comm)[:200]})
+    rows.sort(key=lambda r: (r['cpu'], r['rss']), reverse=True)
+    return {'time': int(time.time()), 'cores': cores, 'tasks': len(rows), 'threads': threads, 'running': running, 'list': rows[:top]}
 def status():
     c = conf(); now = int(time.time())
     mem = {}
@@ -1337,6 +1378,8 @@ def status():
     except Exception: out['f2b'] = []
     rc, o = sh(['ufw', 'status'], 10)
     out['ufw'] = o.strip().splitlines()[:40] if rc == 0 else []
+    try: out['procs'] = procs_snapshot()
+    except Exception as e: out['procs'] = {'error': str(e)[:200]}
     tmp = S + '/status.json.tmp'
     with open(tmp, 'w') as f: json.dump(out, f)
     os.chmod(tmp, 0o640); os.chown(tmp, 0, grp.getgrnam(APP_GROUP).gr_gid); os.replace(tmp, S + '/status.json')

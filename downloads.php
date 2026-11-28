@@ -8,6 +8,7 @@ require_once __DIR__ . '/inc/core/common.php';
 require_once __DIR__ . '/inc/core/pages.php';
 auth_require_setup();
 require_once __DIR__ . '/inc/modules/changelog.php';
+require_once __DIR__ . '/inc/modules/releases.php';
 
 $rel = array_values(array_filter(cl_fetch(), fn($r) => !$r['pre']));
 $latest = $rel[0] ?? null;
@@ -33,6 +34,9 @@ body.dl{padding:0;display:block}.dl-wrap{box-sizing:border-box;max-width:980px;m
 .muted{color:var(--text-muted);font-size:.85rem}
 details{margin-top:18px}summary{cursor:pointer;color:var(--accent-cyan)}
 pre{background:rgba(255,255,255,.05);padding:10px;overflow:auto;font-size:.8rem}
+.dl-more{margin-top:28px}.dl-more h2{font-size:1rem;letter-spacing:2px;text-transform:uppercase;color:var(--accent-cyan);margin:0 0 10px}
+.dl-files{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}.dl-files li{display:flex;flex-direction:column;gap:3px}
+.dl-files a{word-break:break-all}.dl-ver{font-size:.8rem;color:var(--text-muted)}.dl-ver b{color:#fff}
 </style></head><body class="dl"><div class="dl-wrap">
 <h1 style="margin:0">⬇ Downloads</h1>
 <?php if (!$latest): ?><p class="muted">Gerade keine Versionen erreichbar (GitHub). Bitte später erneut versuchen.</p><?php else: ?>
@@ -53,4 +57,20 @@ pre{background:rgba(255,255,255,.05);padding:10px;overflow:auto;font-size:.8rem}
 macOS / Linux:         shasum -a 256 VRC-Nexus-<?php echo e($latest['v']); ?>-android.apk</pre></details>
 <details><summary>🗂 Ältere Versionen</summary><p class="muted"><?php foreach (array_slice($rel, 1, 12) as $r) echo '<a href="' . e($r['url']) . '" target="_blank" rel="noopener">' . e(cl_ver($r['v'])) . '</a> · '; ?> <a href="changelog.php">alle im Changelog</a></p></details>
 <?php endif; ?>
+<?php // 9.0: weitere GhostNode-Projekte (D2 Nexus, Discord-Bot) – gleiche Quelle (GitHub-Releases), gleiche Prüfsummen
+$more = rel_status(['d2', 'bot']);
+$HELP = ['d2' => 'Destiny-2-Begleiter für Windows: Inventar, Loadouts, Wochen-Reset, Clan-Chat. Updates kommen nach der Installation automatisch.',
+         'bot' => 'Der GhostNode-Discord-Bot zum Selbst-Hosten (Node.js ≥ 22, ohne weitere Pakete). Anleitung im Repository; auf dem Root-Server installiert ihn „ghostnode-root.sh bot“.'];
+?>
+<section class="dl-more" id="more"><h2>🧰 Weitere Projekte</h2><div class="dl-grid">
+<?php foreach ($more as $id => $r): $files = array_values(array_filter($r['assets'], fn($a) => !preg_match('/\.(blockmap|yml|yaml)$/i', $a['name']))); ?>
+<div class="dl-card"><h3><?php echo e($r['icon'] . ' ' . $r['name']); ?></h3><p><?php echo e($HELP[$id] ?? ''); ?></p>
+<?php if ($r['v'] === ''): ?><p class="muted">Noch keine Version veröffentlicht – <a href="https://github.com/<?php echo e($r['repo']); ?>/releases" target="_blank" rel="noopener">GitHub</a>.</p>
+<?php else: ?><div class="dl-ver">Version <b>v<?php echo e($r['v']); ?></b> · <?php echo e(date('d.m.Y', $r['date'])); ?> (<?php echo e(rel_ago($r['age'])); ?>) · <a href="<?php echo e($r['url']); ?>" target="_blank" rel="noopener">Release-Notizen</a></div>
+<ul class="dl-files"><?php foreach (array_slice($files, 0, 6) as $a): ?><li><a class="btn btn-sm" href="<?php echo e($a['url']); ?>" rel="noopener">⬇ <?php echo e($a['name']); ?> · <?php echo e(rel_size((int)$a['size'])); ?></a>
+<?php if ($a['sha256'] !== ''): ?><div class="sha" title="Klicken zum Kopieren" onclick="navigator.clipboard&&navigator.clipboard.writeText(this.dataset.h)" data-h="<?php echo e($a['sha256']); ?>">SHA-256: <?php echo e($a['sha256']); ?></div><?php endif; ?></li><?php endforeach; ?>
+<?php if (!$files): ?><li class="muted">Keine Dateien am Release.</li><?php endif; ?></ul>
+<a class="muted" href="<?php echo e($r['page']); ?>">Zur Projektseite →</a><?php endif; ?></div>
+<?php endforeach; ?>
+</div></section>
 </div></body></html>

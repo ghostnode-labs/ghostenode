@@ -27,6 +27,44 @@ if (mb_strlen($q) >= 2) {
             if ($has((string)$p['title'], (string)($p['description'] ?? ''))) $hits[] = ['k' => '🗂 Seite', 'icon' => (string)($p['icon'] ?? '📄'), 't' => (string)$p['title'], 's' => (string)($p['description'] ?? ''), 'h' => page_href($p)];
         }
     } catch (Throwable $e) { /* egal */ }
+    // 9.0: Links aus allen Link-Hubs (nur aus Seiten, die die Person öffnen darf; NSFW nur wie im Dashboard)
+    try {
+        require_once __DIR__ . '/inc/modules/hub.php';
+        $seenUrl = [];
+        foreach (site_db()->query('SELECT * FROM pages ORDER BY sort, title')->fetchAll() as $p) {
+            if (!page_visible_in_index($p, false) || !page_access_ok($p)) continue;
+            $hub = null;
+            if ($p['kind'] === 'custom' && $p['template'] === 'links') $hub = hub_load('page_' . $p['slug'], []);
+            elseif ($p['kind'] === 'file' && preg_match('/^[\w\-]+\.php$/', (string)$p['slug']) && is_file(__DIR__ . '/' . $p['slug'])
+                    && strpos((string)file_get_contents(__DIR__ . '/' . $p['slug']), "if (defined('LINKS_ONLY')) return \$categories;") !== false) {
+                if (!defined('LINKS_ONLY')) define('LINKS_ONLY', true);
+                $hub = (function ($f) { return include $f; })(__DIR__ . '/' . $p['slug']);
+            }
+            foreach ((array)$hub as $cat => $links) foreach ((array)$links as $l) {
+                if (!is_array($l) || empty($l['url']) || !nsfw_visible($l, (string)$cat)) continue;
+                $k = strtolower(rtrim((string)$l['url'], '/'));
+                if (isset($seenUrl[$k]) || !$has((string)($l['title'] ?? ''), (string)($l['desc'] ?? ''), (string)$cat)) continue;
+                $seenUrl[$k] = 1;
+                if (!preg_match('#^https?://#i', (string)$l['url'])) continue;
+                $hits[] = ['k' => '🔗 Link · ' . $p['title'], 'icon' => (string)($l['icon'] ?? '🔗'), 't' => (string)($l['title'] ?? $l['url']), 's' => $cat . ((string)($l['desc'] ?? '') !== '' ? ' — ' . $snip((string)$l['desc']) : ''), 'h' => (string)$l['url'], 'ext' => true];
+                if (count($seenUrl) >= 30) break 3;
+            }
+        }
+    } catch (Throwable $e) { /* Hubs optional */ }
+    // 9.0: Admin-Bereiche (nur mit passendem Recht)
+    if ($u) foreach ([['admin.php?tab=users', '👥', 'Benutzer verwalten', 'users.view', 'Konten Rollen sperren'], ['admin.php?tab=roles', '🛡️', 'Rollen & Rechte', 'roles.manage', 'Berechtigungen'],
+              ['admin.php?tab=invites', '🎟️', 'Einladungen', 'invites.manage', 'Registrierung Code'], ['admin.php?tab=sessions', '🖥️', 'Sitzungen & Geräte', 'sessions.manage', 'abmelden'],
+              ['admin.php?tab=security', '🔐', 'Sicherheit', 'security.manage', 'Passwort IP Sperre 2FA'], ['admin.php?tab=audit', '📜', 'Protokoll', 'audit.view', 'Log Audit'],
+              ['admin.php?tab=database', '🗄️', 'Datenbank', 'database.manage', 'MySQL SQLite'], ['admin.php?tab=system', '🛰️', 'System & Wartung', 'system.manage', 'Wartungsmodus Wartungsfenster Aufgaben Backup'],
+              ['admin.php?tab=server', '🖥', 'Server & Prozesse', 'system.manage', 'htop CPU RAM Dienste'], ['admin.php?tab=account', '👤', 'Mein Konto', null, 'Passwort Zwei-Faktor Discord'],
+              ['me.php', '👤', 'Mein Bereich', null, 'Darstellung Benachrichtigungen Profil Webhooks Datenschutz']] as [$h, $i, $t, $perm, $kw])
+        if (($perm === null || can($perm)) && $has($t, $kw)) $hits[] = ['k' => '⚙ Verwaltung', 'icon' => $i, 't' => $t, 's' => '', 'h' => $h];
+    // 9.0: Dashboard-Widgets
+    try {
+        require_once __DIR__ . '/inc/core/widgets.php';
+        foreach (widgets_available() as $type => $m) if (empty($m['error']) && widget_allowed($m) && $has((string)$m['name'], (string)$m['description']))
+            $hits[] = ['k' => '🧩 Widget', 'icon' => (string)$m['icon'], 't' => (string)$m['name'], 's' => $snip((string)$m['description']), 'h' => 'dashboard.php'];
+    } catch (Throwable $e) { /* Widgets optional */ }
     foreach ([['changelog.php', '📜', 'Changelog'], ['downloads.php', '⬇', 'Downloads'], ['Roadmap.php', '🗺', 'Roadmap'], ['api.php', '🔌', 'API-Dokumentation'], ['market.php', '🧩', 'Marktplatz'], ['nexus.php', '🥽', 'VRC Nexus']] as [$h, $i, $t])
         if ($has($t, $h)) $hits[] = ['k' => '🗂 Seite', 'icon' => $i, 't' => $t, 's' => '', 'h' => $h];
     try {   // Changelog
@@ -68,6 +106,6 @@ if (!empty($_GET['json'])) {
 <form method="GET" style="display:flex;gap:8px"><input type="search" name="q" value="<?php echo e($q); ?>" placeholder="Seiten, Changelog, Termine, Plugins …" autofocus><button class="btn">Suchen</button></form>
 <?php if ($q !== '' && mb_strlen($q) < 2): ?><p class="muted">Mindestens 2 Zeichen.</p><?php endif; ?>
 <?php if (mb_strlen($q) >= 2): ?><p class="muted"><?php echo count($hits); ?> Treffer für „<?php echo e($q); ?>“</p>
-<?php foreach ($hits as $h): ?><a class="sr-hit" href="<?php echo e($h['h']); ?>"><span style="font-size:1.3rem"><?php echo e($h['icon']); ?></span><span><span class="sr-k"><?php echo e($h['k']); ?></span><b><?php echo e($h['t']); ?></b><?php if ($h['s'] !== ''): ?><small><?php echo e($h['s']); ?></small><?php endif; ?></span></a><?php endforeach; ?>
+<?php foreach ($hits as $h): ?><a class="sr-hit" href="<?php echo e($h['h']); ?>"<?php echo !empty($h['ext']) ? ' target="_blank" rel="noopener noreferrer"' : ''; ?>><span style="font-size:1.3rem"><?php echo e($h['icon']); ?></span><span><span class="sr-k"><?php echo e($h['k']); ?></span><b><?php echo e($h['t']); ?></b><?php if ($h['s'] !== ''): ?><small><?php echo e($h['s']); ?></small><?php endif; ?></span></a><?php endforeach; ?>
 <?php endif; ?>
 </div></body></html>

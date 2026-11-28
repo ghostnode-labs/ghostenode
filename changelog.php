@@ -41,6 +41,15 @@ function cl_md(string $md): array {
     return [$title, $html];
 }
 $rel = cl_fetch();
+// 9.0: „Neu seit deinem letzten Besuch“ – angemeldet im Konto gemerkt (alle Geräte), Gäste im Browser (siehe Skript unten)
+$cl_user = function_exists('current_user') ? current_user() : null;
+$cl_seen = '';
+if ($cl_user && $rel) {
+    try {
+        $cl_seen = user_pref((int)$cl_user['id'], 'cl_seen', '');
+        if ($cl_seen !== $rel[0]['v']) user_pref_set((int)$cl_user['id'], 'cl_seen', $rel[0]['v']);
+    } catch (Throwable $e) { $cl_seen = ''; }
+}
 $majors = [];
 foreach ($rel as $r) { $mj = (int)explode('.', $r['v'])[0]; $majors[$mj] = ($majors[$mj] ?? 0) + 1; }
 $fmt = fn(string $d) => $d ? date('d.m.Y', strtotime($d)) : '';
@@ -82,15 +91,20 @@ body.cl{padding:0;display:block}
 .cl-dl a:hover{border-color:var(--accent-cyan);color:var(--accent-cyan)}
 .cl-latest{font-size:.66rem;letter-spacing:1px;color:#000;background:var(--accent-gold);padding:1px 6px;font-weight:700}
 .cl-empty{color:var(--text-muted);text-align:center;padding:40px 0}
+.cl-new{font-size:.66rem;letter-spacing:1px;color:#040609;background:var(--accent-green,#50fa7b);padding:1px 6px;font-weight:700}
+.cl-rel.is-new::before{background:var(--accent-green,#50fa7b);box-shadow:0 0 12px var(--accent-green,#50fa7b)}
+.cl-since{margin:14px 0 0;padding:10px 14px;border:1px solid rgba(80,250,123,.45);background:rgba(80,250,123,.07);display:flex;gap:10px;align-items:center;flex-wrap:wrap;font-size:.88rem}
+.cl-since[hidden]{display:none}
 </style></head><body class="cl"><div class="cl-wrap">
 <div class="cl-hero"><div class="hud-tag">GhostNode · VRC Nexus · Changelog</div><h1>CHANGELOG</h1>
 <p><?= count($rel) ?> Versionen – neueste zuerst. Jede Version mit Neuerungen und Downloads für Windows, Android, Wear OS und Stream Deck. Was als Nächstes kommt, steht in der <a href="Roadmap.php" style="color:var(--accent-cyan)">Roadmap</a>.</p></div>
 <?php if (!$rel): ?><p class="cl-empty">Die Versionsliste ist gerade nicht erreichbar (GitHub). Bitte später noch einmal – oder direkt auf <a href="https://github.com/<?= CL_REPO ?>/releases" style="color:var(--accent-cyan)">GitHub</a>.</p>
 <?php else: ?>
+<div class="cl-since" id="clSince" data-seen="<?= e($cl_seen) ?>" data-user="<?= $cl_user ? '1' : '' ?>" data-latest="<?= e($rel[0]['v']) ?>" hidden><span id="clSinceT"></span><button type="button" class="cl-chip" id="clOnlyNew">Nur neue zeigen</button></div>
 <div class="cl-tools"><input type="search" id="clQ" placeholder="🔍 Suchen, z. B. „Uhr“, „OSC“, „5.2“ …" aria-label="Changelog durchsuchen">
 <button type="button" class="cl-chip on" data-mj="">Alle</button><?php foreach ($majors as $mj => $n): ?><button type="button" class="cl-chip" data-mj="<?= $mj ?>"><?= $mj ?>.x <small>(<?= $n ?>)</small></button><?php endforeach; ?></div>
 <?php foreach ($rel as $i => $r): [$t, $h] = cl_md($r['body']); $minor = !preg_match('/\.0$/', $r['v']) && !cl_ver_is_date($r['v']); ?>
-<article class="cl-rel<?= $minor ? ' minor' : '' ?>" id="v<?= e($r['v']) ?>" data-mj="<?= (int)explode('.', $r['v'])[0] ?>">
+<article class="cl-rel<?= $minor ? ' minor' : '' ?>" id="v<?= e($r['v']) ?>" data-v="<?= e($r['v']) ?>" data-mj="<?= (int)explode('.', $r['v'])[0] ?>">
 <header><span class="cl-v"><?= e(cl_ver($r['v'])) ?></span><h2><a href="#v<?= e($r['v']) ?>"><?= e($t ?: 'VRC Nexus ' . cl_ver($r['v'])) ?></a></h2><span class="cl-date"><?= e($fmt($r['date'])) ?></span><?php if ($i === 0): ?><span class="cl-latest">AKTUELL</span><?php endif; ?></header>
 <div class="cl-body"><?= $h ?: '<p class="cl-date">Keine Beschreibung.</p>' ?>
 <?php if ($r['assets']): ?><div class="cl-dl"><?php foreach ($r['assets'] as $a): if (!preg_match('#^https://github\.com/#', $a['url'])) continue; ?><a href="<?= e($a['url']) ?>" rel="noopener"><?= e($kind($a['name'])) ?> · <?= round($a['size'] / 1048576, 1) ?> MB</a><?php endforeach; ?><a href="<?= e($r['url']) ?>" target="_blank" rel="noopener">GitHub ↗</a></div><?php endif; ?>
@@ -100,8 +114,19 @@ body.cl{padding:0;display:block}
 <script>
 (function () {
     const q = document.getElementById('clQ'); if (!q) return;
-    let mj = '';
-    const run = () => { const s = q.value.trim().toLowerCase(); document.querySelectorAll('.cl-rel').forEach(a => { a.hidden = (mj && a.dataset.mj !== mj) || (s && !a.textContent.toLowerCase().includes(s)); }); };
+    let mj = '', onlyNew = false;
+    // 9.0: neue Versionen seit dem letzten Besuch markieren (Konto: vom Server, Gäste: localStorage)
+    const box = document.getElementById('clSince');
+    const cmp = (a, b) => { const x = a.split('.').map(Number), y = b.split('.').map(Number); for (let i = 0; i < 3; i++) if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) - (y[i] || 0); return 0; };
+    let seen = box.dataset.seen;
+    if (!box.dataset.user) { try { seen = localStorage.getItem('gn_cl_seen') || ''; localStorage.setItem('gn_cl_seen', box.dataset.latest); } catch (e) { seen = ''; } }
+    if (seen) {
+        const fresh = [...document.querySelectorAll('.cl-rel')].filter(a => cmp(a.dataset.v, seen) > 0);
+        fresh.forEach(a => { a.classList.add('is-new'); const h = a.querySelector('header'); const b = document.createElement('span'); b.className = 'cl-new'; b.textContent = 'NEU'; h.appendChild(b); });
+        if (fresh.length) { document.getElementById('clSinceT').textContent = '🆕 ' + fresh.length + (fresh.length === 1 ? ' neue Version' : ' neue Versionen') + ' seit deinem letzten Besuch (zuletzt gesehen: ' + seen + ').'; box.hidden = false; }
+    }
+    document.getElementById('clOnlyNew').addEventListener('click', e => { onlyNew = !onlyNew; e.target.classList.toggle('on', onlyNew); run(); });
+    const run = () => { const s = q.value.trim().toLowerCase(); document.querySelectorAll('.cl-rel').forEach(a => { a.hidden = (mj && a.dataset.mj !== mj) || (s && !a.textContent.toLowerCase().includes(s)) || (onlyNew && !a.classList.contains('is-new')); }); };
     q.addEventListener('input', run);
     document.querySelectorAll('.cl-chip').forEach(b => b.addEventListener('click', () => { mj = b.dataset.mj; document.querySelectorAll('.cl-chip').forEach(x => x.classList.toggle('on', x === b)); run(); }));
 })();

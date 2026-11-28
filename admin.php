@@ -144,6 +144,17 @@ if (!$configured) {
 // Aktionen (angemeldet)
 // =====================================================================
 $me = current_user();
+// 9.0: Prozessanzeige (htop-artig) im Bereich „🖥 Server“ – nur lesen, JSON, alle 2–3 s per fetch
+if (($_GET['sv_procs'] ?? '') === '1' && $mode !== 'panel') { http_response_code(403); header('Content-Type: application/json; charset=utf-8'); exit(json_encode(['error' => 'Bitte anmelden.'])); }
+if ($mode === 'panel' && ($_GET['sv_procs'] ?? '') === '1') {
+    header('Content-Type: application/json; charset=utf-8');
+    header('Cache-Control: no-store');
+    if (!can('system.manage') || !empty($me['preview']) || !same_origin_request()) { http_response_code(403); exit(json_encode(['error' => 'Kein Zugriff.'])); }
+    session_write_close();   // parallele Seitenaufrufe nicht blockieren
+    require_once __DIR__ . '/inc/modules/procs.php';
+    echo json_encode(pr_report((int)$me['id'], (string)($_GET['sort'] ?? 'cpu'), mb_substr((string)($_GET['q'] ?? ''), 0, 60), sv_status()), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_INVALID_UTF8_SUBSTITUTE);
+    exit;
+}
 if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
     $act = $_POST['action'] ?? '';
     $perm_for = [
@@ -636,6 +647,7 @@ if ($mode === 'panel' && $_SERVER['REQUEST_METHOD'] === 'POST') {
                 set_setting('maintenance_from', $dt($_POST['maintenance_from'] ?? ''));
                 set_setting('maintenance_until', $dt($_POST['maintenance_until'] ?? ''));
                 save_site_setting('maintenance_message', mb_substr(trim($_POST['maintenance_message'] ?? ''), 0, 300) ?: 'Wir sind gleich wieder da.');
+                set_setting('maintenance_notice_h', (string)max(0, min(168, (int)($_POST['maintenance_notice_h'] ?? 24))));   // 9.0: Vorankündigung
                 $msg = 'Einstellungen gespeichert.';
                 break;
 
@@ -1850,6 +1862,9 @@ function bytes(int $b): string {
                         <div><label class="field">Ab (optional)</label><input type="datetime-local" name="maintenance_from" value="<?php echo $settings['maintenance_from'] ? e(date('Y-m-d\TH:i', strtotime($settings['maintenance_from']))) : ''; ?>"></div>
                         <div><label class="field">Bis (endet automatisch)</label><input type="datetime-local" name="maintenance_until" value="<?php echo $settings['maintenance_until'] ? e(date('Y-m-d\TH:i', strtotime($settings['maintenance_until']))) : ''; ?>"></div>
                     </div>
+                    <div id="maint-plan" style="margin-top: 8px;"><label class="field">📣 Vorankündigung für alle (Stunden vor „Ab“, 0 = aus)</label>
+                        <input type="number" name="maintenance_notice_h" min="0" max="168" value="<?php echo (int)setting('maintenance_notice_h', '24'); ?>" style="max-width:120px">
+                        <?php $mn = maintenance_notice(); if ($mn): ?><p class="small gold" style="margin:4px 0 0">Wird gerade angezeigt: „<?php echo e($mn['text']); ?>“</p><?php endif; ?></div>
                 </div>
                 <button class="btn btn-gold" style="margin-top: 12px;">Speichern</button>
             </form>

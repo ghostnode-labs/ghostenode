@@ -294,6 +294,24 @@ function announcement_active(?array $a = null): bool {
 }
 
 /** Ankündigung, Rollen-Vorschau und Passwort-Hinweis oben auf jeder Seite (einmal pro Aufruf) */
+/** 9.0: Hinweis auf eine geplante Wartung (Wartungsmodus mit „Ab“ in der Zukunft, innerhalb der Vorankündigungszeit) oder null */
+function maintenance_notice(?int $now = null): ?array {
+    $now = $now ?? time();
+    $h = (int)setting('maintenance_notice_h', '24');
+    if ($h <= 0 || setting('maintenance', '0') !== '1') return null;
+    $from = strtotime(setting('maintenance_from', '')) ?: 0;
+    $until = strtotime(setting('maintenance_until', '')) ?: 0;
+    if (!$from || $from <= $now || $from - $h * 3600 > $now) return null;
+    $wd = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'][(int)date('w', $from)];
+    $left = $from - $now;
+    $in = $left < 3600 ? 'in ' . max(1, intdiv($left, 60)) . ' Min.' : ($left < 86400 ? 'in ' . intdiv($left, 3600) . ' Std.' : 'am ' . $wd . ', ' . date('d.m.', $from));
+    $text = 'Geplante Wartung ' . $in . ' um ' . date('H:i', $from) . ' Uhr' . ($until > $from ? ' bis ' . (date('Y-m-d', $until) === date('Y-m-d', $from) ? '' : date('d.m. ', $until)) . date('H:i', $until) . ' Uhr' : '')
+          . ' – die Seite ist dann kurz nicht erreichbar.';
+    $msg = trim(setting('maintenance_message', ''));
+    if ($msg !== '' && $msg !== 'Wir sind gleich wieder da.') $text .= ' ' . $msg;
+    return ['from' => date('c', $from), 'until' => $until ? date('c', $until) : '', 'text' => $text];
+}
+
 function site_banners(): void {
     static $done = false;
     if ($done) return;
@@ -304,6 +322,9 @@ function site_banners(): void {
     if ($u && !empty($u['preview'])) {
         $out .= '<div class="sb sb-preview">👁 Vorschau als Rolle <b>' . e($u['preview']['role']) . '</b> – du siehst die Seite mit deren Rechten.'
               . '<form method="POST" action="admin.php"><input type="hidden" name="action" value="preview_end"><button>Vorschau beenden</button></form></div>';
+    }
+    if ($mn = maintenance_notice()) {   // 9.0: Vorankündigung einer geplanten Wartung
+        $out .= '<div class="sb sb-warn" data-sb="maint-' . e(md5($mn['from'])) . '"><span>🛠️</span><span class="sb-t">' . e($mn['text']) . '</span><button type="button" class="sb-x" aria-label="Ausblenden">×</button></div>';
     }
     if (announcement_active($a)) {
         $ic = ['info' => 'ℹ️', 'success' => '✅', 'warn' => '⚠️', 'danger' => '🚨'][$a['level']] ?? 'ℹ️';
